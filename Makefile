@@ -1,7 +1,7 @@
 CC=g++
 CXXFLAGS= -std=c++11 -I.
 
-all: main
+all: clean main
 clean:
 	rm -f *.o
 
