@@ -29,7 +29,7 @@ class PartitionManager {
     bool synching = false;
     bool waiting = false;
     pthread_t myThread;
-    pthread_barrier_t* barrierAddr;
+    pthread_barrier_struct* barrierAddr;
     pthread_mutex_t* lockAddr;
     pthread_cond_t* condAddr;
     TraCIAPI myConn;
@@ -49,7 +49,7 @@ class PartitionManager {
 
 public:
    // params: sumo binary, id, barrier, lock, cond, sumo config, host, port, end time
-   PartitionManager(const char*, int,  pthread_barrier_t*, pthread_mutex_t*,
+   PartitionManager(const char*, int,  pthread_barrier_struct*, pthread_mutex_t*,
      pthread_cond_t*, std::string&, std::string&, int, int);
   // set this partition's border edges
    void setMyBorderEdges(std::vector<border_edge_t>);

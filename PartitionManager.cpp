@@ -14,7 +14,7 @@ Author: Phillip Taylor
 #include "TraCIAPI.h"
 #include "PartitionManager.h"
 
-PartitionManager::PartitionManager(const char* binary, int id, pthread_barrier_t* barr,
+PartitionManager::PartitionManager(const char* binary, int id, pthread_barrier_struct* barr,
   pthread_mutex_t* lock, pthread_cond_t* cond, std::string& cfg, std::string& host, int port, int t) :
   SUMO_BINARY(binary),
   id(id),

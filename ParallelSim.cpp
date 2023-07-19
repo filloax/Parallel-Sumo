@@ -382,7 +382,7 @@ void ParallelSim::startSim(){
   std::vector<PartitionManager*> parts;
   std::vector<border_edge_t> borderEdges[numThreads];
   pthread_mutex_t lock;
-  pthread_barrier_t barrier;
+  pthread_barrier_struct barrier;
   pthread_cond_t cond;
 
   // create partitions
