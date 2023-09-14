@@ -129,7 +129,7 @@ def cut_routes(aEdges, orig_net, options, busStopEdges=None):
                 routeRef = False
             else:
                 newDepart = standaloneRoutesDepart.get(vehicle.route)
-                if newDepart is 'discard':
+                if newDepart == 'discard':
                     # route was already checked and discared
                     continue
                 elif newDepart is not None:
