@@ -13,8 +13,8 @@ Author: Phillip Taylor
 int main(int argc, char* argv[]) {
     // params: host server, first port. sumo cfg file, gui option (true), number of threads
     ParallelSim client("localhost", 1337, "assets/simpleNet.sumocfg", true, 4);
-  //  client.getFilePaths();
+    client.getFilePaths();
     // param: true for metis partitioning, false for grid partitioning (only works for 2 partitions currently)
-  //  client.partitionNetwork(true);
+    client.partitionNetwork(true);
     client.startSim();
 }

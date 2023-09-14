@@ -1,2 +1,8 @@
 *.o
 main
+edgesPart*
+*.net.xml
+metisInputFile*
+*.sumocfg
+*.rou.xml
+processed_routes
