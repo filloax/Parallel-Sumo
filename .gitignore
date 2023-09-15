@@ -5,4 +5,4 @@ edgesPart*
 metisInputFile*
 *.sumocfg
 *.rou.xml
-processed_routes
+processed_routes.xml

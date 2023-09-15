@@ -15,7 +15,7 @@ import codecs
 import copy
 import subprocess
 
-from optparse import OptionParser
+from optparse    import OptionParser
 from collections import defaultdict
 
 if 'SUMO_HOME' in os.environ:
@@ -52,18 +52,18 @@ def main(options):
         neighbors.append(neighs)
 
     # write metis input file
-    with codecs.open("metisInputFile", 'w', encoding='utf8') as f:
+    with codecs.open("metisInputFile.metis", 'w', encoding='utf8') as f:
         f.write("%s %s\n" % (numNodes, numUndirectedEdges))
         for neighs in neighbors:
             f.write("%s\n" % (" ".join([str(i+1) for i in [nodesDict[n] for n in neighs]])))
 
     # execute metis
-    subprocess.call(["gpmetis", "-objtype=vol", "-contig", "metisInputFile", options.parts])
+    subprocess.call(["gpmetis", "-objtype=vol", "-contig", "metisInputFile.metis", options.parts])
 
     # get edges corresponding to partitions
     edges = [set() for _ in range(int(options.parts))]
     curr = 0
-    with codecs.open("metisInputFile.part."+options.parts, 'r', encoding='utf8') as f:
+    with codecs.open("metisInputFile.metis.part."+options.parts, 'r', encoding='utf8') as f:
         for line in f:
             part = int(line)
             nodeEdges = nodes[curr].getIncoming() + nodes[curr].getOutgoing()
@@ -74,7 +74,7 @@ def main(options):
 
     # write edges of partitions in separate files
     for i in range(len(edges)):
-        with codecs.open("edgesPart"+str(i), 'w', encoding='utf8') as f:
+        with codecs.open("edgesPart"+str(i)+".txt", 'w', encoding='utf8') as f:
             for eID in edges[i]:
                 f.write("%s\n" % (eID))
 

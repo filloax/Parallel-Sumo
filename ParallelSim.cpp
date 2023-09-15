@@ -212,7 +212,7 @@ void ParallelSim::partitionNetwork(bool metis){
       count++;
     }
   }
-  routes.SaveFile("processed_routes");
+  routes.SaveFile("processed_routes.xml");
 
 
   for(int i=0; i<numThreads; i++){
@@ -225,13 +225,13 @@ void ParallelSim::partitionNetwork(bool metis){
 
     std::string netconvertOption2;
     if(metis)
-      netconvertOption2 = "edgesPart"+charI;
+      netconvertOption2 = "edgesPart"+charI+".txt";
 
     else
       netconvertOption2 = partBounds[i];
 
     const char* partArgs[8] = {NETCONVERT_BINARY, netconvertOption1.c_str(), netconvertOption2.c_str(), "-s", netFile.c_str(), "-o", netPart.c_str(), NULL};
-    const char* rouArgs[11] = {"python3", "cutRoutes.py", netPart.c_str(), "processed_routes", "--routes-output", rouPart.c_str(), "--orig-net", netFile.c_str(), "--disconnected-action", "keep", NULL};
+    const char* rouArgs[11] = {"python3", "cutRoutes.py", netPart.c_str(), "processed_routes.xml", "--routes-output", rouPart.c_str(), "--orig-net", netFile.c_str(), "--disconnected-action", "keep", NULL};
     // create partition
     switch(pid = fork()){
       case -1:
