@@ -6,3 +6,4 @@ metisInputFile*
 *.sumocfg
 *.rou.xml
 processed_routes.xml
+main.exe

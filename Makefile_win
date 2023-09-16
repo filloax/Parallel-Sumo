@@ -1,0 +1,12 @@
+CC=g++
+CXXFLAGS= -std=c++11 -I.
+
+all: clean main
+clean:
+	echo "Cleaning"
+	rm *.o || true
+	rm ./main.exe || true
+
+main: main.o ParallelSim.o PartitionManager.o TraCIAPI.o socket.o storage.o Pthread_barrier.o tinyxml2.o
+	echo "Linking"
+	$(CC) *.o -lws2_32 -o main.exe

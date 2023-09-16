@@ -144,9 +144,15 @@ void ParallelSim::partitionNetwork(bool metis){
         perror("fork");
         break;
       case 0:
+        std::cout << "Running convertToMetis.py to split graph..." << std::endl;
         // execute metis for partition
         execvp(args[0], (char*const*) args);
-        std::cout << "execvp() has failed" << std::endl;
+        // python3 not found, try with python
+        if (errno == ENOENT) {
+          args[0] = "python";
+          execvp(args[0], (char*const*) args);
+        }
+        std::cerr << "execvp() for convertToMetis.py has failed: " << errno << std::endl;
         exit(EXIT_FAILURE);
         break;
       default:
@@ -194,7 +200,7 @@ void ParallelSim::partitionNetwork(bool metis){
   // get routes element
   tinyxml2::XMLElement* routesEl = routes.FirstChildElement("routes");
   if (routesEl == nullptr) {
-    std::cout << "xml error: unable to find routes element in routes-file" << std::endl;
+    std::cerr << "xml error: unable to find routes element in routes-file" << std::endl;
     exit(EXIT_FAILURE);
   }
   int count = 0;
@@ -240,15 +246,16 @@ void ParallelSim::partitionNetwork(bool metis){
         break;
       case 0:
         // execute netconvert to create sumo network partition
+        std::cout << "Running netConvert..." << std::endl;
         execv(partArgs[0], (char*const*) partArgs);
-        std::cout << "execv() has failed" << std::endl;
+        std::cerr << "execv() for netConvert has failed: " << errno << std::endl;
         exit(EXIT_FAILURE);
         break;
       default:
         // waiting for partition to be created
         pid = wait(&status);
         if(WEXITSTATUS(status)) {
-          std::cout << "Partition " << i << " failed to be created" << std::endl;
+          std::cerr << "Partition " << i << " failed to be created" << std::endl;
           exit(EXIT_FAILURE);
         }
         printf("partition %d successfully created with status: %d\n", i, WEXITSTATUS(status));
@@ -262,16 +269,22 @@ void ParallelSim::partitionNetwork(bool metis){
           break;
         case 0:
           // execute cutRoutes.py to create routes
+          std::cout << "Running cutRoutes.py to create routes..." << std::endl;
           execvp(rouArgs[0], (char*const*) rouArgs);
-          std::cout << "execvp() has failed" << std::endl;
+          // python3 not found, try with python
+          if (errno == ENOENT) {
+            rouArgs[0] = "python";
+            execvp(rouArgs[0], (char*const*) rouArgs);
+          }
+          std::cerr << "execvp() for cutRoutes.py has failed: " << errno << std::endl;
           exit(EXIT_FAILURE);
           break;
         default:
           // waiting for routes to be created
           pid = wait(&status);
           if(WEXITSTATUS(status)) {
-            std::cout << "Routes " << i << " failed to be created" << std::endl;
-            std::cout << "Routes must be specified as explicit edges" << std::endl;
+            std::cerr << "Routes " << i << " failed to be created" << std::endl;
+            std::cerr << "Routes must be specified as explicit edges" << std::endl;
             exit(EXIT_FAILURE);
           }
           printf("routes %d successfully created with status: %d\n", i, WEXITSTATUS(status));

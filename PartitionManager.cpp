@@ -9,8 +9,9 @@ Author: Phillip Taylor
 
 
 #include <iostream>
-#include <unistd.h>
+#include <time.h>
 #include <algorithm>
+#include <unistd.h>
 #include "TraCIAPI.h"
 #include "PartitionManager.h"
 
@@ -228,7 +229,7 @@ void PartitionManager::internalSim() {
       break;
   }
   // wait for server to startup (1 second)
-  usleep(1000000);
+  nanosleep((const struct timespec[]){{1, 0}}, NULL);
   // ensure all servers have started before simulation begins
   pthread_barrier_wait(barrierAddr);
   connect();

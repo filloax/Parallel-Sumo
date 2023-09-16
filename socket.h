@@ -9,6 +9,10 @@
 #ifndef __SHAWN_APPS_TCPIP_SOCKET_H
 #define __SHAWN_APPS_TCPIP_SOCKET_H
 
+#if defined(_WIN32) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
+	#define WIN_SOCKET
+#endif
+
 #ifdef SHAWN
      #include <shawn_config.h>
      #include "_apps_enable_cmake.h"
@@ -110,7 +114,7 @@ namespace tcpip
 	private:
 		void init();
 		static void BailOnSocketError(std::string context);
-#ifdef WIN32
+#ifdef WIN_SOCKET
 		static std::string GetWinsockErrorString(int err);
 #endif
 		bool atoaddr(std::string, struct sockaddr_in& addr);
@@ -123,7 +127,7 @@ namespace tcpip
 		bool blocking_;
 
 		bool verbose_;
-#ifdef WIN32
+#ifdef WIN_SOCKET
 		static bool init_windows_sockets_;
 		static bool windows_sockets_initialized_;
 		static int instance_count_;
