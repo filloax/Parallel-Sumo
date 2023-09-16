@@ -2,7 +2,11 @@
 
 Tweaks to the Parallel-Sumo repo as part of a thesis work, to study possibilities of parallelization in SUMO.
 
-Remember to set the SUMO_HOME environment variable to the directory containing SUMO?
+Remember to set the SUMO_HOME environment variable to the directory containing SUMO!
+
+### Installation and dependencies
+
+First, you need to install Eclipse [SUMO](https://eclipse.dev/sumo/). This version of Parallel-Sumo also requires the [pymetis](https://github.com/inducer/pymetis) python package (on Windows, it is recommended to install it through conda-forge as linked in its repository), instead of the metis repository, for the purpose of simpler building in different operating systems. Python 3 is also required, as in the original repo.
 
 ### How to compile:
 

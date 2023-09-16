@@ -137,7 +137,7 @@ void ParallelSim::partitionNetwork(bool metis){
   if(metis) {
     pid_t pid;
     int status;
-    const char* args[6] = {"python3", "convertToMetis.py", netFile.c_str(), std::to_string(numThreads).c_str(), NULL};
+    const char* args[6] = {"python3", "scripts/convertToMetis.py", netFile.c_str(), std::to_string(numThreads).c_str(), NULL};
     switch(pid = fork()){
       case -1:
         // fork() has failed
@@ -237,7 +237,7 @@ void ParallelSim::partitionNetwork(bool metis){
       netconvertOption2 = partBounds[i];
 
     const char* partArgs[8] = {NETCONVERT_BINARY, netconvertOption1.c_str(), netconvertOption2.c_str(), "-s", netFile.c_str(), "-o", netPart.c_str(), NULL};
-    const char* rouArgs[11] = {"python3", "cutRoutes.py", netPart.c_str(), "processed_routes.xml", "--routes-output", rouPart.c_str(), "--orig-net", netFile.c_str(), "--disconnected-action", "keep", NULL};
+    const char* rouArgs[11] = {"python3", "scripts/cutRoutes.py", netPart.c_str(), "processed_routes.xml", "--routes-output", rouPart.c_str(), "--orig-net", netFile.c_str(), "--disconnected-action", "keep", NULL};
     // create partition
     switch(pid = fork()){
       case -1:
