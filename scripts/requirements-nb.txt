@@ -1,0 +1,3 @@
+# notebook requirements
+ipykernel
+matplotlib

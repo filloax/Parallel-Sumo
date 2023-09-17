@@ -8,3 +8,4 @@ metisInputFile*
 processed_routes.xml
 main.exe
 .vscode/**
+**/__pycache__/**

@@ -1,0 +1,3 @@
+networkx
+metis # this also requires METIS to be separately installed, see README
+# tweaks to metis might be necessary nowadays to make some of its examples work with python 3.11, but not necessarily for main functionality

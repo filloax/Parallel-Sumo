@@ -1,0 +1,11 @@
+	1
+Error	C2059	syntax error: '('	cmpfillin	C:\Program Files (x86)\Windows Kits\10\Include\10.0.19041.0\ucrt\corecrt_math.h	530		3
+Error	C2059	syntax error: '('	metis	C:\Program Files (x86)\Windows Kits\10\Include\10.0.19041.0\ucrt\corecrt_math.h	530		57
+Error	C2059	syntax error: '('	graphchk	C:\Program Files (x86)\Windows Kits\10\Include\10.0.19041.0\ucrt\corecrt_math.h	530		2
+Error	C2059	syntax error: '('	m2gmetis	C:\Program Files (x86)\Windows Kits\10\Include\10.0.19041.0\ucrt\corecrt_math.h	530		3
+Error	C2059	syntax error: '('	gpmetis	C:\Program Files (x86)\Windows Kits\10\Include\10.0.19041.0\ucrt\corecrt_math.h	530		4
+Error (active)	E0651	a calling convention may not be followed by a nested declarator	m2gmetis	C:\Program Files (x86)\Windows Kits\10\Include\10.0.19041.0\ucrt\corecrt_math.h	530		1
+Severity	Code	Description	Project	File	Line	Suppression State	1
+Error (active)	E0040	expected an identifier	m2gmetis	C:\Program Files (x86)\Windows Kits\10\Include\10.0.19041.0\ucrt\corecrt_math.h	530		1
+Error	C2059	syntax error: '('	mpmetis	C:\Program Files (x86)\Windows Kits\10\Include\10.0.19041.0\ucrt\corecrt_math.h	530		4
+Error	C2059	syntax error: '('	ndmetis	C:\Program Files (x86)\Windows Kits\10\Include\10.0.19041.0\ucrt\corecrt_math.h	530		4

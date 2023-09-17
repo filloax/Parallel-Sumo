@@ -1,5 +1,6 @@
 # convertToMetis.py
 # Author: Phillip Taylor
+# Tweaked by Filippo Lenzi
 
 """
 Convert SUMO network into proper format for METIS input, partition with METIS,
@@ -14,6 +15,7 @@ import sys
 import codecs
 import copy
 import subprocess
+import metis
 
 from optparse    import OptionParser
 from collections import defaultdict
@@ -40,25 +42,26 @@ def main(options):
     net = readNet(options.network)
     nodes = net.getNodes()
     nodesDict = {}
-    neighbors = []
     numNodes = len(nodes)
+    # for every node i, list of its neighbors indices
+    neighbors = [None] * numNodes
     numUndirectedEdges = 0
     for i in range(numNodes):
-        nodesDict.update({nodes[i] : i})
+        nodesDict[nodes[i]] = i
         neighs = nodes[i].getNeighboringNodes()
         for n in neighs:
             if n not in nodesDict:
                 numUndirectedEdges+=1
-        neighbors.append(neighs)
-
-    # write metis input file
-    with codecs.open("metisInputFile.metis", 'w', encoding='utf8') as f:
-        f.write("%s %s\n" % (numNodes, numUndirectedEdges))
-        for neighs in neighbors:
-            f.write("%s\n" % (" ".join([str(i+1) for i in [nodesDict[n] for n in neighs]])))
+        neighbors[i] = neighs
 
     # execute metis
-    subprocess.call(["gpmetis", "-objtype=vol", "-contig", "metisInputFile.metis", options.parts])
+    # params passed by original program not represented here: 
+    # "-objtype=vol", "-contig"
+    objval, parts = metis.part_graph(
+        neighbors, nparts=options.parts, 
+        objtype='vol',
+        contig=True,
+    )
 
     # get edges corresponding to partitions
     edges = [set() for _ in range(int(options.parts))]
