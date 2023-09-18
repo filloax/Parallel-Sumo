@@ -24,6 +24,7 @@ class ParallelSim {
     const char* cfgFile;
     std::string netFile;
     std::string routeFile;
+    std::string dataFolder;
     int port;
     int numThreads;
     int endTime;

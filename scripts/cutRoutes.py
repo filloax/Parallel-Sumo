@@ -18,6 +18,8 @@
 # and delete vehicles that do not start in this partition to be added at
 # runtime with TraCI.
 
+# edited by Filloax
+
 """
 Cut down routes from a large scenario to a sub-scenario optionally using exitTimes
 Output can be a route file or a tripfile.
@@ -381,7 +383,7 @@ def main(options):
 
     busStopEdges = {}
     if options.stops_output:
-        busStops = codecs.open(options.stops_output, 'w', encoding='utf8')
+        busStops = open(options.stops_output, 'w', encoding='utf8')
         busStops.write(
             '<additional xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" ' +
             'xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/additional_file.xsd">\n')
@@ -451,7 +453,7 @@ def main(options):
     if options.big:
         # write output unsorted
         tmpname = options.output + ".unsorted"
-        with codecs.open(tmpname, 'w', encoding='utf8') as f:
+        with open(tmpname, 'w', encoding='utf8') as f:
             write_to_file(
                 cut_routes(edges, orig_net, options, busStopEdges), f)
         # sort out of memory
@@ -459,7 +461,7 @@ def main(options):
     else:
         routes = list(cut_routes(edges, orig_net, options, busStopEdges))
         #routes.sort(key=lambda v: v[0])
-        with codecs.open(options.output, 'w', encoding='utf8') as f:
+        with open(options.output, 'w', encoding='utf8') as f:
             write_to_file(routes, f)
 
 

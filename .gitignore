@@ -1,11 +1,6 @@
 *.o
 main
-edgesPart*
-*.net.xml
-metisInputFile*
-*.sumocfg
-*.rou.xml
-processed_routes.xml
 main.exe
 .vscode/**
 **/__pycache__/**
+data/**

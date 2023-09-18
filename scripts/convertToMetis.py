@@ -7,18 +7,14 @@ Convert SUMO network into proper format for METIS input, partition with METIS,
 and write in one file per partition the SUMO network edges of that partition.
 
 """
-from __future__ import absolute_import
-from __future__ import print_function
-
 import os
 import sys
-import codecs
-import copy
-import subprocess
-import metis
 
-from optparse    import OptionParser
-from collections import defaultdict
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('netfile', help="SUMO network file to partition (in .net.xml format)")
+parser.add_argument('numparts', type=int, help="Amount of partitions to create. Might end up being lower in the output in small graphs.")
 
 if 'SUMO_HOME' in os.environ:
     tools = os.path.join(os.environ['SUMO_HOME'], 'tools')
@@ -29,59 +25,82 @@ if 'SUMO_HOME' in os.environ:
 else:
     sys.exit("please declare environment variable 'SUMO_HOME'")
 
+if 'METIS_DLL' in os.environ:
+    import metis
+else:
+    sys.exit("please declare environment variable 'METIS_DLL' to the complete path of the metis library dll or lib file! (See README)")
 
-def get_options(args=sys.argv[1:]):
-    optParser = OptionParser()
-    options, args = optParser.parse_args(args=args)
-    options.network = args[0]
-    options.parts = args[1]
-    return options
+def remove_non_empty_parts(partitions: list[int]):
+    """From a list assigning a partition to each index, remove 
+    missing indices (meaning, shift later ones back so they are a
+    continuous range).
+    METIS might sometimes return empty partitions in small graphs.
+    """
 
+    part_values = set(partitions)
+    min_val = 0
+    max_val = max(part_values)
+    missing_values = set(range(min_val, max_val + 1)) - part_values
+    offsets = {v: len([x for x in missing_values if x < v]) for v in part_values}
 
-def main(options):
-    net = readNet(options.network)
+    return [x - offsets[x] for x in partitions]
+
+def main(netfile: str, numparts: int):
+    net = readNet(netfile)
     nodes = net.getNodes()
     nodesDict = {}
     numNodes = len(nodes)
     # for every node i, list of its neighbors indices
     neighbors = [None] * numNodes
     numUndirectedEdges = 0
-    for i in range(numNodes):
-        nodesDict[nodes[i]] = i
-        neighs = nodes[i].getNeighboringNodes()
+    for i, node in enumerate(nodes):
+        nodesDict[node] = i
+    for i, node in enumerate(nodes):
+        neighs = node.getNeighboringNodes()
+        # print(f"{i}/{node}: {neighs}")
         for n in neighs:
             if n not in nodesDict:
                 numUndirectedEdges+=1
-        neighbors[i] = neighs
+        neighbors[i] = [nodesDict[nnode] for nnode in neighs]
+
+    # print(f"neighbor lists: {neighbors}")
 
     # execute metis
-    # params passed by original program not represented here: 
-    # "-objtype=vol", "-contig"
-    objval, parts = metis.part_graph(
-        neighbors, nparts=options.parts, 
+    # edgecuts: amount of edges lying between partitions, that were cut
+    edgecuts, parts = metis.part_graph(
+        neighbors, nparts=numparts, 
         objtype='vol',
         contig=True,
     )
 
+    # parts is a list like this: parts[nodeid] = partid
+    # might have empty partitions with metis in small graphs, so remove em
+    parts = remove_non_empty_parts(parts)
+
+    print("parts:", parts)
+
+    actual_numparts = len(set(parts))
+
     # get edges corresponding to partitions
-    edges = [set() for _ in range(int(options.parts))]
-    curr = 0
-    with codecs.open("metisInputFile.metis.part."+options.parts, 'r', encoding='utf8') as f:
-        for line in f:
-            part = int(line)
-            nodeEdges = nodes[curr].getIncoming() + nodes[curr].getOutgoing()
-            for e in nodeEdges:
-                if e.getID() not in edges[part]:
-                    edges[part].add(e.getID())
-            curr+=1
+    edges = [set() for _ in range(actual_numparts)]
+    for node, partition in zip(nodes, parts):
+        nodeEdges = node.getIncoming() + node.getOutgoing()
+        # print(f"{node} in {partition}: {nodeEdges}")
+        for e in nodeEdges:
+            if e.getID() not in edges[partition]:
+                edges[partition].add(e.getID())
+
+    print("edges", edges)
+
+    with open(os.path.join("data", "numParts.txt"), 'w', encoding='utf-8') as f:
+        f.write(f"{actual_numparts}")
 
     # write edges of partitions in separate files
-    for i in range(len(edges)):
-        with codecs.open("edgesPart"+str(i)+".txt", 'w', encoding='utf8') as f:
-            for eID in edges[i]:
-                f.write("%s\n" % (eID))
-
-
+    for i, edge_set in enumerate(edges):
+        with open(os.path.join("data", f"edgesPart{i}.txt"), 'w', encoding='utf-8') as f:
+            for eID in edge_set:
+                print(eID, file=f)
 
 if __name__ == "__main__":
-    main(get_options())
+    args = parser.parse_args()
+    main(args.netfile, args.numparts)

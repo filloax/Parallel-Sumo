@@ -8,9 +8,11 @@ Author: Phillip Taylor
 */
 
 #include <iostream>
+#include <fstream>
 #include <pthread.h>
 #include <ctime>
 #include <unistd.h>
+#include <stdlib.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <fcntl.h>
@@ -28,6 +30,7 @@ ParallelSim::ParallelSim(const std::string& host, int port, const char* cfg, boo
   port(port),
   cfgFile(cfg),
   numThreads(threads) {
+  dataFolder = "data";
 
   // set paths for sumo executable binaries
   const char* sumoExe;
@@ -137,7 +140,8 @@ void ParallelSim::partitionNetwork(bool metis){
   if(metis) {
     pid_t pid;
     int status;
-    const char* args[6] = {"python3", "scripts/convertToMetis.py", netFile.c_str(), std::to_string(numThreads).c_str(), NULL};
+    std::string numThreadsStr = std::to_string(numThreads);
+    const char* args[] = {"python3", "scripts/convertToMetis.py", netFile.c_str(), numThreadsStr.c_str(), NULL};
     switch(pid = fork()){
       case -1:
         // fork() has failed
@@ -145,6 +149,11 @@ void ParallelSim::partitionNetwork(bool metis){
         break;
       case 0:
         std::cout << "Running convertToMetis.py to split graph..." << std::endl;
+        std::cout << "command: ";
+        for (int i = 0; i < 4; i++) {
+          std::cout << args[i] << " ";
+        }
+        std::cout << std::endl;
         // execute metis for partition
         execvp(args[0], (char*const*) args);
         // python3 not found, try with python
@@ -163,6 +172,23 @@ void ParallelSim::partitionNetwork(bool metis){
           exit(EXIT_FAILURE);
         }
         printf("metis partitioning successful with status: %d\n", WEXITSTATUS(status));
+
+        // Read actual partition num in case METIS had empty partitions
+        std::ifstream partNumFile(dataFolder + "/numParts.txt"); // Open the input file
+
+        if (partNumFile.is_open()) {
+          int number;
+          if (partNumFile >> number) {
+            numThreads = number;
+            printf("Set numThreads to %d from METIS output\n", numThreads);
+          } else {
+            std::cerr << "Failed to read metis output partition num from file." << std::endl;
+          }
+
+          partNumFile.close(); // Close the file
+        } else {
+          std::cerr << "Failed to open metis output partition num file." << std::endl;
+        }
       }
       netconvertOption1 = "--keep-edges.input-file";
   }
@@ -218,26 +244,26 @@ void ParallelSim::partitionNetwork(bool metis){
       count++;
     }
   }
-  routes.SaveFile("processed_routes.xml");
+  routes.SaveFile((dataFolder + "/processed_routes.xml").c_str());
 
-
+  std::string processedRoutesPath = dataFolder + "/processed_routes.xml";
   for(int i=0; i<numThreads; i++){
     pid_t pid;
     int status;
     std::string charI = std::to_string(i);
-    std::string netPart = "part"+charI+".net.xml";
-    std::string rouPart = "part"+charI+".rou.xml";
-    std::string cfgPart = "part"+charI+".sumocfg";
+    std::string netPart = dataFolder + "/part"+charI+".net.xml";
+    std::string rouPart = dataFolder + "/part"+charI+".rou.xml";
+    std::string cfgPart = dataFolder + "/part"+charI+".sumocfg";
 
     std::string netconvertOption2;
     if(metis)
-      netconvertOption2 = "edgesPart"+charI+".txt";
+      netconvertOption2 = dataFolder + "/edgesPart"+charI+".txt";
 
     else
       netconvertOption2 = partBounds[i];
 
     const char* partArgs[8] = {NETCONVERT_BINARY, netconvertOption1.c_str(), netconvertOption2.c_str(), "-s", netFile.c_str(), "-o", netPart.c_str(), NULL};
-    const char* rouArgs[11] = {"python3", "scripts/cutRoutes.py", netPart.c_str(), "processed_routes.xml", "--routes-output", rouPart.c_str(), "--orig-net", netFile.c_str(), "--disconnected-action", "keep", NULL};
+    const char* rouArgs[11] = {"python3", "scripts/cutRoutes.py", netPart.c_str(), processedRoutesPath.c_str(), "--routes-output", rouPart.c_str(), "--orig-net", netFile.c_str(), "--disconnected-action", "keep", NULL};
     // create partition
     switch(pid = fork()){
       case -1:
@@ -270,6 +296,10 @@ void ParallelSim::partitionNetwork(bool metis){
         case 0:
           // execute cutRoutes.py to create routes
           std::cout << "Running cutRoutes.py to create routes..." << std::endl;
+          std::cout << "command: " << rouArgs[0] << " " << rouArgs[1] << " " << rouArgs[2] << " " << rouArgs[3] 
+            << " " << rouArgs[4] << " " << rouArgs[5] << " " << rouArgs[6] << " " << rouArgs[7] << " " << rouArgs[8]
+            << " " << rouArgs[9]
+            << std::endl;
           execvp(rouArgs[0], (char*const*) rouArgs);
           // python3 not found, try with python
           if (errno == ENOENT) {
@@ -308,11 +338,11 @@ void ParallelSim::partitionNetwork(bool metis){
        tinyxml2::XMLElement* netFileEl = inputEl->FirstChildElement("net-file");
        tinyxml2::XMLElement* rouFileEl = inputEl->FirstChildElement("route-files");
        tinyxml2::XMLElement* guiFileEl = inputEl->FirstChildElement("gui-settings-file");
-       netFileEl->SetAttribute("value", netPart.c_str());
-       rouFileEl->SetAttribute("value", rouPart.c_str());
+       netFileEl->SetAttribute("value", ("../" + netPart).c_str());
+       rouFileEl->SetAttribute("value", ("../" + rouPart).c_str());
        if(guiFileEl != nullptr) {
          std::string newGuiVal = path+guiFileEl->Attribute("value");
-         guiFileEl->SetAttribute("value", newGuiVal.c_str());
+         guiFileEl->SetAttribute("value", ("../" + newGuiVal).c_str());
      }
        cfgPartDoc.SaveFile(cfgPart.c_str());
      }
@@ -322,7 +352,7 @@ void ParallelSim::setBorderEdges(std::vector<border_edge_t> borderEdges[], std::
   std::unordered_multimap<std::string, int> allEdges;
   // add all edges to map, mapping edge ids to partition ids
   for(int i=0; i<parts.size(); i++) {
-    std::string currNetFile = "part"+std::to_string(i)+".net.xml";
+    std::string currNetFile = dataFolder + "/part"+std::to_string(i)+".net.xml";
     tinyxml2::XMLDocument currNet;
     tinyxml2::XMLError e = currNet.LoadFile(currNetFile.c_str());
     tinyxml2::XMLElement* netEl = currNet.FirstChildElement("net");
@@ -344,7 +374,7 @@ void ParallelSim::setBorderEdges(std::vector<border_edge_t> borderEdges[], std::
       border_edge_t borderEdge2 = {};
       borderEdge1.id = key;
       borderEdge2.id = key;
-      std::string currNetFile = "part"+std::to_string(edgeIt1->second)+".net.xml";
+      std::string currNetFile = dataFolder + "/part"+std::to_string(edgeIt1->second)+".net.xml";
       tinyxml2::XMLDocument currNet;
       tinyxml2::XMLError e = currNet.LoadFile(currNetFile.c_str());
       tinyxml2::XMLElement* netEl = currNet.FirstChildElement("net");
@@ -403,7 +433,7 @@ void ParallelSim::startSim(){
   pthread_cond_init(&cond, NULL);
   pthread_barrier_init(&barrier, NULL, numThreads);
   for(int i=0; i<numThreads; i++) {
-    cfg = "part"+std::to_string(i)+".sumocfg";
+    cfg = dataFolder + "/part"+std::to_string(i)+".sumocfg";
     PartitionManager* part = new PartitionManager(SUMO_BINARY, i, &barrier, &lock, &cond, cfg, host, port+i, endTime);
     parts.push_back(part);
   }
