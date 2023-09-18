@@ -26,6 +26,7 @@ class PartitionManager {
     std::string host;
     int port;
     int endT;
+    std::string dataFolder = "";
     bool synching = false;
     bool waiting = false;
     pthread_t myThread;
@@ -49,8 +50,8 @@ class PartitionManager {
 
 public:
    // params: sumo binary, id, barrier, lock, cond, sumo config, host, port, end time
-   PartitionManager(const char*, int,  pthread_barrier_struct*, pthread_mutex_t*,
-     pthread_cond_t*, std::string&, std::string&, int, int);
+   PartitionManager(const char* binary, int id, pthread_barrier_struct* barr,
+    pthread_mutex_t* lock, pthread_cond_t* cond, std::string& cfg, std::string& host, int port, int t);
   // set this partition's border edges
    void setMyBorderEdges(std::vector<border_edge_t>);
    /* Starts this partition in a thread. Returns true if the thread was

@@ -16,6 +16,7 @@ Author: Phillip Taylor
 #include <unistd.h>
 #include "TraCIAPI.h"
 #include "PartitionManager.h"
+#include "utils.h"
 
 PartitionManager::PartitionManager(const char* binary, int id, pthread_barrier_struct* barr,
   pthread_mutex_t* lock, pthread_cond_t* cond, std::string& cfg, std::string& host, int port, int t) :
@@ -27,7 +28,10 @@ PartitionManager::PartitionManager(const char* binary, int id, pthread_barrier_s
   cfg(cfg),
   host(host),
   port(port),
-  endT(t) {}
+  endT(t)
+  {
+    dataFolder = "data";
+  }
 
 void PartitionManager::setMyBorderEdges(std::vector<border_edge_t> borderEdges) {
   for(border_edge_t e : borderEdges) {
@@ -220,7 +224,14 @@ void PartitionManager::internalSim() {
   // ISSUE: currently this prints the right value, but prints are inconsistent (sometimes 2 threads have same port in one print but not another)
   // and mainly sometimes the simulation is started with two threads having the same port, which of course leads to errors
   // Probably an issue with memory and pointers in the original program?
-  const char* args[7] = {SUMO_BINARY, "-c", cfg.c_str(), "--remote-port", std::to_string(port).c_str(), "--start", NULL};
+  std::string portStr = std::to_string(port);
+  std::vector<std::string> args {
+    SUMO_BINARY, 
+    "-c", cfg, 
+    "--remote-port", portStr, 
+    "--start",
+    "--netstate-dump", dataFolder+"/output"+std::to_string(id)+".xml"
+  };
 
   switch(pid = fork()){
     case -1:
@@ -229,9 +240,8 @@ void PartitionManager::internalSim() {
       break;
     case 0:
       // execute sumo simulation
-      for (int i = 0; i < 6; i++) printf("%s ", args[i]);
-      printf("\n");
-      execv(args[0], (char*const*) args);
+      for (int i = 0; i < args.size(); i++) printf("%s ", args[i].c_str()); printf("\n");
+      EXECVP_CPP(args);
       std::cout << "execv() has failed" << std::endl;
       exit(EXIT_FAILURE);
       break;
