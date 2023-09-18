@@ -9,6 +9,8 @@ Author: Phillip Taylor
 
 
 #include <iostream>
+#include <algorithm>
+#include <iterator>
 #include <time.h>
 #include <algorithm>
 #include <unistd.h>
@@ -37,6 +39,7 @@ void PartitionManager::setMyBorderEdges(std::vector<border_edge_t> borderEdges) 
 }
 
 bool PartitionManager::startPartition() {
+  printf("Manager %d: creating thread on port %d, cfg %s\n", id, port, cfg.c_str());
   return (pthread_create(&myThread, NULL, internalSimFunc, this) == 0);
 }
 
@@ -214,6 +217,9 @@ void PartitionManager::handleFromEdges(int num, std::vector<std::string> prevFro
 
 void PartitionManager::internalSim() {
   pid_t pid;
+  // ISSUE: currently this prints the right value, but prints are inconsistent (sometimes 2 threads have same port in one print but not another)
+  // and mainly sometimes the simulation is started with two threads having the same port, which of course leads to errors
+  // Probably an issue with memory and pointers in the original program?
   const char* args[7] = {SUMO_BINARY, "-c", cfg.c_str(), "--remote-port", std::to_string(port).c_str(), "--start", NULL};
 
   switch(pid = fork()){
@@ -223,6 +229,8 @@ void PartitionManager::internalSim() {
       break;
     case 0:
       // execute sumo simulation
+      for (int i = 0; i < 6; i++) printf("%s ", args[i]);
+      printf("\n");
       execv(args[0], (char*const*) args);
       std::cout << "execv() has failed" << std::endl;
       exit(EXIT_FAILURE);
@@ -234,7 +242,7 @@ void PartitionManager::internalSim() {
   pthread_barrier_wait(barrierAddr);
   connect();
   pthread_mutex_lock(lockAddr);
-  std::cout << "partition " << id << " started in thread " << pthread_self() << std::endl;
+  std::cout << "partition " << id << " started in thread " << pthread_self() << " (port " << args[4] << ")" << std::endl;
   pthread_mutex_unlock(lockAddr);
   int numFromEdges = fromBorderEdges.size();
   int numToEdges = toBorderEdges.size();

@@ -434,7 +434,7 @@ void ParallelSim::startSim(){
   pthread_barrier_init(&barrier, NULL, numThreads);
   for(int i=0; i<numThreads; i++) {
     cfg = dataFolder + "/part"+std::to_string(i)+".sumocfg";
-    printf("Starting thread %d on cfg file %s, port=%d\n", i, cfg.c_str(), port+i);
+    printf("Creating partition manager %d on cfg file %s, port=%d\n", i, cfg.c_str(), port+i);
     PartitionManager* part = new PartitionManager(SUMO_BINARY, i, &barrier, &lock, &cond, cfg, host, port+i, endTime);
     parts.push_back(part);
   }
