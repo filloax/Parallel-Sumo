@@ -12,7 +12,10 @@ Author: Phillip Taylor
 
 #include <cstdlib>
 #include <pthread.h>
+#include <string>
+#include <vector>
 #include "Pthread_barrier.h"
+#include "TraCIAPI.h"
 
 typedef struct border_edge_t border_edge_t;
 
@@ -26,6 +29,7 @@ class PartitionManager {
     std::string host;
     int port;
     int endT;
+    std::vector<std::string> extraArgs;
     std::string dataFolder = "";
     bool synching = false;
     bool waiting = false;
@@ -51,7 +55,8 @@ class PartitionManager {
 public:
    // params: sumo binary, id, barrier, lock, cond, sumo config, host, port, end time
    PartitionManager(const char* binary, int id, pthread_barrier_struct* barr,
-    pthread_mutex_t* lock, pthread_cond_t* cond, std::string& cfg, std::string& host, int port, int t);
+    pthread_mutex_t* lock, pthread_cond_t* cond, std::string& cfg, std::string& host, int port, int t,
+    std::vector<std::string> extraArgs);
   // set this partition's border edges
    void setMyBorderEdges(std::vector<border_edge_t>);
    /* Starts this partition in a thread. Returns true if the thread was

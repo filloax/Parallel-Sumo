@@ -11,15 +11,18 @@ Author: Phillip Taylor
 #include <iostream>
 #include <algorithm>
 #include <iterator>
+#include <string>
 #include <time.h>
 #include <algorithm>
 #include <unistd.h>
+#include <vector>
 #include "TraCIAPI.h"
 #include "PartitionManager.h"
 #include "utils.h"
 
 PartitionManager::PartitionManager(const char* binary, int id, pthread_barrier_struct* barr,
-  pthread_mutex_t* lock, pthread_cond_t* cond, std::string& cfg, std::string& host, int port, int t) :
+  pthread_mutex_t* lock, pthread_cond_t* cond, std::string& cfg, std::string& host, int port, int t,
+  std::vector<std::string> extraArgs) :
   SUMO_BINARY(binary),
   id(id),
   lockAddr(lock),
@@ -28,7 +31,8 @@ PartitionManager::PartitionManager(const char* binary, int id, pthread_barrier_s
   cfg(cfg),
   host(host),
   port(port),
-  endT(t)
+  endT(t),
+  extraArgs(extraArgs)
   {
     dataFolder = "data";
   }
@@ -232,6 +236,8 @@ void PartitionManager::internalSim() {
     "--start",
     "--netstate-dump", dataFolder+"/output"+std::to_string(id)+".xml"
   };
+  args.reserve(args.size() + distance(extraArgs.begin(), extraArgs.end()));
+  args.insert(args.end(),extraArgs.begin(),extraArgs.end());
 
   switch(pid = fork()){
     case -1:

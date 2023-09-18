@@ -27,13 +27,13 @@ class ParallelSim {
     std::string dataFolder;
     int port;
     int numThreads;
+    std::vector<std::string> extraArgs;
     int endTime;
     // sets the border edges for all partitions
     void setBorderEdges(std::vector<border_edge_t>[], std::vector<PartitionManager*>&);
 
   public:
-    // params: host, port, cfg file, gui (true), threads
-    ParallelSim(const std::string&, int, const char*, bool, int);
+    ParallelSim(const std::string& host, int port, const char* file, bool gui, int threads, std::vector<std::string> extraArgs);
     // gets network and route file paths
     void getFilePaths();
     // partition the SUMO network

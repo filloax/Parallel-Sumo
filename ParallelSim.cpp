@@ -25,11 +25,12 @@ Author: Phillip Taylor
 
 typedef std::unordered_multimap<std::string, int>::iterator umit;
 
-ParallelSim::ParallelSim(const std::string& host, int port, const char* cfg, bool gui, int threads) :
+ParallelSim::ParallelSim(const std::string& host, int port, const char* cfg, bool gui, int threads, std::vector<std::string> extraArgs) :
   host(host),
   port(port),
   cfgFile(cfg),
-  numThreads(threads) {
+  numThreads(threads),
+  extraArgs(extraArgs) {
   dataFolder = "data";
 
   // set paths for sumo executable binaries
@@ -435,7 +436,7 @@ void ParallelSim::startSim(){
   for(int i=0; i<numThreads; i++) {
     cfg = dataFolder + "/part"+std::to_string(i)+".sumocfg";
     printf("Creating partition manager %d on cfg file %s, port=%d\n", i, cfg.c_str(), port+i);
-    PartitionManager* part = new PartitionManager(SUMO_BINARY, i, &barrier, &lock, &cond, cfg, host, port+i, endTime);
+    PartitionManager* part = new PartitionManager(SUMO_BINARY, i, &barrier, &lock, &cond, cfg, host, port+i, endTime, extraArgs);
     parts.push_back(part);
   }
 

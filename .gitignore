@@ -4,3 +4,4 @@ main.exe
 .vscode/**
 **/__pycache__/**
 data/**
+.venv
