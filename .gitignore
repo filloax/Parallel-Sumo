@@ -1,7 +1,9 @@
 *.o
+*.d
 main
 main.exe
 .vscode/**
 **/__pycache__/**
 data/**
 .venv
+.obj/libs/storage.d

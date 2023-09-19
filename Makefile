@@ -1,9 +1,36 @@
 CC=g++
-CXXFLAGS= -std=c++11 -I. -g
+CXXFLAGS= -std=c++11 -I.
+BIN_DIR = bin
+OBJ_DIR = .obj
+SOURCES := $(shell find * -type f -name "*.cpp" -o -name "*.c")
+SRC_LST := $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(SOURCES)))
+OBJECTS := $(addprefix $(OBJ_DIR)/,$(SRC_LST))
 
 all: clean main
-clean:
-	rm *.o || true
-	rm ./main || true
 
-main: main.o ParallelSim.o PartitionManager.o TraCIAPI.o socket.o storage.o Pthread_barrier.o tinyxml2.o
+clean:
+	@echo "Cleaning"
+	rm -f **/*.o
+	rm -f $(BIN_DIR)/main
+
+main: $(BIN_DIR)/main
+
+$(BIN_DIR)/main: $(OBJECTS)
+	@echo "Linking"
+	@mkdir -p $(@D)
+	$(CC) $^ -o $@
+
+# %.o: %.cpp
+# 	$(CC) $(CXXFLAGS) -c $< -o $@
+
+.SECONDEXPANSION:
+$(OBJECTS): $(OBJ_DIR)/%.o: $$(wildcard %.c*)
+	mkdir -p $(@D)
+ifeq "$(suffix $<)" ".cpp"
+	$(CC) -MMD -MP $(CXXFLAGS) -c $< -o $@ 
+else
+#equal for now
+	$(CC) -MMD -MP $(CXXFLAGS) -c $< -o $@
+endif
+
+-include $(OBJECTS:.o=.d)

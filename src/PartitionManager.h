@@ -14,8 +14,8 @@ Author: Phillip Taylor
 #include <pthread.h>
 #include <string>
 #include <vector>
-#include "Pthread_barrier.h"
-#include "TraCIAPI.h"
+#include "libs/Pthread_barrier.h"
+#include "libs/TraCIAPI.h"
 
 typedef struct border_edge_t border_edge_t;
 

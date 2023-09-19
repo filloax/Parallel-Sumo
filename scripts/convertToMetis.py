@@ -30,7 +30,7 @@ if 'METIS_DLL' in os.environ:
 else:
     sys.exit("please declare environment variable 'METIS_DLL' to the complete path of the metis library dll or lib file! (See README)")
 
-def remove_non_empty_parts(partitions: list[int]):
+def remove_non_empty_parts(partitions: list[int], warn: bool = True):
     """From a list assigning a partition to each index, remove 
     missing indices (meaning, shift later ones back so they are a
     continuous range).
@@ -41,6 +41,8 @@ def remove_non_empty_parts(partitions: list[int]):
     min_val = 0
     max_val = max(part_values)
     missing_values = set(range(min_val, max_val + 1)) - part_values
+    if warn:
+        print(f"[WARN] Empty partitions: <{', '.join([str(x) for x in missing_values])}>", file=sys.stderr)
     offsets = {v: len([x for x in missing_values if x < v]) for v in part_values}
 
     return [x - offsets[x] for x in partitions]

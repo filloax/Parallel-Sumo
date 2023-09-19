@@ -16,7 +16,7 @@ Author: Phillip Taylor
 #include <algorithm>
 #include <unistd.h>
 #include <vector>
-#include "TraCIAPI.h"
+#include "libs/TraCIAPI.h"
 #include "PartitionManager.h"
 #include "utils.h"
 

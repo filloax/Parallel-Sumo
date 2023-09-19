@@ -20,8 +20,8 @@ Author: Phillip Taylor
 #include <iterator>
 #include <unordered_map>
 #include <vector>
-#include "Pthread_barrier.h"
-#include "tinyxml2.h"
+#include "libs/Pthread_barrier.h"
+#include "libs/tinyxml2.h"
 #include "ParallelSim.h"
 #include "utils.h"
 
