@@ -1,5 +1,5 @@
 CC=g++
-CXXFLAGS= -std=c++11 -I.
+CXXFLAGS= -std=c++11 -I. -g
 
 all: clean main
 clean:

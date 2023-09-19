@@ -11,6 +11,7 @@ Author: Phillip Taylor
 #include <fstream>
 #include <pthread.h>
 #include <ctime>
+#include <string>
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -18,9 +19,11 @@ Author: Phillip Taylor
 #include <fcntl.h>
 #include <iterator>
 #include <unordered_map>
+#include <vector>
 #include "Pthread_barrier.h"
 #include "tinyxml2.h"
 #include "ParallelSim.h"
+#include "utils.h"
 
 
 typedef std::unordered_multimap<std::string, int>::iterator umit;
@@ -50,11 +53,13 @@ ParallelSim::ParallelSim(const std::string& host, int port, const char* cfg, boo
     int len = strlen(sumoPath);
     char* tmp1 = new char[len+14];
     char* tmp2 = new char[len+16];
+    char* tmp3 = new char[len+26];
     strcpy(tmp1, sumoPath);
     strcpy(tmp2, sumoPath);
+    strcpy(tmp3, sumoPath);
     SUMO_BINARY = strcat(tmp1, sumoExe);
     NETCONVERT_BINARY = strcat(tmp2, "/bin/netconvert");
-
+    CUT_ROUTES_SCRIPT = strcat(tmp3, "/tools/route/cutRoutes.py");
    }
    // get end time
    tinyxml2::XMLDocument cfgDoc;
@@ -121,232 +126,65 @@ void ParallelSim::getFilePaths(){
 }
 
 void ParallelSim::partitionNetwork(bool metis){
+  // Filippo Lenzi: Originally was implemented in C++
+  // in the original program, but because of it not needing to be
+  // perfectly optimized (as partitioning is run once per simulation configuration)
+  // it was converted to a Python script
+  std::string numThreadsStr = std::to_string(numThreads);
+  std::vector<std::string> args {
+    "python", "scripts/createParts.py",
+    "-n", numThreadsStr,
+    "-C", cfgFile,
+    "-N", netFile,
+    "-R", routeFile,
+    "--data-folder", dataFolder
+  };
 
-  // load network xml
-  tinyxml2::XMLDocument network;
-  tinyxml2::XMLError e = network.LoadFile(netFile.c_str());
-  if(e) {
-    std::cout << network.ErrorIDToName(e) << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  // get net element
-  tinyxml2::XMLElement* netEl = network.FirstChildElement("net");
-  if (netEl == nullptr) {
-    std::cout << "xml error: unable to find net element in net-file" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  std::vector<std::string> partBounds;
-  std::string netconvertOption1;
-  // partition network with metis
-  if(metis) {
-    pid_t pid;
-    int status;
-    std::string numThreadsStr = std::to_string(numThreads);
-    const char* args[] = {"python3", "scripts/convertToMetis.py", netFile.c_str(), numThreadsStr.c_str(), NULL};
-    switch(pid = fork()){
-      case -1:
-        // fork() has failed
-        perror("fork");
-        break;
-      case 0:
-        std::cout << "Running convertToMetis.py to split graph..." << std::endl;
-        std::cout << "command: ";
-        for (int i = 0; i < 4; i++) {
-          std::cout << args[i] << " ";
-        }
-        std::cout << std::endl;
-        // execute metis for partition
-        execvp(args[0], (char*const*) args);
-        // python3 not found, try with python
-        if (errno == ENOENT) {
-          args[0] = "python";
-          execvp(args[0], (char*const*) args);
-        }
-        std::cerr << "execvp() for convertToMetis.py has failed: " << errno << std::endl;
+  pid_t pid;
+  int status;
+  switch(pid = fork()) {
+    case -1:
+      // fork() has failed
+      perror("fork");
+      break;
+    case 0:
+      std::cout << "Running createParts.py to split graph and create partition files..." << std::endl;
+      std::cout << "command: ";
+      for (int i = 0; i < args.size(); i++) std::cout << args[i] << " ";
+      std::cout << std::endl;
+      EXECVP_CPP(args);
+      std::cerr << "execvp() for convertToMetis.py has failed: " << errno << std::endl;
+      exit(EXIT_FAILURE);
+      break;
+    default:
+      // waiting for convertToMetis.py
+      pid = wait(&status);
+      if(WEXITSTATUS(status)) {
+        std::cout << "failed while converting to metis" << std::endl;
         exit(EXIT_FAILURE);
-        break;
-      default:
-        // waiting for convertToMetis.py
-        pid = wait(&status);
-        if(WEXITSTATUS(status)) {
-          std::cout << "failed while converting to metis" << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        printf("metis partitioning successful with status: %d\n", WEXITSTATUS(status));
-
-        // Read actual partition num in case METIS had empty partitions
-        std::ifstream partNumFile(dataFolder + "/numParts.txt"); // Open the input file
-
-        if (partNumFile.is_open()) {
-          int number;
-          if (partNumFile >> number) {
-            numThreads = number;
-            printf("Set numThreads to %d from METIS output\n", numThreads);
-          } else {
-            std::cerr << "Failed to read metis output partition num from file." << std::endl;
-          }
-
-          partNumFile.close(); // Close the file
-        } else {
-          std::cerr << "Failed to open metis output partition num file." << std::endl;
-        }
       }
-      netconvertOption1 = "--keep-edges.input-file";
+      printf("metis partitioning successful with status: %d\n", WEXITSTATUS(status));
+      break;
   }
-  else {
-    // partition network as grid
-    tinyxml2::XMLElement* locEl = netEl->FirstChildElement("location");
-    const char* boundText = nullptr;
-    boundText = locEl->Attribute("convBoundary");
-    std::stringstream ss(boundText);
-    std::vector<int> bound;
-    while(ss.good()){
-      std::string substr;
-      getline(ss, substr, ',');
-      bound.push_back(stoi(substr));
+}
+
+void ParallelSim::loadRealNumThreads() {
+  // Read actual partition num in case METIS had empty partitions
+  std::ifstream partNumFile(dataFolder + "/numParts.txt"); // Open the input file
+
+  if (partNumFile.is_open()) {
+    int number;
+    if (partNumFile >> number) {
+      numThreads = number;
+      printf("Set numThreads to %d from METIS output\n", numThreads);
+    } else {
+      std::cerr << "Failed to read metis output partition num from file." << std::endl;
     }
-    int xCenter = (bound[0]+bound[2])/2;
-    int yCenter = (bound[1]+bound[3])/2;
-    int tmpXCenter = xCenter;
-    int tmpYCenter = yCenter;
-    if (numThreads == 2) {
-      partBounds.push_back(std::to_string(bound[0])+","+std::to_string(bound[1])+","+std::to_string(xCenter)+","+std::to_string(bound[2]));
-      partBounds.push_back(std::to_string(xCenter)+","+std::to_string(bound[1])+","+std::to_string(bound[2])+","+std::to_string(bound[2]));
-    }
-    netconvertOption1 = "--keep-edges.in-boundary";
+
+    partNumFile.close(); // Close the file
+  } else {
+    std::cerr << "Failed to open metis output partition num file." << std::endl;
   }
-
-  // preprocess routes file for proper input to cutRoutes.py
-  tinyxml2::XMLDocument routes;
-  e = routes.LoadFile(routeFile.c_str());
-  if(e) {
-    std::cout << routes.ErrorIDToName(e) << std::endl;
-    exit(EXIT_FAILURE);
-  }
-
-  // get routes element
-  tinyxml2::XMLElement* routesEl = routes.FirstChildElement("routes");
-  if (routesEl == nullptr) {
-    std::cerr << "xml error: unable to find routes element in routes-file" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  int count = 0;
-  // create route IDs for all routes defined within vehicles
-  for(tinyxml2::XMLElement* el = routesEl->FirstChildElement("vehicle"); el != NULL; el = el->NextSiblingElement("vehicle")) {
-    tinyxml2::XMLElement* routeEl = el->FirstChildElement("route");
-    if(routeEl != nullptr) {
-      std::string id = "custom_route"+std::to_string(count);
-      tinyxml2::XMLElement* routeRefEl = routes.NewElement("route");
-      routeRefEl->SetAttribute("id", id.c_str());
-      routeRefEl->SetAttribute("edges", routeEl->Attribute("edges"));
-      el->SetAttribute("route", id.c_str());
-      routesEl->LinkEndChild(routeRefEl);
-      el->DeleteChild(routeEl);
-      count++;
-    }
-  }
-  routes.SaveFile((dataFolder + "/processed_routes.xml").c_str());
-
-  std::string processedRoutesPath = dataFolder + "/processed_routes.xml";
-  for(int i=0; i<numThreads; i++){
-    pid_t pid;
-    int status;
-    std::string charI = std::to_string(i);
-    std::string netPart = dataFolder + "/part"+charI+".net.xml";
-    std::string rouPart = dataFolder + "/part"+charI+".rou.xml";
-    std::string cfgPart = dataFolder + "/part"+charI+".sumocfg";
-
-    std::string netconvertOption2;
-    if(metis)
-      netconvertOption2 = dataFolder + "/edgesPart"+charI+".txt";
-
-    else
-      netconvertOption2 = partBounds[i];
-
-    const char* partArgs[8] = {NETCONVERT_BINARY, netconvertOption1.c_str(), netconvertOption2.c_str(), "-s", netFile.c_str(), "-o", netPart.c_str(), NULL};
-    const char* rouArgs[11] = {"python3", "scripts/cutRoutes.py", netPart.c_str(), processedRoutesPath.c_str(), "--routes-output", rouPart.c_str(), "--orig-net", netFile.c_str(), "--disconnected-action", "keep", NULL};
-    // create partition
-    switch(pid = fork()){
-      case -1:
-        // fork() has failed
-        perror("fork");
-        break;
-      case 0:
-        // execute netconvert to create sumo network partition
-        std::cout << "Running netConvert..." << std::endl;
-        execv(partArgs[0], (char*const*) partArgs);
-        std::cerr << "execv() for netConvert has failed: " << errno << std::endl;
-        exit(EXIT_FAILURE);
-        break;
-      default:
-        // waiting for partition to be created
-        pid = wait(&status);
-        if(WEXITSTATUS(status)) {
-          std::cerr << "Partition " << i << " failed to be created" << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        printf("partition %d successfully created with status: %d\n", i, WEXITSTATUS(status));
-
-      }
-      // create routes for partition
-      switch(pid = fork()){
-        case -1:
-          // fork() has failed
-          perror("fork");
-          break;
-        case 0:
-          // execute cutRoutes.py to create routes
-          std::cout << "Running cutRoutes.py to create routes..." << std::endl;
-          std::cout << "command: " << rouArgs[0] << " " << rouArgs[1] << " " << rouArgs[2] << " " << rouArgs[3] 
-            << " " << rouArgs[4] << " " << rouArgs[5] << " " << rouArgs[6] << " " << rouArgs[7] << " " << rouArgs[8]
-            << " " << rouArgs[9]
-            << std::endl;
-          execvp(rouArgs[0], (char*const*) rouArgs);
-          // python3 not found, try with python
-          if (errno == ENOENT) {
-            rouArgs[0] = "python";
-            execvp(rouArgs[0], (char*const*) rouArgs);
-          }
-          std::cerr << "execvp() for cutRoutes.py has failed: " << errno << std::endl;
-          exit(EXIT_FAILURE);
-          break;
-        default:
-          // waiting for routes to be created
-          pid = wait(&status);
-          if(WEXITSTATUS(status)) {
-            std::cerr << "Routes " << i << " failed to be created" << std::endl;
-            std::cerr << "Routes must be specified as explicit edges" << std::endl;
-            exit(EXIT_FAILURE);
-          }
-          printf("routes %d successfully created with status: %d\n", i, WEXITSTATUS(status));
-        }
-        // create sumo cfg file for partition
-        char buf[BUFSIZ];
-        std::size_t size;
-
-        int source = open(cfgFile, O_RDONLY, 0);
-        int dest = open(cfgPart.c_str(), O_WRONLY | O_CREAT, 0644);
-
-        while((size = read(source, buf, BUFSIZ)) > 0){
-          write(dest, buf, size);
-        }
-       close(source);
-       close(dest);
-       // set partition net-file and route-files in cfg file
-       tinyxml2::XMLDocument cfgPartDoc;
-       cfgPartDoc.LoadFile(cfgPart.c_str());
-        tinyxml2::XMLElement* inputEl = cfgPartDoc.FirstChildElement("configuration")->FirstChildElement("input");
-       tinyxml2::XMLElement* netFileEl = inputEl->FirstChildElement("net-file");
-       tinyxml2::XMLElement* rouFileEl = inputEl->FirstChildElement("route-files");
-       tinyxml2::XMLElement* guiFileEl = inputEl->FirstChildElement("gui-settings-file");
-       netFileEl->SetAttribute("value", ("../" + netPart).c_str());
-       rouFileEl->SetAttribute("value", ("../" + rouPart).c_str());
-       if(guiFileEl != nullptr) {
-         std::string newGuiVal = path+guiFileEl->Attribute("value");
-         guiFileEl->SetAttribute("value", ("../" + newGuiVal).c_str());
-     }
-       cfgPartDoc.SaveFile(cfgPart.c_str());
-     }
 }
 
 void ParallelSim::setBorderEdges(std::vector<border_edge_t> borderEdges[], std::vector<PartitionManager*>& parts){
@@ -367,7 +205,7 @@ void ParallelSim::setBorderEdges(std::vector<border_edge_t> borderEdges[], std::
   umit it = allEdges.begin();
   while(it != allEdges.end()) {
     std::string key = it->first;
-    if(allEdges.count(key)>1){
+    if(allEdges.count(key)>1) {
       std::pair<umit, umit> edgePair = allEdges.equal_range(key);
       umit edgeIt1 = edgePair.first;
       umit edgeIt2 = ++edgePair.first;
@@ -406,22 +244,24 @@ void ParallelSim::setBorderEdges(std::vector<border_edge_t> borderEdges[], std::
               borderEdge1.to = to;
               borderEdge2.to = to;
               break;
+            }
           }
+          break;
         }
-        break;
       }
-    }
-    borderEdges[edgeIt1->second].push_back(borderEdge1);
-    borderEdges[edgeIt2->second].push_back(borderEdge2);
+      borderEdges[edgeIt1->second].push_back(borderEdge1);
+      borderEdges[edgeIt2->second].push_back(borderEdge2);
 
-    it = allEdges.erase(edgePair.first, edgePair.second);
-  }
-  else
-    it = allEdges.erase(it);
+      it = allEdges.erase(edgePair.first, edgePair.second);
+    } else {
+      it = allEdges.erase(it);
+    }
   }
 }
 
 void ParallelSim::startSim(){
+  this->loadRealNumThreads();
+
   std::string cfg;
   std::vector<PartitionManager*> parts;
   std::vector<border_edge_t> borderEdges[numThreads];

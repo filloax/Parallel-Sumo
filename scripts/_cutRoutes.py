@@ -124,7 +124,6 @@ def cut_routes(aEdges, orig_net, options, busStopEdges=None):
     for routeFile in options.routeFiles:
         print("Parsing routes from %s" % routeFile)
         for vehicle in parse(routeFile, 'vehicle'):
-
             num_vehicles += 1
             if type(vehicle.route) == list:
                 edges = vehicle.route[0].edges.split()
@@ -143,6 +142,13 @@ def cut_routes(aEdges, orig_net, options, busStopEdges=None):
                         del vehicle
                     else:
                         # end edit
+                        print("A", vehicle, vehicle.route)
+                        # Filloax: add setting route here, as without it 
+                        # part files had veichles with the original route id
+                        route_id = vehicle.route
+                        route_id_part = route_id + "_part" + str(ix_part)
+                        vehicle.route = route_id_part
+
                         yield vehicle.depart, vehicle
                     continue
                 else:
@@ -157,10 +163,10 @@ def cut_routes(aEdges, orig_net, options, busStopEdges=None):
             route_parts = [(firstIndex + i, firstIndex + j)
                            for (i, j) in missingEdges(areaEdges, edges[firstIndex:(lastIndex + 1)],
                                                       missingEdgeOccurences)]
-#             print("areaEdges: %s"%str(areaEdges))
-#             print("routeEdges: %s"%str(edges))
-#             print("firstIndex = %d"%firstIndex)
-#             print("route_parts = %s"%str(route_parts))
+            print("areaEdges: %s"%str(areaEdges))
+            print("routeEdges: %s"%str(edges))
+            print("firstIndex = %d"%firstIndex)
+            print("route_parts = %s"%str(route_parts))
             if len(route_parts) > 1:
                 multiAffectedRoutes += 1
                 if options.disconnected_action == 'discard':
@@ -171,7 +177,7 @@ def cut_routes(aEdges, orig_net, options, busStopEdges=None):
             for ix_part, ix_interval in enumerate(route_parts):
 
                 fromIndex, toIndex = ix_interval
-                # print("(fromIndex,toIndex) = (%d,%d)"%(fromIndex,toIndex))
+                print("(fromIndex,toIndex) = (%d,%d)"%(fromIndex,toIndex))
                 # check for minimum length
                 if toIndex - fromIndex + 1 < options.min_length:
                     too_short += 1
@@ -232,6 +238,7 @@ def cut_routes(aEdges, orig_net, options, busStopEdges=None):
                     route_part = copy.deepcopy(routeRef)
                     route_part.id = routeRef.id + "_part" + str(ix_part)
                     route_part.edges = " ".join(edges[fromIndex:toIndex+1])
+                    print("B", vehicle)
                     yield newDepart, route_part
 
 
@@ -241,16 +248,20 @@ def cut_routes(aEdges, orig_net, options, busStopEdges=None):
                         yield_veh.depart = "%.2f" % newDepart #edit
                         yield_veh.id = vehicle.id + "_part" + str(ix_part)
                         yield_veh.route = route_part.id
+                        print("C", vehicle)
                         yield newDepart, yield_veh
                 elif float(vehicle.depart) != newDepart: #edit
                     routeRef.id = routeRef.id + "_part" + str(ix_part)
+                    print("D", None)
                     yield None, routeRef
                     del vehicle #edit
                 else: #edit
                     routeRef.id = routeRef.id + "_part" + str(ix_part)
+                    print("E", None)
                     yield None, routeRef
                     vehicle.route = routeRef.id
                     vehicle.depart = "%.2f" % newDepart
+                    print("F", vehicle)
                     yield newDepart, vehicle
                 num_returned += 1
 
@@ -454,8 +465,7 @@ def main(options):
         # write output unsorted
         tmpname = options.output + ".unsorted"
         with open(tmpname, 'w', encoding='utf8') as f:
-            write_to_file(
-                cut_routes(edges, orig_net, options, busStopEdges), f)
+            write_to_file(cut_routes(edges, orig_net, options, busStopEdges), f)
         # sort out of memory
         sort_routes.main([tmpname, '--big', '--outfile', options.output])
     else:
