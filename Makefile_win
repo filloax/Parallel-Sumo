@@ -18,14 +18,14 @@ main: $(BIN_DIR)/main
 $(BIN_DIR)/main: $(OBJECTS)
 	@echo "Linking"
 	@mkdir -p $(@D)
-	$(CC) $^ -o $(BIN_DIR)/main.exe
+	$(CC) $^ -lws2_32 -o $(BIN_DIR)/main.exe
 
 # %.o: %.cpp
 # 	$(CC) $(CXXFLAGS) -c $< -o $@
 
 .SECONDEXPANSION:
 $(OBJECTS): $(OBJ_DIR)/%.o: $$(wildcard %.c*)
-	mkdir -p $(@D)
+	@mkdir -p $(@D)
 ifeq "$(suffix $<)" ".cpp"
 	$(CC) -MMD -MP $(CXXFLAGS) -c $< -o $@ 
 else
