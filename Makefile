@@ -1,5 +1,5 @@
 CC=g++
-CXXFLAGS= -std=c++11 -I.
+CXXFLAGS= -std=c++17 -I.
 BIN_DIR = bin
 OBJ_DIR = .obj
 SOURCES := $(shell find * -type f -name "*.cpp" -o -name "*.c")
@@ -25,7 +25,7 @@ $(BIN_DIR)/main: $(OBJECTS)
 
 .SECONDEXPANSION:
 $(OBJECTS): $(OBJ_DIR)/%.o: $$(wildcard %.c*)
-	mkdir -p $(@D)
+	@mkdir -p $(@D)
 ifeq "$(suffix $<)" ".cpp"
 	$(CC) -MMD -MP $(CXXFLAGS) -c $< -o $@ 
 else

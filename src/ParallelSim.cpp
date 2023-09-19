@@ -28,7 +28,7 @@ Author: Phillip Taylor
 
 typedef std::unordered_multimap<std::string, int>::iterator umit;
 
-ParallelSim::ParallelSim(const std::string& host, int port, const char* cfg, bool gui, int threads, std::vector<std::string> extraArgs) :
+ParallelSim::ParallelSim(const std::string& host, int port, const char* cfg, bool gui, int threads, std::vector<std::string>& extraArgs) :
   host(host),
   port(port),
   cfgFile(cfg),

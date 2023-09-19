@@ -2,4 +2,4 @@
 
 mkdir -p data
 
-bash run-with-env.sh ./main "$@"
+bash run-with-env.sh bin/main "$@"

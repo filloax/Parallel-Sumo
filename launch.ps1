@@ -10,4 +10,4 @@ if (!(Test-Path -Path "data" -PathType Container)) {
     .venv/Scripts/activate
 }
 
-./main.exe $args
+bin/main.exe $args

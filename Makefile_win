@@ -1,5 +1,5 @@
 CC=g++
-CXXFLAGS= -std=c++11 -I.
+CXXFLAGS= -std=c++17 -I.
 BIN_DIR = bin
 OBJ_DIR = .obj
 SOURCES := $(shell find * -type f -name "*.cpp" -o -name "*.c")
