@@ -30,7 +30,7 @@ if 'METIS_DLL' in os.environ:
 else:
     sys.exit("please declare environment variable 'METIS_DLL' to the complete path of the metis library dll or lib file! (See README)")
 
-def remove_non_empty_parts(partitions: list[int], warn: bool = True):
+def remove_empty_parts(partitions: list[int], warn: bool = True):
     """From a list assigning a partition to each index, remove 
     missing indices (meaning, shift later ones back so they are a
     continuous range).
@@ -77,7 +77,7 @@ def main(netfile: str, numparts: int):
 
     # parts is a list like this: parts[nodeid] = partid
     # might have empty partitions with metis in small graphs, so remove em
-    parts = remove_non_empty_parts(parts)
+    parts = remove_empty_parts(parts)
 
     print("parts:", parts)
 
