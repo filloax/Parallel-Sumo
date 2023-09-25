@@ -1,5 +1,5 @@
 CC=g++
-CXXFLAGS= -std=c++17 -I.
+CXXFLAGS= -std=c++17 -I. -g
 BIN_DIR = bin
 OBJ_DIR = .obj
 SOURCES := $(shell find * -type f -name "*.cpp" -o -name "*.c")
@@ -18,7 +18,7 @@ main: $(BIN_DIR)/main
 $(BIN_DIR)/main: $(OBJECTS)
 	@echo "Linking"
 	@mkdir -p $(@D)
-	$(CC) $^ -lws2_32 -o $(BIN_DIR)/main.exe
+	$(CC) $^ -lws2_32 -g -o $(BIN_DIR)/main.exe
 
 # %.o: %.cpp
 # 	$(CC) $(CXXFLAGS) -c $< -o $@

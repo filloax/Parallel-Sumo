@@ -8,6 +8,7 @@ Adapted by Filippo Lenzi
 """
 
 import os, sys
+import glob
 import subprocess
 import xml.etree.ElementTree as ET
 from xml.etree.ElementTree import Element
@@ -17,33 +18,46 @@ from convertToMetis import main as convert_to_metis
 if 'SUMO_HOME' in os.environ:
     SUMO_HOME = os.environ['SUMO_HOME']
     route_tools = os.path.join(SUMO_HOME, 'tools', 'route')
-    sys.path.append(route_tools)
+    sys.path.append(os.path.join(route_tools))
+
+    import sumolib  # noqa
     from cutRoutes import main as cut_routes, get_options as cut_routes_options
+
+    DUAROUTER = sumolib.checkBinary('duarouter')
+    NETCONVERT = sumolib.checkBinary('netconvert')
 else:
     sys.exit("please declare environment variable 'SUMO_HOME'")
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-n', '--num-threads', required=True, type=int)
 parser.add_argument('-C', '--cfg-file', required=True, type=str, help="Path to the SUMO .sumocfg simulation config")
-parser.add_argument('-N', '--net-file', required=True, type=str, help="Path to the SUMO .net.xml network file")
-parser.add_argument('-R', '--route-file', required=True, type=str, help="Path to the SUMO .rou.xml network demand file")
 parser.add_argument('--data-folder', default='data', help="Folder to store output in")
 parser.add_argument('--no-metis', action='store_true', help="Partition network using grid (unsupported)")
 
 def partition_network(
-    num_threads: int, net_file: str, route_file: str, cfg_file: str,
-    net_convert_bin: str,
+    num_threads: int, cfg_file: str,
     use_metis: bool = True,
     data_folder: str = "data",
 ):
+    os.makedirs(data_folder, exist_ok=True)
+    for f in glob.glob(f'{data_folder}/*'):
+        os.remove(f)
+
+    cfg_tree = ET.parse(cfg_file)
+    cfg_root = cfg_tree.getroot()
     cfg_dir = os.path.dirname(cfg_file)
-    
+
+    net_file: str = os.path.join(cfg_dir, cfg_root.find("./input/net-file").attrib["value"])
+    route_files: list[str] = [os.path.join(cfg_dir, x) for x in cfg_root.find("./input/route-files").attrib["value"].split(",")]
+    additional_files_el = cfg_root.find("./input/additional-files")
+    additional_files: list[str] = [os.path.join(cfg_dir, x) for x in additional_files_el.attrib["value"].split(",")] if additional_files_el else []
+
     # Load network XML
     network_tree = ET.parse(net_file)
     network = network_tree.getroot()
 
     part_bounds = []
-    netconvert_option1 = ""
+    netconvert_options = []
     
     # Partition network with METIS
     if use_metis:
@@ -63,7 +77,7 @@ def partition_network(
         except ValueError:
             print("Failed to read metis output partition num from file.")
 
-        netconvert_option1 = "--keep-edges.input-file"
+        netconvert_options.append("--keep-edges.input-file")
     else:
         # not tested as unused in original repo at time of forking
         locEl = network.find("location")
@@ -76,27 +90,10 @@ def partition_network(
             part_bounds.append(f"{bound[0]},{bound[1]},{xCenter},{bound[2]}")
             part_bounds.append(f"{xCenter},{bound[1]},{bound[2]},{bound[2]}")
 
-        netconvert_option1 = "--keep-edges.in-boundary"
+        netconvert_options.append("--keep-edges.in-boundary")
 
     # Preprocess routes file for proper input to cutRoutes.py
-    routes_tree = ET.parse(route_file)
-    routes = routes_tree.getroot()
-
-    count = 0
-    for vehicle in routes.findall("vehicle"):
-        route_el = vehicle.find("route")
-        if route_el is not None:
-            id = f"custom_route{count}"
-            route_ref_el = ET.Element("route")
-            route_ref_el.set("id", id)
-            route_ref_el.set("edges", route_el.get("edges"))
-            vehicle.set("route", id)
-            routes.append(route_ref_el)
-            routes.remove(route_el)
-            count += 1
-
-    processed_routes_path = os.path.join(data_folder, "processed_routes.xml")
-    routes_tree.write(processed_routes_path)
+    processed_routes_path = _preprocess_routes(net_file, route_files, data_folder, additional_files)
 
     # vehicle_id: depart_time
     min_depart_times = {}
@@ -105,7 +102,7 @@ def partition_network(
     for i in range(num_threads):
         _process_partition(
             i, cfg_dir, cfg_file, net_file,
-            processed_routes_path, net_convert_bin, netconvert_option1,
+            processed_routes_path, netconvert_options.copy(),
             part_bounds, min_depart_times, temp_files,
             data_folder, use_metis, 
         )
@@ -116,10 +113,49 @@ def partition_network(
     for file in temp_files:
         os.remove(file)
 
+def _preprocess_routes(
+    net_file: str,
+    route_files: list[str], 
+    data_folder: str,
+    additional_files: list[str] = [],
+):
+    processed_routes_path = os.path.join(data_folder, "processed_routes.rou.xml")
+    interm_file_path = os.path.join(data_folder, "processed_routes.interm.rou.xml")
+
+    # duarouter is a SUMO executable that computes trips, aka SUMO routes defined only by start and end points
+    # and normally computed via shortest-path at runtime
+    # (This also ends up joining the input route files into one regardless)
+    _run_duarouter(net_file, route_files, interm_file_path, additional_files=additional_files)
+    # Remove alternate path files
+    for f in glob.glob(f'{data_folder}/*.alt.xml'):
+        os.remove(f)
+
+    routes_tree = ET.parse(interm_file_path)
+    routes: ET.Element = routes_tree.getroot()
+
+    # Takes routes defined inside of vehicles out of the vehicles
+    count = 0
+    for vehicle in routes.findall("vehicle"):
+        route_el = vehicle.find("route")
+        if route_el is not None:
+            vehicle_id = vehicle.attrib.get("id", -1)
+            id = f"veh_{vehicle_id}_route_{count}"
+            route_ref_el = ET.Element("route")
+            route_ref_el.set("id", id)
+            route_ref_el.set("edges", route_el.get("edges"))
+            vehicle.set("route", id)
+            routes.append(route_ref_el)
+            vehicle.remove(route_el)
+            count += 1
+
+    routes_tree.write(processed_routes_path, encoding='utf-8')
+
+    return processed_routes_path
+
 def _process_partition(
     part_idx: int, cfg_dir: str, cfg_file: str, net_file: str,
     processed_routes_path: str,
-    net_convert_bin: str, netconvert_option1: str,
+    netconvert_options: list[str],
     part_bounds: dict,
     min_depart_times: dict, temp_files: list,
     data_folder: str = "data", use_metis = True
@@ -130,18 +166,13 @@ def _process_partition(
     cfg_part = os.path.abspath(os.path.join(data_folder, f"part{part_idx}.sumocfg"))
 
     if use_metis:
-        netconvert_option2 = os.path.join(data_folder, f"edgesPart{part_idx}.txt")
+        netconvert_options.append(os.path.join(data_folder, f"edgesPart{part_idx}.txt"))
     else:
-        netconvert_option2 = part_bounds[part_idx]
+        netconvert_options.append(part_bounds[part_idx])
 
     # Create partition
     print(f"Running netConvert for partition {part_idx}...")
-    subprocess.run([
-        net_convert_bin,
-        netconvert_option1, netconvert_option2,
-        "-s", net_file,
-        "-o", net_part
-    ], check=True)
+    _run_netconvert(net_file=net_file, output=net_part, extra_options=netconvert_options)
     print(f"Partition {part_idx} successfully created")
 
     print(f"Running cutRoutes.py to create routes for partition {part_idx}...")
@@ -187,6 +218,56 @@ def _process_partition(
 
     cfg_part_tree.write(cfg_part)
 
+def _run_netconvert(net_file: str, output: str, extra_options: list[str] = []):
+    _run_prefix([
+        NETCONVERT,
+        *extra_options,
+        "-s", net_file,
+        "-o", output
+    ], "netconvert | ")
+
+def _run_duarouter(net_file: str, trip_files: list[str], output: str, additional_files: list[str] = [], extra_options: list[str] = []):
+    opts = [
+        DUAROUTER,
+        "--net-file", net_file, 
+        "--route-files", ",".join(trip_files),
+        "--output", output,
+        *extra_options
+    ]
+    if len(additional_files) > 0:
+        opts.extend([
+            "--additional-files", ",".join(additional_files),
+        ])
+    _run_prefix(opts, "duarouter | ")
+
+def _run_prefix(args: list[str], prefix: str = "PROC | ", **kwargs):
+    print("Executing", " ".join(args))
+
+    process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, **kwargs)
+
+    while True:
+        stdout_line = process.stdout.readline()
+        stderr_line = process.stderr.readline()
+
+        if not stdout_line and not stderr_line:
+            break
+
+        if stdout_line:
+            # Prepend your prefix to stdout lines and print them
+            print(prefix + stdout_line, end="")
+
+        if stderr_line:
+            # Handle stderr separately if needed
+            print(prefix +stderr_line, end="", file=sys.stderr)
+
+    # Wait for the process to complete
+    process.wait()
+
+    # Check the return code
+    if process.returncode != 0:
+        raise Exception("Error: The command failed with a non-zero exit code: " + process.returncode)
+    
+
 def _postprocess_partition(
     part_idx: int, min_depart_times: dict,
     data_folder: str = "data",
@@ -209,13 +290,9 @@ def _postprocess_partition(
         route_part_tree.write(rou_part)
 
 def main(args):
-    net_convert_bin = os.path.join(os.path.join(SUMO_HOME, 'bin', 'netconvert'))
     partition_network(
         args.num_threads,
-        args.net_file,
-        args.route_file,
         args.cfg_file,
-        net_convert_bin,
         not args.no_metis,
         args.data_folder,
     )

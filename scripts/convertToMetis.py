@@ -41,7 +41,7 @@ def remove_empty_parts(partitions: list[int], warn: bool = True):
     min_val = 0
     max_val = max(part_values)
     missing_values = set(range(min_val, max_val + 1)) - part_values
-    if warn:
+    if warn and len(missing_values) > 0:
         print(f"[WARN] Empty partitions: <{', '.join([str(x) for x in missing_values])}>", file=sys.stderr)
     offsets = {v: len([x for x in missing_values if x < v]) for v in part_values}
 
@@ -79,7 +79,7 @@ def main(netfile: str, numparts: int):
     # might have empty partitions with metis in small graphs, so remove em
     parts = remove_empty_parts(parts)
 
-    print("parts:", parts)
+    # print("parts:", parts)
 
     actual_numparts = len(set(parts))
 
@@ -92,7 +92,7 @@ def main(netfile: str, numparts: int):
             if e.getID() not in edges[partition]:
                 edges[partition].add(e.getID())
 
-    print("edges", edges)
+    # print("edges", edges)
 
     with open(os.path.join("data", "numParts.txt"), 'w', encoding='utf-8') as f:
         f.write(f"{actual_numparts}")

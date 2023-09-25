@@ -135,8 +135,6 @@ void ParallelSim::partitionNetwork(bool metis){
     "python", "scripts/createParts.py",
     "-n", numThreadsStr,
     "-C", cfgFile,
-    "-N", netFile,
-    "-R", routeFile,
     "--data-folder", dataFolder
   };
 
