@@ -1,5 +1,5 @@
 CC=g++
-CXXFLAGS= -std=c++17 -I.
+CXXFLAGS= -g -std=c++17 -I.
 BIN_DIR = bin
 OBJ_DIR = .obj
 SOURCES := $(shell find * -type f -name "*.cpp" -o -name "*.c")
@@ -10,7 +10,7 @@ all: clean main
 
 clean:
 	@echo "Cleaning"
-	rm -f **/*.o
+	rm -rf $(OBJ_DIR)/*
 	rm -f $(BIN_DIR)/main
 
 main: $(BIN_DIR)/main
@@ -18,7 +18,7 @@ main: $(BIN_DIR)/main
 $(BIN_DIR)/main: $(OBJECTS)
 	@echo "Linking"
 	@mkdir -p $(@D)
-	$(CC) $^ -o $@
+	$(CC) -g $^ -o $@
 
 # %.o: %.cpp
 # 	$(CC) $(CXXFLAGS) -c $< -o $@

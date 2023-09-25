@@ -10,7 +10,7 @@ all: clean main
 
 clean:
 	@echo "Cleaning"
-	rm -f **/*.o
+	rm -rf $(OBJ_DIR)/*
 	rm -f $(BIN_DIR)/main.exe
 
 main: $(BIN_DIR)/main

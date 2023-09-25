@@ -60,27 +60,31 @@ ParallelSim::ParallelSim(const std::string& host, int port, const char* cfg, boo
     SUMO_BINARY = strcat(tmp1, sumoExe);
     NETCONVERT_BINARY = strcat(tmp2, "/bin/netconvert");
     CUT_ROUTES_SCRIPT = strcat(tmp3, "/tools/route/cutRoutes.py");
-   }
-   // get end time
-   tinyxml2::XMLDocument cfgDoc;
-   tinyxml2::XMLError e = cfgDoc.LoadFile(cfgFile);
-   if(e) {
-     std::cout << cfgDoc.ErrorIDToName(e) << std::endl;
-     exit(EXIT_FAILURE);
-   }
-   tinyxml2::XMLElement* cfgEl = cfgDoc.FirstChildElement("configuration");
-   if (cfgEl == nullptr) {
-     std::cout << "sumo config error: no configuration" << std::endl;
-     exit(EXIT_FAILURE);
-   }
-   tinyxml2::XMLElement* endTimeEl = cfgEl->FirstChildElement("time")->FirstChildElement("end");
-   if (endTimeEl == nullptr) {
-     std::cout << "No end time specified. Setting default end time at 1000 steps." << std::endl;
-     endTime = 1000;
-   }
-   else {
-     endTime = atoi(endTimeEl->Attribute("value"));
-   }
+  }
+  // get end time
+  tinyxml2::XMLDocument cfgDoc;
+  tinyxml2::XMLError e = cfgDoc.LoadFile(cfgFile);
+  if(e) {
+    std::cout << cfgDoc.ErrorIDToName(e) << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  tinyxml2::XMLElement* cfgEl = cfgDoc.FirstChildElement("configuration");
+  if (cfgEl == nullptr) {
+    std::cout << "sumo config error: no configuration" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  tinyxml2::XMLElement* timeEl = cfgEl->FirstChildElement("time");
+  if (timeEl != nullptr) {
+    tinyxml2::XMLElement* endTimeEl = cfgEl->FirstChildElement("time")->FirstChildElement("end");
+    if (endTimeEl == nullptr) {
+      std::cout << "No end time specified. Setting default end time at 1000 steps." << std::endl;
+      endTime = 1000;
+    }
+  }
+  else {
+    std::cout << "No end time specified. Setting default end time at 1000 steps." << std::endl;
+    endTime = 1000;
+  }
 }
 
 void ParallelSim::getFilePaths(){
