@@ -13,6 +13,7 @@ import subprocess
 import xml.etree.ElementTree as ET
 from xml.etree.ElementTree import Element
 import argparse
+import re
 from convertToMetis import main as convert_to_metis
 
 if 'SUMO_HOME' in os.environ:
@@ -32,13 +33,33 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-n', '--num-threads', required=True, type=int)
 parser.add_argument('-C', '--cfg-file', required=True, type=str, help="Path to the SUMO .sumocfg simulation config")
 parser.add_argument('--data-folder', default='data', help="Folder to store output in")
+parser.add_argument('--keep-poly', action='store_true', help="Keep poly files from the sumocfg (disabled by default for performance)")
 parser.add_argument('--no-metis', action='store_true', help="Partition network using grid (unsupported)")
+# remove default True later
+parser.add_argument('--dev-mode', action='store_true', default=True, help="Remove some currently unhandled edge cases from the routes (not ideal in release)")
+parser.add_argument('-v', '--verbose', action='store_true', help="Additional output")
+
+verbose = False
+devmode = False
+
+def _is_poly_file(path: str):
+    return path.endswith(".poly.xml")
 
 def partition_network(
     num_threads: int, cfg_file: str,
     use_metis: bool = True,
     data_folder: str = "data",
+    keep_poly: bool = False,
 ):
+    if devmode:
+        print("-------------------------------")
+        print("--          DEV MODE         --")
+        print("-- Some edge cases will get  --")
+        print("-- removed from the input.   --")
+        print("-- * Routes/vehicles split   --")
+        print("--   by cutRoutes.py         --")
+        print("-------------------------------")
+
     os.makedirs(data_folder, exist_ok=True)
     for f in glob.glob(f'{data_folder}/*'):
         os.remove(f)
@@ -51,6 +72,8 @@ def partition_network(
     route_files: list[str] = [os.path.join(cfg_dir, x) for x in cfg_root.find("./input/route-files").attrib["value"].split(",")]
     additional_files_el = cfg_root.find("./input/additional-files")
     additional_files: list[str] = [os.path.join(cfg_dir, x) for x in additional_files_el.attrib["value"].split(",")] if additional_files_el else []
+    if not keep_poly:
+        additional_files = list(filter(lambda x: not _is_poly_file(x), additional_files))
 
     # Load network XML
     network_tree = ET.parse(net_file)
@@ -105,6 +128,7 @@ def partition_network(
             processed_routes_path, netconvert_options.copy(),
             part_bounds, min_depart_times, temp_files,
             data_folder, use_metis, 
+            keep_poly,
         )
         
     for i in range(num_threads):
@@ -139,7 +163,7 @@ def _preprocess_routes(
         route_el = vehicle.find("route")
         if route_el is not None:
             vehicle_id = vehicle.attrib.get("id", -1)
-            id = f"veh_{vehicle_id}_route_{count}"
+            id = f"vr_{vehicle_id}_{count}"
             route_ref_el = ET.Element("route")
             route_ref_el.set("id", id)
             route_ref_el.set("edges", route_el.get("edges"))
@@ -158,7 +182,8 @@ def _process_partition(
     netconvert_options: list[str],
     part_bounds: dict,
     min_depart_times: dict, temp_files: list,
-    data_folder: str = "data", use_metis = True
+    data_folder: str = "data", use_metis = True,
+    keep_poly = False,
 ):
     net_part = os.path.abspath(os.path.join(data_folder, f"part{part_idx}.net.xml"))
     interm_rou_part = os.path.abspath(os.path.join(data_folder, f"part{part_idx}.interm.rou.xml"))
@@ -183,7 +208,7 @@ def _process_partition(
         "--orig-net", net_file,
         "--disconnected-action", "keep"
     ]))
-    temp_files.append(interm_rou_part)
+    # temp_files.append(interm_rou_part)
     
     with open(interm_rou_part, 'r', encoding='utf-8') as f:
         route_part_el: Element = ET.parse(f).getroot()
@@ -204,17 +229,37 @@ def _process_partition(
     # Set partition net-file and route-files in cfg file
     cfg_part_tree = ET.parse(cfg_part)
     cfg_part_el = cfg_part_tree.getroot()
+    parent_map = {c:p for p in cfg_part_tree.iter() for c in p}
     input_el = cfg_part_el.find("input")
     net_file_el = input_el.find("net-file")
     rou_file_el = input_el.find("route-files")
-    gui_file_el = input_el.find("gui-settings-file")
 
     net_file_el.set("value", net_part)
     rou_file_el.set("value", rou_part)
 
-    if gui_file_el is not None:
-        gui_prev_val = gui_file_el.get("value")
-        gui_file_el.set("value", os.path.abspath(os.path.join(cfg_dir, gui_prev_val)))
+    elements_to_fix = [
+        "gui-settings-file",
+        "additional-files"
+    ]
+
+    for el_name in elements_to_fix:
+        el = cfg_part_el.find(f'.//{el_name}')
+
+        if el is not None:
+            prev_val = el.get("value")
+            files = prev_val.split(",")
+            fixed_files = [os.path.abspath(os.path.join(cfg_dir, val)) for val in files]
+            el.set("value", ",".join(fixed_files))
+
+    # Remove poly
+    if not keep_poly:
+        additional_files = cfg_part_el.find(f'.//additional-files')
+        if additional_files is not None:
+            prev_val = additional_files.get("value")
+            files = prev_val.split(",")
+            additional_files.set("value", ",".join(list(filter(lambda x: not _is_poly_file(x), files))))
+            if additional_files.get("value") == "":
+                parent_map[additional_files].remove(additional_files)
 
     cfg_part_tree.write(cfg_part)
 
@@ -266,7 +311,10 @@ def _run_prefix(args: list[str], prefix: str = "PROC | ", **kwargs):
     # Check the return code
     if process.returncode != 0:
         raise Exception("Error: The command failed with a non-zero exit code: " + process.returncode)
-    
+
+def _devmode_remove_vehicle(vehicle: Element):
+    id = vehicle.attrib["id"]
+    return re.search(r'_part\d+$', id)
 
 def _postprocess_partition(
     part_idx: int, min_depart_times: dict,
@@ -275,21 +323,60 @@ def _postprocess_partition(
     interm_rou_part = os.path.abspath(os.path.join(data_folder, f"part{part_idx}.interm.rou.xml"))
     rou_part = os.path.abspath(os.path.join(data_folder, f"part{part_idx}.rou.xml"))
     
+    belonging = []
+
     with open(interm_rou_part, 'r', encoding='utf-8') as fr:
         route_part_tree = ET.parse(fr)
         route_part_el: Element = route_part_tree.getroot()
         vehicles = route_part_el.findall("vehicle")
         remove = []
+        dev_removed = 0
         for vehicle in vehicles:
             id = vehicle.attrib["id"]
             depart = float(vehicle.attrib["depart"])
             if depart > min_depart_times[id]:
                 remove.append(vehicle)
+            elif devmode and _devmode_remove_vehicle(vehicle):
+                remove.append(vehicle)
+                dev_removed += 1
+            else:
+                belonging.append(vehicle)
+
+        # Duplicate routes (likely unhandled edge cases in partitioning and cutting)
+        routes = route_part_el.findall("route")
+        found_rids = set()
+        dup_route_removed = 0
+        for route in routes:
+            id = route.attrib["id"]
+            if id not in found_rids:
+                found_rids.add(id)
+            else:
+                remove.append(route)
+                dup_route_removed += 1
+
         for el in remove: 
             route_part_el.remove(el)
         route_part_tree.write(rou_part)
 
+        if dev_removed > 0:
+            print(f"Removed {dev_removed} vehicles as part of dev mode")
+        if dup_route_removed > 0:
+            print(f"Removed {dup_route_removed} duplicate routes (likely unhandled edge cases)")
+
+    belonging.sort(key=lambda x: int(re.sub(r'[^\d]', '', x.attrib["id"])))
+
+    if verbose:
+        print(f"Vehicles starting in partition {part_idx}: [ ", ', '.join([v.attrib["id"] for v in belonging]), "]")
+
 def main(args):
+    global verbose, devmode
+
+    if args.verbose:
+        verbose = True
+
+    if args.dev_mode:
+        devmode = True
+
     partition_network(
         args.num_threads,
         args.cfg_file,
