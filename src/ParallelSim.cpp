@@ -129,7 +129,7 @@ void ParallelSim::getFilePaths(){
 
 }
 
-void ParallelSim::partitionNetwork(bool metis){
+void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
   // Filippo Lenzi: Originally was implemented in C++
   // in the original program, but because of it not needing to be
   // perfectly optimized (as partitioning is run once per simulation configuration)
@@ -141,6 +141,13 @@ void ParallelSim::partitionNetwork(bool metis){
     "-C", cfgFile,
     "--data-folder", dataFolder
   };
+
+  if (!metis) {
+    args.push_back("--no-metis");
+  }
+  if (keepPoly) {
+    args.push_back("--keep-poly");
+  }
 
   pid_t pid;
   int status;
@@ -155,17 +162,17 @@ void ParallelSim::partitionNetwork(bool metis){
       for (int i = 0; i < args.size(); i++) std::cout << args[i] << " ";
       std::cout << std::endl;
       EXECVP_CPP(args);
-      std::cerr << "execvp() for convertToMetis.py has failed: " << errno << std::endl;
+      std::cerr << "execvp() for createParts.py has failed: " << errno << std::endl;
       exit(EXIT_FAILURE);
       break;
     default:
       // waiting for convertToMetis.py
       pid = wait(&status);
       if(WEXITSTATUS(status)) {
-        std::cout << "failed while converting to metis" << std::endl;
+        std::cout << "failed while partitioning" << std::endl;
         exit(EXIT_FAILURE);
       }
-      printf("metis partitioning successful with status: %d\n", WEXITSTATUS(status));
+      printf("partitioning successful with status: %d\n", WEXITSTATUS(status));
       break;
   }
 }

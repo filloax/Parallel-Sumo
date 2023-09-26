@@ -36,6 +36,10 @@ int main(int argc, char* argv[]) {
         .help("Skip partitioning (needs to already have run the program without this option before)")
         .default_value(false)
         .implicit_value(true);
+    program.add_argument("--keep-poly")
+        .help("Keep poly data if present in the original sumocfg (False by default for performance)")
+        .default_value(false)
+        .implicit_value(true);
 
     std::vector<std::string> sumoArgs;
     try {
@@ -52,13 +56,14 @@ int main(int argc, char* argv[]) {
     auto port = program.get<int>("--port");
     auto cfg = program.get<std::string>("--cfg");
     auto numThreads = program.get<int>("--num-threads");
+    auto keepPoly = program.get<bool>("--keep-poly");
 
     // params: host server, first port. sumo cfg file, gui option (true), number of threads
     ParallelSim client(host, port, cfg.c_str(), true, numThreads, sumoArgs);
     client.getFilePaths();
     // param: true for metis partitioning, false for grid partitioning (only works for 2 partitions currently)
     if (!skipPart) {
-        client.partitionNetwork(true);
+        client.partitionNetwork(true, keepPoly);
     }
     client.startSim();
 }

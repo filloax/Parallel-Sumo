@@ -40,7 +40,7 @@ class ParallelSim {
     void getFilePaths();
     // partition the SUMO network
     // param: true for metis partitioning, false for grid partitioning
-    void partitionNetwork(bool);
+    void partitionNetwork(bool metis, bool keepPoly);
     // execute parallel sumo simulations in created partitions
     void startSim();
 
