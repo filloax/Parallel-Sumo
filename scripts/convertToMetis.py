@@ -17,6 +17,11 @@ import xml.etree.ElementTree as ET
 WEIGHT_ROUTE_NUM = "route-num"
 WEIGHT_OSM = "osm"
 
+weight_funs = [
+    WEIGHT_ROUTE_NUM,
+    WEIGHT_OSM,
+]
+
 parser = argparse.ArgumentParser()
 parser.add_argument('netfile', help="SUMO network file to partition (in .net.xml format)")
 parser.add_argument('numparts', type=int, help="Amount of partitions to create. Might end up being lower in the output in small graphs.")

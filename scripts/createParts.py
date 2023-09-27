@@ -17,7 +17,7 @@ import contextily as cx
 from threading import Thread, Lock
 from prefixing import ThreadPrefixStream
 
-from convertToMetis import main as convert_to_metis
+from convertToMetis import main as convert_to_metis, weight_funs, WEIGHT_ROUTE_NUM
 from sumobin import run_duarouter, run_netconvert
 from sumo2png import generate_network_image
 
@@ -43,6 +43,8 @@ parser.add_argument('-C', '--cfg-file', required=True, type=str, help="Path to t
 parser.add_argument('--data-folder', default='data', help="Folder to store output in")
 parser.add_argument('--keep-poly', action='store_true', help="Keep poly files from the sumocfg (disabled by default for performance)")
 parser.add_argument('--no-metis', action='store_true', help="Partition network using grid (unsupported)")
+parser.add_argument('-w', '--weight-fun', choices=weight_funs, nargs="*", default=[WEIGHT_ROUTE_NUM], help="One or more weighting methods to use")
+parser.add_argument('-nw', '--no-weight', action='store_true', help="Do not use edge weights in partitioning")
 # remove default True later
 parser.add_argument('--dev-mode', action='store_false', help="Remove some currently unhandled edge cases from the routes (not ideal in release, currently works inversely for easier development)")
 parser.add_argument('--png', action='store_true', help="Output network images for each partition")
@@ -60,6 +62,7 @@ def partition_network(
     data_folder: str = "data",
     keep_poly: bool = False,
     png: bool = False,
+    weight_functions: list[str] = [WEIGHT_ROUTE_NUM],
 ):
     if devmode:
         print("-------------------------------")
@@ -106,6 +109,7 @@ def partition_network(
         convert_to_metis(
             net_file, num_parts, 
             routefile=processed_routes_path,
+            weight_functions=weight_functions,
             output_weights_file=edge_weights_file,
         )
 
@@ -400,6 +404,10 @@ def main(args):
 
     sys.stdout = ThreadPrefixStream()
 
+    weight_funs = args.weight_fun
+    if args.no_weight:
+        weight_funs = []
+
     partition_network(
         args.num_threads,
         args.cfg_file,
@@ -407,6 +415,7 @@ def main(args):
         args.data_folder,
         args.keep_poly,
         args.png,
+        weight_funs,
     )
 
 if __name__ == '__main__':
