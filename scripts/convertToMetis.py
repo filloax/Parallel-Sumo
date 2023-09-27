@@ -10,7 +10,7 @@ and write in one file per partition the SUMO network edges of that partition.
 import os
 import sys
 import argparse
-from pymetisdoc import part_graph
+from pymetis import Options, part_graph
 
 parser = argparse.ArgumentParser()
 parser.add_argument('netfile', help="SUMO network file to partition (in .net.xml format)")
@@ -45,29 +45,36 @@ def remove_empty_parts(partitions: list[int], warn: bool = True):
 def main(netfile: str, numparts: int):
     net: sumolib.net.Net = readNet(netfile)
     nodes: list[sumolib.net.node.Node] = net.getNodes()
-    edges: list[sumolib.net.edge.Edge] = net.getEdges()
 
     nodesDict = {}
     numNodes = len(nodes)
 
     # for every node i, list of its neighbors indices
     neighbors = [None] * numNodes
+    neighbor_edge_wgts = [None] * numNodes
     num_neighs_total = 0
     for i, node in enumerate(nodes):
         nodesDict[node] = i
     for i, node in enumerate(nodes):
-        neighs = node.getNeighboringNodes()
+        outgoing_edges: list[sumolib.net.edge.Edge] = node.getOutgoing()
+        neighbor_edge_wgts[i] = [_get_edge_weight(edge) for edge in outgoing_edges]
+        # Do not use getNeighboringNodes to make sure weights are in same order as edges
+        neighs = [_get_other_node(edge, node) for edge in outgoing_edges]
         neighbors[i] = [nodesDict[nnode] for nnode in neighs]
         num_neighs_total += len(neighbors[i])
 
     # print(f"neighbor lists: {neighbors}")
 
-    xadj, adjncy = _neighbors_to_xadj(neighbors, num_neighs_total)
+    xadj, adjncy, eweights = _neighbors_to_xadj(neighbors, num_neighs_total, neighbor_edge_wgts)
 
     # execute metis
     # edgecuts: amount of edges lying between partitions, that were cut
+    metis_opts = Options()
+    metis_opts.contig = True
     edgecuts, parts = part_graph(
         numparts, xadj=xadj, adjncy=adjncy,
+        # eweights=eweights,
+        # options=metis_opts,
         contiguous=True,
     )
 
@@ -99,8 +106,36 @@ def main(netfile: str, numparts: int):
             for eID in edge_set:
                 print(eID, file=f)
 
+def _get_other_node(edge, node):
+    to_node: sumolib.net.node.Node = edge.getToNode()
+    from_node: sumolib.net.node.Node = edge.getToNode()
+    return to_node if to_node.getID() != node.getID() else from_node
+
+DEFAULT_WGT = 10
+
+def _get_edge_weight(edge: sumolib.net.edge.Edge):
+    # later could add more ways of determining weight and/or options
+    return _get_edge_weight_osm(edge)
+
+OSM_HIGHWAY_WEIGHTS = {
+    'motorway': 150,
+    'trunk': 150,
+    'primary': 100,
+    'secondary': 50,
+    'tertiary': 15,
+    'unclassified': 15,
+    'residential': 10,
+}
+
+def _get_edge_weight_osm(edge: sumolib.net.edge.Edge):
+    edge_type = edge.getType()
+    split = edge_type.split('.')
+    if len(split) > 1 and split[0] == 'highway' and split[1] in OSM_HIGHWAY_WEIGHTS:
+        return OSM_HIGHWAY_WEIGHTS[split[1]]
+    return DEFAULT_WGT
+
 # convert from neighbor list to C-like metis format
-def _neighbors_to_xadj(neighbors: list, num_edges: int) -> tuple[list, list]:
+def _neighbors_to_xadj(neighbors: list, num_edges: int, *other_lists: list) -> tuple[list, list]:
     # The adjacency structure of the graph is stored as follows: The
     # adjacency list of vertex *i* is stored in array *adjncy* starting at
     # index ``xadj[i]`` and ending at (but not including) index ``xadj[i +
@@ -110,16 +145,21 @@ def _neighbors_to_xadj(neighbors: list, num_edges: int) -> tuple[list, list]:
 
     xadj = [None] * (len(neighbors) + 1)
     adjncy = [None] * num_edges
+    other_lists_out = [[None] * num_edges] * len(other_lists)
 
     adj_idx = 0
-    for id, neighs in enumerate(neighbors):
+    for id, neigh_elements in enumerate(zip(neighbors, *other_lists)):
         xadj[id] = adj_idx
-        for neigh in neighs:
+        neighs = neigh_elements[0]
+        for i, neigh in enumerate(neighs):
             adjncy[adj_idx] = neigh
+            if len(neigh_elements) > 1:
+                for j, neigh_list in enumerate(neigh_elements[1:]):
+                    other_lists_out[j][adj_idx] = neigh_list[i]
             adj_idx += 1
         xadj[id+1] = adj_idx # mostly redundant, but covers last one
 
-    return xadj, adjncy
+    return xadj, adjncy, *other_lists_out
 
 
 if __name__ == "__main__":

@@ -6,5 +6,6 @@ main.exe
 **/__pycache__/**
 data/**
 .venv
+.conda
 .obj/libs/storage.d
 *.whl

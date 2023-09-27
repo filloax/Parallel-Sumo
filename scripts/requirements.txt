@@ -5,3 +5,4 @@ pillow
 pyproj #for net2geojson
 geopandas
 matplotlib
+contextily

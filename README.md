@@ -6,7 +6,7 @@ Remember to set the SUMO_HOME environment variable to the directory containing S
 
 ### Installation and dependencies
 
-First, you need to install Eclipse [SUMO](https://eclipse.dev/sumo/). This version of Parallel-Sumo also requires the [pymetis](https://github.com/inducer/pymetis) python package, which requires python from 3.4 to 3.10. Check the repository page for install instructions especially on Windows, will need to download either from conda-forge or [here](https://www.lfd.uci.edu/~gohlke/pythonlibs/#pymetis). We include a *install-pymetis.ps1* Powershell script to do that.
+First, you need to install Eclipse [SUMO](https://eclipse.dev/sumo/). This version of Parallel-Sumo also requires the [pymetis](https://github.com/inducer/pymetis) python package, which requires python from 3.4 to 3.10. Check the repository page for install instructions especially on Windows, will need to download either it with conda from conda-forge (the other binary option in its repo is outdated). We include a *install-pymetis.ps1* Powershell script to do that.
 
 ### How to compile:
 

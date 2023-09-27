@@ -19,6 +19,8 @@ from convertToMetis import main as convert_to_metis
 from sumobin import run_duarouter, run_net2geojson, run_netconvert
 import geopandas as gpd
 import matplotlib.pyplot as plt
+import contextily as cx
+from itertools import cycle
 
 if 'SUMO_HOME' in os.environ:
     SUMO_HOME = os.environ['SUMO_HOME']
@@ -144,13 +146,17 @@ def partition_network(
         _postprocess_partition(i, min_depart_times, data_folder)
     
     if png:
-        paths = []
-        for i in range(num_parts):
-            net_part = os.path.join(data_folder, f"part{i}.net.xml")
-            path = generate_network_image(net_part, os.path.join(data_folder, f"part{i}.png"), data_folder, temp_files)
-            paths.append(path)
+        # paths = []
+        # for i in range(num_parts):
+        #     net_part = os.path.join(data_folder, f"part{i}.net.xml")
+        path = generate_network_image([os.path.join(data_folder, f"part{i}.net.xml") for i in range(num_parts)], 
+            os.path.join(data_folder, f"partitions.png"), 
+            data_folder, 
+            temp_files
+        )
+            # paths.append(path)
 
-        create_grid_image(paths, (2, 2), os.path.join(data_folder, "network_grid.png"))
+        # create_grid_image(paths, (2, 2), os.path.join(data_folder, "network_grid.png"))
 
     for file in temp_files:
         os.remove(file)
@@ -337,14 +343,21 @@ def _postprocess_partition(
     if verbose:
         print(f"Vehicles starting in partition {part_idx}: [ ", ', '.join([v.attrib["id"] for v in belonging]), "]")
 
-def generate_network_image(net_file:str, output_png_file:str, data_folder:str, temp_files: list[str]):
-    name = os.path.basename(net_file).replace('.net.xml', '')
-    geo_json_path = os.path.join(data_folder, f"{name}.geo.json")
-    run_net2geojson(net_file, geo_json_path)
-    temp_files.append(geo_json_path)
+def generate_network_image(net_files: list[str], output_png_file:str, data_folder:str, temp_files: list[str]):
+    fig, ax = plt.subplots()
 
-    gdf = gpd.read_file(geo_json_path)
-    gdf.plot()
+    colors = ['red', 'blue', 'green', 'yellow', 'purple', 'orange', 'cyan', 'magenta']
+
+    for net_file, color in zip(net_files, cycle(colors)):
+        name = os.path.basename(net_file).replace('.net.xml', '')
+        geo_json_path = os.path.join(data_folder, f"{name}.geo.json")
+        run_net2geojson(net_file, geo_json_path)
+        temp_files.append(geo_json_path)
+
+        gdf = gpd.read_file(geo_json_path)
+        gdf.plot(ax=ax, color=color)
+    print("Adding background with contextily...")
+    cx.add_basemap(ax, crs='epsg:4326', source=cx.providers.OpenStreetMap.Mapnik)
     plt.savefig(output_png_file, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"Saved network png to {output_png_file}")
