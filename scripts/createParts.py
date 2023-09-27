@@ -15,12 +15,14 @@ from xml.etree.ElementTree import Element
 import argparse
 import re
 from PIL import Image
-from convertToMetis import main as convert_to_metis
-from sumobin import run_duarouter, run_net2geojson, run_netconvert
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import contextily as cx
 from itertools import cycle
+import json
+
+from convertToMetis import main as convert_to_metis
+from sumobin import run_duarouter, run_net2geojson, run_netconvert
 
 if 'SUMO_HOME' in os.environ:
     SUMO_HOME = os.environ['SUMO_HOME']
@@ -45,7 +47,7 @@ parser.add_argument('--data-folder', default='data', help="Folder to store outpu
 parser.add_argument('--keep-poly', action='store_true', help="Keep poly files from the sumocfg (disabled by default for performance)")
 parser.add_argument('--no-metis', action='store_true', help="Partition network using grid (unsupported)")
 # remove default True later
-parser.add_argument('--dev-mode', action='store_true', default=True, help="Remove some currently unhandled edge cases from the routes (not ideal in release)")
+parser.add_argument('--dev-mode', action='store_false', help="Remove some currently unhandled edge cases from the routes (not ideal in release, currently works inversely for easier development)")
 parser.add_argument('--png', action='store_true', help="Output network images for each partition")
 parser.add_argument('-v', '--verbose', action='store_true', help="Additional output")
 
@@ -73,7 +75,8 @@ def partition_network(
 
     os.makedirs(data_folder, exist_ok=True)
     for f in glob.glob(f'{data_folder}/*'):
-        os.remove(f)
+        if os.path.basename(f) != "cache":
+            os.remove(f)
 
     cfg_tree = ET.parse(cfg_file)
     cfg_root = cfg_tree.getroot()
@@ -86,18 +89,31 @@ def partition_network(
     if not keep_poly:
         additional_files = list(filter(lambda x: not _is_poly_file(x), additional_files))
 
+    # Preprocess routes file for proper input to cutRoutes.py
+    processed_routes_path = _preprocess_routes(net_file, route_files, data_folder, additional_files)
+
     # Load network XML
     network_tree = ET.parse(net_file)
     network = network_tree.getroot()
 
     part_bounds = []
     netconvert_options = []
-    
+    edge_weights_file = os.path.join("data", "edge_weights.json")
+
     # Partition network with METIS
     if use_metis:
         print("Running convertToMetis.py to split graph...")
-        
-        convert_to_metis(net_file, num_parts)
+        print("=========================================")
+        print()
+
+        convert_to_metis(
+            net_file, num_parts, 
+            routefile=processed_routes_path,
+            output_weights_file=edge_weights_file,
+        )
+
+        print()
+        print("=========================================")
 
         # Read actual partition num from METIS output
         part_num_file = os.path.join(data_folder, "numParts.txt")
@@ -126,12 +142,9 @@ def partition_network(
 
         netconvert_options.append("--keep-edges.in-boundary")
 
-    # Preprocess routes file for proper input to cutRoutes.py
-    processed_routes_path = _preprocess_routes(net_file, route_files, data_folder, additional_files)
-
     # vehicle_id: depart_time
     min_depart_times = {}
-    temp_files = []
+    temp_files = set()
 
     for i in range(num_parts):
         _process_partition(
@@ -146,17 +159,18 @@ def partition_network(
         _postprocess_partition(i, min_depart_times, data_folder)
     
     if png:
-        # paths = []
-        # for i in range(num_parts):
-        #     net_part = os.path.join(data_folder, f"part{i}.net.xml")
-        path = generate_network_image([os.path.join(data_folder, f"part{i}.net.xml") for i in range(num_parts)], 
+        generate_network_image([os.path.join(data_folder, f"part{i}.net.xml") for i in range(num_parts)], 
             os.path.join(data_folder, f"partitions.png"), 
             data_folder, 
-            temp_files
+            temp_files,
         )
-            # paths.append(path)
-
-        # create_grid_image(paths, (2, 2), os.path.join(data_folder, "network_grid.png"))
+        # weight color image
+        generate_network_image([os.path.join(data_folder, f"part{i}.net.xml") for i in range(num_parts)], 
+            os.path.join(data_folder, f"partitions_weights.png"), 
+            data_folder, 
+            temp_files,
+            edge_weights_file,
+        )
 
     for file in temp_files:
         os.remove(file)
@@ -205,7 +219,7 @@ def _process_partition(
     processed_routes_path: str,
     netconvert_options: list[str],
     part_bounds: dict,
-    min_depart_times: dict, temp_files: list,
+    min_depart_times: dict, temp_files: set,
     data_folder: str = "data", use_metis = True,
     keep_poly = False,
 ):
@@ -232,7 +246,7 @@ def _process_partition(
         "--orig-net", net_file,
         "--disconnected-action", "keep"
     ]))
-    # temp_files.append(interm_rou_part)
+    temp_files.add(interm_rou_part)
     
     with open(interm_rou_part, 'r', encoding='utf-8') as f:
         route_part_el: Element = ET.parse(f).getroot()
@@ -343,21 +357,34 @@ def _postprocess_partition(
     if verbose:
         print(f"Vehicles starting in partition {part_idx}: [ ", ', '.join([v.attrib["id"] for v in belonging]), "]")
 
-def generate_network_image(net_files: list[str], output_png_file:str, data_folder:str, temp_files: list[str]):
-    fig, ax = plt.subplots()
+def generate_network_image(net_files: list[str], output_png_file:str, data_folder:str, temp_files: set[str], edge_value_file: str = None):
+    fig, ax = plt.subplots(figsize=(15,15))
 
-    colors = ['red', 'blue', 'green', 'yellow', 'purple', 'orange', 'cyan', 'magenta']
+    colors = ['red', 'blue', 'green', 'black', 'purple', 'orange', 'cyan', 'magenta', 'yellow']
+
+    edge_value_dict = None
+    if edge_value_file:
+        with open(edge_value_file, 'r', encoding='utf-8') as f:
+            edge_value_dict = json.load(f)
 
     for net_file, color in zip(net_files, cycle(colors)):
         name = os.path.basename(net_file).replace('.net.xml', '')
         geo_json_path = os.path.join(data_folder, f"{name}.geo.json")
-        run_net2geojson(net_file, geo_json_path)
-        temp_files.append(geo_json_path)
+        try:
+            run_net2geojson(net_file, geo_json_path)
+        except:
+            print("[ERR] Network doesn't provide geo json representation, cannot save image...", file=sys.stderr)
+            return None
+        temp_files.add(geo_json_path)
 
-        gdf = gpd.read_file(geo_json_path)
-        gdf.plot(ax=ax, color=color)
+        gdf: gpd.GeoDataFrame = gpd.read_file(geo_json_path)
+        if edge_value_dict:
+            gdf["value"] = gdf.id.apply(lambda id: edge_value_dict.get(id, -1))
+            gdf.plot("value", ax=ax)#, legend=True)
+        else:
+            gdf.plot(ax=ax, color=color)
     print("Adding background with contextily...")
-    cx.add_basemap(ax, crs='epsg:4326', source=cx.providers.OpenStreetMap.Mapnik)
+    cx.add_basemap(ax, crs='epsg:4326', source=cx.providers.OpenStreetMap.Mapnik, alpha=0.8)
     plt.savefig(output_png_file, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"Saved network png to {output_png_file}")
@@ -396,6 +423,10 @@ def main(args):
         devmode = True
 
     print(args)
+
+    cache_dir = os.path.join(args.data_folder, "cache")
+    cx.set_cache_dir(cache_dir)
+    os.makedirs(cache_dir, exist_ok=True)
 
     partition_network(
         args.num_threads,

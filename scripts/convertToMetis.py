@@ -7,10 +7,15 @@ Convert SUMO network into proper format for METIS input, partition with METIS,
 and write in one file per partition the SUMO network edges of that partition.
 
 """
+from collections import defaultdict
 import os
 import sys
 import argparse
 from pymetis import Options, part_graph
+import xml.etree.ElementTree as ET
+
+WEIGHT_ROUTE_NUM = "route-num"
+WEIGHT_OSM = "osm"
 
 parser = argparse.ArgumentParser()
 parser.add_argument('netfile', help="SUMO network file to partition (in .net.xml format)")
@@ -21,6 +26,8 @@ if 'SUMO_HOME' in os.environ:
     sys.path.append(os.path.join(tools))
     from sumolib.output import parse, parse_fast
     from sumolib.net import readNet
+    from sumolib.net.edge import Edge
+    from sumolib.net.node import Node
     import sumolib
 else:
     sys.exit("please declare environment variable 'SUMO_HOME'")
@@ -42,48 +49,131 @@ def remove_empty_parts(partitions: list[int], warn: bool = True):
 
     return [x - offsets[x] for x in partitions]
 
-def main(netfile: str, numparts: int):
-    net: sumolib.net.Net = readNet(netfile)
-    nodes: list[sumolib.net.node.Node] = net.getNodes()
+def main(
+    netfile: str, numparts: int,
+    weight_functions: list[str]|str = WEIGHT_ROUTE_NUM,
+    routefile: str = None,
+    output_weights_file: str = None,
+):
+    f"""Partition a SUMO network using METIS
 
-    nodesDict = {}
+    Args:
+        netfile (str): Path to the SUMO network
+        numparts (int): Target amount of parts (might have less in output)
+        weights (list[str] | str, optional): One of more weightings to use
+            for edges, current options: "{WEIGHT_OSM}", "{WEIGHT_ROUTE_NUM}".
+            "{WEIGHT_ROUTE_NUM}" requires a routefile to be set.
+        routefile (str, optional): path to route file to use for weighting.
+        output_weights_file (str, optional): if set, path to write a file with the weight of each node, in a json-dict format.
+    """
+    if weight_functions is None:
+        weight_functions = []
+    elif type(weight_functions) is str:
+        weight_functions = [weight_functions]
+    weight_functions = set(weight_functions)
+
+    print(f"Weight functions used: {', '.join(weight_functions)}")
+
+    if routefile is None and WEIGHT_ROUTE_NUM in weight_functions:
+        weight_functions.remove(WEIGHT_ROUTE_NUM)
+        print(f"[WARN] Needs a routefile specified to use weight option {WEIGHT_ROUTE_NUM}", file=sys.stderr)
+
+    net: sumolib.net.Net = readNet(netfile)
+    nodes: list[Node] = net.getNodes()
+
+    nodes_dict = {}
+    edge_weights = {}
     numNodes = len(nodes)
+
+    if routefile is not None:
+        routes_by_edge = _count_routes_in_edges(routefile)
+
+    def get_edge_weight(edge: Edge) -> int:
+        nonlocal routes_by_edge, weight_functions
+
+        wgt = 1
+        if WEIGHT_OSM in weight_functions:
+            wgt += _get_edge_weight_osm(edge)
+        if WEIGHT_ROUTE_NUM in weight_functions:
+            wgt += _get_edge_weight_routecount(edge, routes_by_edge)
+        return int(wgt * 100)
+    
+    def get_node_data(node: Node) -> tuple[list[int],list[int]]:
+        nonlocal edge_weights
+
+        # Consider both outgoing and ingoing edges for every node, 
+        # to simplify the METIS algorithm
+        # in case of both directions edge, average the node weights
+        weights = {}
+
+        incoming: list[Edge] = node.getIncoming()
+        for edge in incoming:
+            other_node = _get_other_node(edge, node)
+            wgt = get_edge_weight(edge)
+            weights[other_node] = wgt
+
+        outgoing: list[Edge] = node.getOutgoing()
+        for edge in outgoing:
+            other_node = _get_other_node(edge, node)
+            wgt = get_edge_weight(edge)
+            edge_weights[edge.getID()] = wgt
+            if other_node in weights:
+                weights[other_node] = int((weights[other_node] + wgt) * 0.5)
+            else:
+                weights[other_node] = wgt
+
+        nodes = list(weights.keys())
+        # Make sure to keep the same order
+        return nodes, [weights[node] for node in nodes]
 
     # for every node i, list of its neighbors indices
     neighbors = [None] * numNodes
     neighbor_edge_wgts = [None] * numNodes
     num_neighs_total = 0
     for i, node in enumerate(nodes):
-        nodesDict[node] = i
+        nodes_dict[node] = i
     for i, node in enumerate(nodes):
-        outgoing_edges: list[sumolib.net.edge.Edge] = node.getOutgoing()
-        neighbor_edge_wgts[i] = [_get_edge_weight(edge) for edge in outgoing_edges]
-        # Do not use getNeighboringNodes to make sure weights are in same order as edges
-        neighs = [_get_other_node(edge, node) for edge in outgoing_edges]
-        neighbors[i] = [nodesDict[nnode] for nnode in neighs]
+        neighs, weights = get_node_data(node)
+        neighbor_edge_wgts[i] = weights
+        neighbors[i] = [nodes_dict[nnode] for nnode in neighs]
         num_neighs_total += len(neighbors[i])
 
-    # print(f"neighbor lists: {neighbors}")
+    is_connected = _is_connected(neighbors)
+
+    print(f"Graph connected: {is_connected}")
 
     xadj, adjncy, eweights = _neighbors_to_xadj(neighbors, num_neighs_total, neighbor_edge_wgts)
 
+    # print("xadj", xadj)
+    # print("adjncy", adjncy)
+    # print("eweights", eweights)
+
     # execute metis
-    # edgecuts: amount of edges lying between partitions, that were cut
+    # See metis docs [here](https://github.com/KarypisLab/METIS/blob/master/manual/manual.pdf)
+    # (page 13 at time of writing) for parameter explanations
     metis_opts = Options()
     metis_opts.contig = True
-    edgecuts, parts = part_graph(
-        numparts, xadj=xadj, adjncy=adjncy,
-        # eweights=eweights,
-        # options=metis_opts,
-        contiguous=True,
-    )
+    try:
+        # edgecuts: amount of edges lying between partitions, that were cut
+        edgecuts, parts = part_graph(
+            numparts, xadj=xadj, adjncy=adjncy,
+            eweights=eweights,
+            recursive=False,
+            options=metis_opts,
+        )
+    except:
+        print("[ERR] Metis error: tried to partition non-connected graph as contiguous, will return non contiguous partitions", file=sys.stderr)
+        metis_opts.contig = False
+        edgecuts, parts = part_graph(
+            numparts, xadj=xadj, adjncy=adjncy,
+            eweights=eweights,
+            recursive=False,
+            options=metis_opts,
+        )
 
     # parts is a list like this: parts[nodeid] = partid
     # might have empty partitions with metis in small graphs, so remove them
     parts = remove_empty_parts(parts)
-
-    # print("parts:", parts)
-
     actual_numparts = len(set(parts))
 
     # get edges corresponding to partitions
@@ -105,34 +195,74 @@ def main(netfile: str, numparts: int):
         with open(os.path.join("data", f"edgesPart{i}.txt"), 'w', encoding='utf-8') as f:
             for eID in edge_set:
                 print(eID, file=f)
+    
+    if output_weights_file is not None:
+        with open(output_weights_file, 'w', encoding='utf-8') as f:
+            print('{', file=f)
+            for i, eid in enumerate(edge_weights):
+                wgt = edge_weights[eid]
+                print(f'    "{eid}": {wgt}', end="", file=f)
+                if i < len(edge_weights.keys()) - 1:
+                    print(',', file=f)
+                else:
+                    print('', file=f)
+            print('}', file=f)
+
+
+def _is_connected(neighbors):
+    visited = defaultdict(bool)
+
+    def dfs(id):
+        visited[id] = True
+        for neighbor in neighbors[id]:
+            if not visited[neighbor]:
+                dfs(neighbor)
+
+    if not neighbors or len(neighbors) == 0:
+        return True
+    
+    dfs(0)
+
+    return all(visited.values())
 
 def _get_other_node(edge, node):
-    to_node: sumolib.net.node.Node = edge.getToNode()
-    from_node: sumolib.net.node.Node = edge.getToNode()
+    to_node: Node = edge.getToNode()
+    from_node: Node = edge.getFromNode()
     return to_node if to_node.getID() != node.getID() else from_node
 
-DEFAULT_WGT = 10
-
-def _get_edge_weight(edge: sumolib.net.edge.Edge):
-    # later could add more ways of determining weight and/or options
-    return _get_edge_weight_osm(edge)
-
 OSM_HIGHWAY_WEIGHTS = {
-    'motorway': 150,
-    'trunk': 150,
-    'primary': 100,
-    'secondary': 50,
-    'tertiary': 15,
-    'unclassified': 15,
-    'residential': 10,
+    'motorway': 15,
+    'trunk': 15,
+    'primary': 10,
+    'secondary': 5,
+    'tertiary': 1.5,
+    'unclassified': 1.5,
+    'residential': 1,
 }
 
-def _get_edge_weight_osm(edge: sumolib.net.edge.Edge):
+def _get_edge_weight_osm(edge: Edge):
     edge_type = edge.getType()
     split = edge_type.split('.')
     if len(split) > 1 and split[0] == 'highway' and split[1] in OSM_HIGHWAY_WEIGHTS:
         return OSM_HIGHWAY_WEIGHTS[split[1]]
-    return DEFAULT_WGT
+    return 1
+
+def _count_routes_in_edges(routefile: str) -> dict[str: int]:
+    tree = ET.parse(routefile)
+    root = tree.getroot()
+    #<route edges="201998907#0 30618699 26256819#0 -82715344 -23276777#4 -23276777#1 65292474#0 65292474#2 232512842#0 325434952 -217845955#1 />"
+    routes = root.findall("route")
+    out = {}
+    for route in routes:
+        edges = [x for x in route.attrib["edges"].split(" ") if x != ""]
+        for edge in edges:
+            out[edge] = out.get(edge, 0) + 1
+    return out
+
+
+def _get_edge_weight_routecount(edge: Edge, routes_by_edge: dict):
+    edge_id = edge.getID()
+    return (routes_by_edge.get(edge_id, -5) + 5) * 10
 
 # convert from neighbor list to C-like metis format
 def _neighbors_to_xadj(neighbors: list, num_edges: int, *other_lists: list) -> tuple[list, list]:
