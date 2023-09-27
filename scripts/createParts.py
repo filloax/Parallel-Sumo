@@ -20,6 +20,8 @@ import matplotlib.pyplot as plt
 import contextily as cx
 from itertools import cycle
 import json
+from threading import Thread, Lock
+from prefixing import ThreadPrefixStream
 
 from convertToMetis import main as convert_to_metis
 from sumobin import run_duarouter, run_net2geojson, run_netconvert
@@ -144,20 +146,38 @@ def partition_network(
 
     # vehicle_id: depart_time
     min_depart_times = {}
+    min_depart_times_lock = Lock()
     temp_files = set()
+    temp_files_lock = Lock()
+
+    part_threads = []
 
     for i in range(num_parts):
-        _process_partition(
+        thread = Thread(target=_process_partition, args = [
             i, cfg_dir, cfg_file, net_file,
-            processed_routes_path, netconvert_options.copy(),
-            part_bounds, min_depart_times, temp_files,
-            data_folder, use_metis, 
-            keep_poly,
-        )
+            processed_routes_path, netconvert_options.copy(), part_bounds, 
+            min_depart_times, temp_files, # <-- these are modified in the call
+            min_depart_times_lock, temp_files_lock,
+            data_folder, use_metis, keep_poly,
+        ])
+        thread.start()
+        part_threads.append(thread)
+
+    for thread in part_threads:
+        thread.join()
+
+    part_threads.clear()
         
     for i in range(num_parts):
-        _postprocess_partition(i, min_depart_times, data_folder)
+        thread = Thread(target=_postprocess_partition, args = [
+            i, min_depart_times, data_folder
+        ])
+        thread.start()
+        part_threads.append(thread)
     
+    for thread in part_threads:
+        thread.join()
+
     if png:
         generate_network_image([os.path.join(data_folder, f"part{i}.net.xml") for i in range(num_parts)], 
             os.path.join(data_folder, f"partitions.png"), 
@@ -219,10 +239,15 @@ def _process_partition(
     processed_routes_path: str,
     netconvert_options: list[str],
     part_bounds: dict,
-    min_depart_times: dict, temp_files: set,
-    data_folder: str = "data", use_metis = True,
+    min_depart_times: dict, temp_files: set, # <-- modified in partition
+    min_depart_times_lock: Lock, temp_files_lock: Lock,
+    data_folder: str = "data", 
+    use_metis = True,
     keep_poly = False,
 ):
+    if type(sys.stdout) is ThreadPrefixStream:
+        sys.stdout.add_thread_prefix(f"[Process: {part_idx}]")
+
     net_part = os.path.abspath(os.path.join(data_folder, f"part{part_idx}.net.xml"))
     interm_rou_part = os.path.abspath(os.path.join(data_folder, f"part{part_idx}.interm.rou.xml"))
     rou_part = os.path.abspath(os.path.join(data_folder, f"part{part_idx}.rou.xml"))
@@ -246,7 +271,8 @@ def _process_partition(
         "--orig-net", net_file,
         "--disconnected-action", "keep"
     ]))
-    temp_files.add(interm_rou_part)
+    with temp_files_lock:
+        temp_files.add(interm_rou_part)
     
     with open(interm_rou_part, 'r', encoding='utf-8') as f:
         route_part_el: Element = ET.parse(f).getroot()
@@ -254,10 +280,11 @@ def _process_partition(
         for vehicle in vehicles:
             id = vehicle.attrib["id"]
             depart = float(vehicle.attrib["depart"])
-            if id not in min_depart_times:
-                min_depart_times[id] = depart
-            elif min_depart_times[id] > depart:
-                min_depart_times[id] = depart
+            with min_depart_times_lock:
+                if id not in min_depart_times:
+                    min_depart_times[id] = depart
+                elif min_depart_times[id] > depart:
+                    min_depart_times[id] = depart
 
     # Create sumo cfg file for partition
     with open(cfg_file, "r") as source, open(cfg_part, "w") as dest:
@@ -306,9 +333,13 @@ def _devmode_remove_vehicle(vehicle: Element):
     return re.search(r'_part\d+$', id)
 
 def _postprocess_partition(
-    part_idx: int, min_depart_times: dict,
+    part_idx: int, 
+    min_depart_times: dict, # <-- do not modify, not thread-safe
     data_folder: str = "data",
 ):
+    if type(sys.stdout) is ThreadPrefixStream:
+        sys.stdout.add_thread_prefix(f"[Post process: {part_idx}]")
+
     interm_rou_part = os.path.abspath(os.path.join(data_folder, f"part{part_idx}.interm.rou.xml"))
     rou_part = os.path.abspath(os.path.join(data_folder, f"part{part_idx}.rou.xml"))
     
@@ -427,6 +458,8 @@ def main(args):
     cache_dir = os.path.join(args.data_folder, "cache")
     cx.set_cache_dir(cache_dir)
     os.makedirs(cache_dir, exist_ok=True)
+
+    sys.stdout = ThreadPrefixStream()
 
     partition_network(
         args.num_threads,
