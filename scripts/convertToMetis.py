@@ -9,8 +9,8 @@ and write in one file per partition the SUMO network edges of that partition.
 """
 import os
 import sys
-
 import argparse
+from pymetisdoc import part_graph
 
 parser = argparse.ArgumentParser()
 parser.add_argument('netfile', help="SUMO network file to partition (in .net.xml format)")
@@ -24,11 +24,6 @@ if 'SUMO_HOME' in os.environ:
     import sumolib
 else:
     sys.exit("please declare environment variable 'SUMO_HOME'")
-
-if 'METIS_DLL' in os.environ:
-    import metis
-else:
-    sys.exit("please declare environment variable 'METIS_DLL' to the complete path of the metis library dll or lib file! (See README)")
 
 def remove_empty_parts(partitions: list[int], warn: bool = True):
     """From a list assigning a partition to each index, remove 
@@ -48,35 +43,36 @@ def remove_empty_parts(partitions: list[int], warn: bool = True):
     return [x - offsets[x] for x in partitions]
 
 def main(netfile: str, numparts: int):
-    net = readNet(netfile)
-    nodes = net.getNodes()
+    net: sumolib.net.Net = readNet(netfile)
+    nodes: list[sumolib.net.node.Node] = net.getNodes()
+    edges: list[sumolib.net.edge.Edge] = net.getEdges()
+
     nodesDict = {}
     numNodes = len(nodes)
+
     # for every node i, list of its neighbors indices
     neighbors = [None] * numNodes
-    numUndirectedEdges = 0
+    num_neighs_total = 0
     for i, node in enumerate(nodes):
         nodesDict[node] = i
     for i, node in enumerate(nodes):
         neighs = node.getNeighboringNodes()
-        # print(f"{i}/{node}: {neighs}")
-        for n in neighs:
-            if n not in nodesDict:
-                numUndirectedEdges+=1
         neighbors[i] = [nodesDict[nnode] for nnode in neighs]
+        num_neighs_total += len(neighbors[i])
 
     # print(f"neighbor lists: {neighbors}")
 
+    xadj, adjncy = _neighbors_to_xadj(neighbors, num_neighs_total)
+
     # execute metis
     # edgecuts: amount of edges lying between partitions, that were cut
-    edgecuts, parts = metis.part_graph(
-        neighbors, nparts=numparts, 
-        objtype='vol',
-        contig=True,
+    edgecuts, parts = part_graph(
+        numparts, xadj=xadj, adjncy=adjncy,
+        contiguous=True,
     )
 
     # parts is a list like this: parts[nodeid] = partid
-    # might have empty partitions with metis in small graphs, so remove em
+    # might have empty partitions with metis in small graphs, so remove them
     parts = remove_empty_parts(parts)
 
     # print("parts:", parts)
@@ -102,6 +98,29 @@ def main(netfile: str, numparts: int):
         with open(os.path.join("data", f"edgesPart{i}.txt"), 'w', encoding='utf-8') as f:
             for eID in edge_set:
                 print(eID, file=f)
+
+# convert from neighbor list to C-like metis format
+def _neighbors_to_xadj(neighbors: list, num_edges: int) -> tuple[list, list]:
+    # The adjacency structure of the graph is stored as follows: The
+    # adjacency list of vertex *i* is stored in array *adjncy* starting at
+    # index ``xadj[i]`` and ending at (but not including) index ``xadj[i +
+    # 1]``. That is, for each vertex i, its adjacency list is stored in
+    # consecutive locations in the array *adjncy*, and the array *xadj* is
+    # used to point to where it begins and where it ends.
+
+    xadj = [None] * (len(neighbors) + 1)
+    adjncy = [None] * num_edges
+
+    adj_idx = 0
+    for id, neighs in enumerate(neighbors):
+        xadj[id] = adj_idx
+        for neigh in neighs:
+            adjncy[adj_idx] = neigh
+            adj_idx += 1
+        xadj[id+1] = adj_idx # mostly redundant, but covers last one
+
+    return xadj, adjncy
+
 
 if __name__ == "__main__":
     args = parser.parse_args()

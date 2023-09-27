@@ -14,11 +14,16 @@ import xml.etree.ElementTree as ET
 from xml.etree.ElementTree import Element
 import argparse
 import re
+from PIL import Image
 from convertToMetis import main as convert_to_metis
+from sumobin import run_duarouter, run_net2geojson, run_netconvert
+import geopandas as gpd
+import matplotlib.pyplot as plt
 
 if 'SUMO_HOME' in os.environ:
     SUMO_HOME = os.environ['SUMO_HOME']
     route_tools = os.path.join(SUMO_HOME, 'tools', 'route')
+    net_tools = os.path.join(SUMO_HOME, 'tools', 'net')
     sys.path.append(os.path.join(route_tools))
 
     import sumolib  # noqa
@@ -26,6 +31,8 @@ if 'SUMO_HOME' in os.environ:
 
     DUAROUTER = sumolib.checkBinary('duarouter')
     NETCONVERT = sumolib.checkBinary('netconvert')
+    # python script, but doesn't have an importable main function (everything in the if)
+    NET2GEOJSON = os.path.join(net_tools, "net2geojson")
 else:
     sys.exit("please declare environment variable 'SUMO_HOME'")
 
@@ -37,6 +44,7 @@ parser.add_argument('--keep-poly', action='store_true', help="Keep poly files fr
 parser.add_argument('--no-metis', action='store_true', help="Partition network using grid (unsupported)")
 # remove default True later
 parser.add_argument('--dev-mode', action='store_true', default=True, help="Remove some currently unhandled edge cases from the routes (not ideal in release)")
+parser.add_argument('--png', action='store_true', help="Output network images for each partition")
 parser.add_argument('-v', '--verbose', action='store_true', help="Additional output")
 
 verbose = False
@@ -46,10 +54,11 @@ def _is_poly_file(path: str):
     return path.endswith(".poly.xml")
 
 def partition_network(
-    num_threads: int, cfg_file: str,
+    num_parts: int, cfg_file: str,
     use_metis: bool = True,
     data_folder: str = "data",
     keep_poly: bool = False,
+    png: bool = False,
 ):
     if devmode:
         print("-------------------------------")
@@ -86,15 +95,15 @@ def partition_network(
     if use_metis:
         print("Running convertToMetis.py to split graph...")
         
-        convert_to_metis(net_file, num_threads)
+        convert_to_metis(net_file, num_parts)
 
         # Read actual partition num from METIS output
         part_num_file = os.path.join(data_folder, "numParts.txt")
         try:
             with open(part_num_file, "r") as f:
                 number = int(f.read().strip())
-                num_threads = number
-                print(f"Set numThreads to {num_threads} from METIS output")
+                num_parts = number
+                print(f"Set numThreads to {num_parts} from METIS output")
         except FileNotFoundError:
             print("Failed to open metis output partition num file.")
         except ValueError:
@@ -109,7 +118,7 @@ def partition_network(
         xCenter = (bound[0] + bound[2]) // 2
         yCenter = (bound[1] + bound[3]) // 2
 
-        if num_threads == 2:
+        if num_parts == 2:
             part_bounds.append(f"{bound[0]},{bound[1]},{xCenter},{bound[2]}")
             part_bounds.append(f"{xCenter},{bound[1]},{bound[2]},{bound[2]}")
 
@@ -122,7 +131,7 @@ def partition_network(
     min_depart_times = {}
     temp_files = []
 
-    for i in range(num_threads):
+    for i in range(num_parts):
         _process_partition(
             i, cfg_dir, cfg_file, net_file,
             processed_routes_path, netconvert_options.copy(),
@@ -131,9 +140,18 @@ def partition_network(
             keep_poly,
         )
         
-    for i in range(num_threads):
+    for i in range(num_parts):
         _postprocess_partition(i, min_depart_times, data_folder)
     
+    if png:
+        paths = []
+        for i in range(num_parts):
+            net_part = os.path.join(data_folder, f"part{i}.net.xml")
+            path = generate_network_image(net_part, os.path.join(data_folder, f"part{i}.png"), data_folder, temp_files)
+            paths.append(path)
+
+        create_grid_image(paths, (2, 2), os.path.join(data_folder, "network_grid.png"))
+
     for file in temp_files:
         os.remove(file)
 
@@ -149,7 +167,7 @@ def _preprocess_routes(
     # duarouter is a SUMO executable that computes trips, aka SUMO routes defined only by start and end points
     # and normally computed via shortest-path at runtime
     # (This also ends up joining the input route files into one regardless)
-    _run_duarouter(net_file, route_files, interm_file_path, additional_files=additional_files)
+    run_duarouter(net_file, route_files, interm_file_path, additional_files=additional_files)
     # Remove alternate path files
     for f in glob.glob(f'{data_folder}/*.alt.xml'):
         os.remove(f)
@@ -197,7 +215,7 @@ def _process_partition(
 
     # Create partition
     print(f"Running netConvert for partition {part_idx}...")
-    _run_netconvert(net_file=net_file, output=net_part, extra_options=netconvert_options)
+    run_netconvert(net_file=net_file, output=net_part, extra_options=netconvert_options)
     print(f"Partition {part_idx} successfully created")
 
     print(f"Running cutRoutes.py to create routes for partition {part_idx}...")
@@ -263,55 +281,6 @@ def _process_partition(
 
     cfg_part_tree.write(cfg_part)
 
-def _run_netconvert(net_file: str, output: str, extra_options: list[str] = []):
-    _run_prefix([
-        NETCONVERT,
-        *extra_options,
-        "-s", net_file,
-        "-o", output
-    ], "netconvert | ")
-
-def _run_duarouter(net_file: str, trip_files: list[str], output: str, additional_files: list[str] = [], extra_options: list[str] = []):
-    opts = [
-        DUAROUTER,
-        "--net-file", net_file, 
-        "--route-files", ",".join(trip_files),
-        "--output", output,
-        *extra_options
-    ]
-    if len(additional_files) > 0:
-        opts.extend([
-            "--additional-files", ",".join(additional_files),
-        ])
-    _run_prefix(opts, "duarouter | ")
-
-def _run_prefix(args: list[str], prefix: str = "PROC | ", **kwargs):
-    print("Executing", " ".join(args))
-
-    process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, **kwargs)
-
-    while True:
-        stdout_line = process.stdout.readline()
-        stderr_line = process.stderr.readline()
-
-        if not stdout_line and not stderr_line:
-            break
-
-        if stdout_line:
-            # Prepend your prefix to stdout lines and print them
-            print(prefix + stdout_line, end="")
-
-        if stderr_line:
-            # Handle stderr separately if needed
-            print(prefix +stderr_line, end="", file=sys.stderr)
-
-    # Wait for the process to complete
-    process.wait()
-
-    # Check the return code
-    if process.returncode != 0:
-        raise Exception("Error: The command failed with a non-zero exit code: " + process.returncode)
-
 def _devmode_remove_vehicle(vehicle: Element):
     id = vehicle.attrib["id"]
     return re.search(r'_part\d+$', id)
@@ -368,6 +337,42 @@ def _postprocess_partition(
     if verbose:
         print(f"Vehicles starting in partition {part_idx}: [ ", ', '.join([v.attrib["id"] for v in belonging]), "]")
 
+def generate_network_image(net_file:str, output_png_file:str, data_folder:str, temp_files: list[str]):
+    name = os.path.basename(net_file).replace('.net.xml', '')
+    geo_json_path = os.path.join(data_folder, f"{name}.geo.json")
+    run_net2geojson(net_file, geo_json_path)
+    temp_files.append(geo_json_path)
+
+    gdf = gpd.read_file(geo_json_path)
+    gdf.plot()
+    plt.savefig(output_png_file, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Saved network png to {output_png_file}")
+    return output_png_file
+
+def create_grid_image(png_paths, grid_size, output_png_file):
+    images = []
+
+    for png in png_paths:
+        images.append(Image.open(png))
+
+    grid_width = min(grid_size[0], len(images))
+    grid_height = min(grid_size[1], len(images))
+
+    # Calculate the size of each cell in the grid
+    cell_width = max(img.width for img in images)
+    cell_height = max(img.height for img in images)
+
+    grid_image = Image.new('RGB', (grid_width * cell_width, grid_height * cell_height), (255, 255, 255))
+
+    for i, img in enumerate(images):
+        x = (i % grid_width) * cell_width
+        y = (i // grid_width) * cell_height
+        grid_image.paste(img, (x, y))
+
+    grid_image.save(output_png_file)
+    print(f"Combined images saved as: {output_png_file}")
+
 def main(args):
     global verbose, devmode
 
@@ -377,11 +382,15 @@ def main(args):
     if args.dev_mode:
         devmode = True
 
+    print(args)
+
     partition_network(
         args.num_threads,
         args.cfg_file,
         not args.no_metis,
         args.data_folder,
+        args.keep_poly,
+        args.png,
     )
 
 if __name__ == '__main__':

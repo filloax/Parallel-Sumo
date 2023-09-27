@@ -1,3 +1,7 @@
-networkx
-metis # this also requires METIS to be separately installed, see README
-# tweaks to metis might be necessary nowadays to make some of its examples work with python 3.11, but not necessarily for main functionality
+# IMPORTANT: check the Pymetis repo to install instructions on Windows especially,
+# either download from conda-forge or from here https://www.lfd.uci.edu/~gohlke/pythonlibs/#pymetis
+# pymetis
+pillow
+pyproj #for net2geojson
+geopandas
+matplotlib

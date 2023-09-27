@@ -6,8 +6,7 @@ Remember to set the SUMO_HOME environment variable to the directory containing S
 
 ### Installation and dependencies
 
-First, you need to install Eclipse [SUMO](https://eclipse.dev/sumo/). This version of Parallel-Sumo also requires the [metis](https://github.com/inducer/pymetis) python package. This as the original problem needs METIS to be installed and be available on the PATH, the source can be downloaded [here](http://glaros.dtc.umn.edu/gkhome/metis/metis/download), both for Windows and for Linux.
-- Note: installing METIS on Windows is difficult. Personally I managed to do it by downloading old Visual Studio and CMake versions (2010 and 2.8 respectively) to match the build instructions in the METIS download from its main website, otherwise [this repository](https://github.com/guglielmosanchini/conda-metis) could be of help. You need to end up with a metis.dll file (and set the `METIS_DLL` environment variable to its full path), depending on your compile method you might need to enable SHARED in the compile settings to end up with a dll.
+First, you need to install Eclipse [SUMO](https://eclipse.dev/sumo/). This version of Parallel-Sumo also requires the [pymetis](https://github.com/inducer/pymetis) python package, which requires python from 3.4 to 3.10. Check the repository page for install instructions especially on Windows, will need to download either from conda-forge or [here](https://www.lfd.uci.edu/~gohlke/pythonlibs/#pymetis). We include a *install-pymetis.ps1* Powershell script to do that.
 
 ### How to compile:
 

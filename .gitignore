@@ -7,3 +7,4 @@ main.exe
 data/**
 .venv
 .obj/libs/storage.d
+*.whl
