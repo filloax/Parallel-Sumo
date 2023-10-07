@@ -1,5 +1,4 @@
-#ifndef _UTILS_LOADED
-#define _UTILS_LOADED
+#pragma once
 
 #define EXECVP_CPP(args) \
     do { \
@@ -10,5 +9,3 @@
         c_args.push_back(nullptr); \
         execvp(c_args[0], c_args.data()); \
     } while (0)
-
-#endif

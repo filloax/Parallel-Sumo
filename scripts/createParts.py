@@ -37,8 +37,14 @@ if 'SUMO_HOME' in os.environ:
 else:
     sys.exit("please declare environment variable 'SUMO_HOME'")
 
+def check_nthreads(value):
+    ivalue = int(value)
+    if ivalue <= 0:
+        raise argparse.ArgumentTypeError(f"{value} is an invalid thread num (positive int value)")
+    return ivalue
+
 parser = argparse.ArgumentParser()
-parser.add_argument('-n', '--num-threads', required=True, type=int)
+parser.add_argument('-n', '--num-threads', required=True, type=check_nthreads)
 parser.add_argument('-C', '--cfg-file', required=True, type=str, help="Path to the SUMO .sumocfg simulation config")
 parser.add_argument('--data-folder', default='data', help="Folder to store output in")
 parser.add_argument('--keep-poly', action='store_true', help="Keep poly files from the sumocfg (disabled by default for performance)")

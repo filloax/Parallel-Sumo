@@ -18,7 +18,7 @@ First, you need to install Eclipse [SUMO](https://eclipse.dev/sumo/). This versi
 - Optional: add msys64/usr/bin folder to PATH
 - Run `make -f Makefile_win` command either in Powershell msys folders to path, or from the msys2 terminal. Make sure you're running it in the project's folder!
 
-\* In general, you need a C++ environment with the standard POSIX libraries like *sys/wait.h* available, while Windows by default doesn't have it, and neither does UCRT64.  The MSYS2 default environment has the correct libraries set up.  
+\* In general, you need a C++ 17 environment with the standard POSIX libraries like *sys/wait.h* available, while Windows by default doesn't have it, and neither does UCRT64.  The MSYS2 default environment has the correct libraries set up.  
 Another way to compile this is using Cygwin, but it does have the side effect of requiring the program to be run through it and having X-style windows.
 
 

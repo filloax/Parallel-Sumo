@@ -19,10 +19,11 @@ Author: Phillip Taylor
 #include "libs/TraCIAPI.h"
 #include "PartitionManager.h"
 #include "utils.h"
+#include "args.hpp"
 
 PartitionManager::PartitionManager(const char* binary, int id, pthread_barrier_struct* barr,
   pthread_mutex_t* lock, pthread_cond_t* cond, std::string& cfg, std::string& host, int port, int t,
-  std::vector<std::string> extraArgs) :
+  std::vector<std::string> sumoArgs, Args& args) :
   SUMO_BINARY(binary),
   id(id),
   lockAddr(lock),
@@ -32,7 +33,8 @@ PartitionManager::PartitionManager(const char* binary, int id, pthread_barrier_s
   host(host),
   port(port),
   endT(t),
-  extraArgs(extraArgs)
+  sumoArgs(sumoArgs),
+  args(args)
   {
     dataFolder = "data";
   }
@@ -236,8 +238,8 @@ void PartitionManager::internalSim() {
     "--start",
     "--netstate-dump", dataFolder+"/output"+std::to_string(id)+".xml"
   };
-  args.reserve(args.size() + distance(extraArgs.begin(), extraArgs.end()));
-  args.insert(args.end(),extraArgs.begin(),extraArgs.end());
+  args.reserve(args.size() + distance(sumoArgs.begin(), sumoArgs.end()));
+  args.insert(args.end(),sumoArgs.begin(),sumoArgs.end());
 
   switch(pid = fork()){
     case -1:

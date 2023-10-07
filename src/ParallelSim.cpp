@@ -24,16 +24,20 @@ Author: Phillip Taylor
 #include "libs/tinyxml2.h"
 #include "ParallelSim.h"
 #include "utils.h"
+#include "args.hpp"
+#include <filesystem> // C++17
 
+namespace fs = std::filesystem;
 
 typedef std::unordered_multimap<std::string, int>::iterator umit;
 
-ParallelSim::ParallelSim(const std::string& host, int port, const char* cfg, bool gui, int threads, std::vector<std::string>& extraArgs) :
+ParallelSim::ParallelSim(const std::string& host, int port, const char* cfg, bool gui, int threads, std::vector<std::string>& sumoArgs, Args& args) :
   host(host),
   port(port),
   cfgFile(cfg),
   numThreads(threads),
-  extraArgs(extraArgs) {
+  sumoArgs(sumoArgs),
+  args(args) {
   dataFolder = "data";
 
   // set paths for sumo executable binaries
@@ -134,9 +138,17 @@ void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
   // in the original program, but because of it not needing to be
   // perfectly optimized (as partitioning is run once per simulation configuration)
   // it was converted to a Python script
+
+  char* pythonPath = std::getenv("PYTHONPATH");
+  fs::path pythonCommand = "python";
+  if (pythonPath != nullptr) {
+    fs::path pythonPathStr(pythonPath);
+    std::cout << "PYTHONPATH set to " << pythonPathStr << ", using it" << std::endl;
+    pythonCommand = pythonPathStr / pythonCommand;
+  }
   std::string numThreadsStr = std::to_string(numThreads);
   std::vector<std::string> args {
-    "python", "scripts/createParts.py",
+    pythonCommand, "scripts/createParts.py",
     "-n", numThreadsStr,
     "-C", cfgFile,
     "--data-folder", dataFolder
@@ -269,9 +281,14 @@ void ParallelSim::setBorderEdges(std::vector<border_edge_t> borderEdges[], std::
 }
 
 void ParallelSim::startSim(){
-  this->loadRealNumThreads();
+  if (numThreads > 1)
+    this->loadRealNumThreads();
 
-  std::string cfg;
+  if (numThreads == 1) {
+    std::cout << "Running in 1 thread mode, will use the original cfg (not intended? check your --num-threads param or the partitions created)" << std::endl;
+  }
+
+  std::string partCfg;
   std::vector<PartitionManager*> parts;
   std::vector<border_edge_t> borderEdges[numThreads];
   pthread_mutex_t lock;
@@ -283,9 +300,12 @@ void ParallelSim::startSim(){
   pthread_cond_init(&cond, NULL);
   pthread_barrier_init(&barrier, NULL, numThreads);
   for(int i=0; i<numThreads; i++) {
-    cfg = dataFolder + "/part"+std::to_string(i)+".sumocfg";
-    printf("Creating partition manager %d on cfg file %s, port=%d\n", i, cfg.c_str(), port+i);
-    PartitionManager* part = new PartitionManager(SUMO_BINARY, i, &barrier, &lock, &cond, cfg, host, port+i, endTime, extraArgs);
+    if (numThreads > 1)
+      partCfg = dataFolder + "/part"+std::to_string(i)+".sumocfg";
+    else // Only one thread, so use normal config, for the purpose of benchmarking comparisions
+      partCfg = cfgFile;
+    printf("Creating partition manager %d on cfg file %s, port=%d\n", i, partCfg.c_str(), port+i);
+    PartitionManager* part = new PartitionManager(SUMO_BINARY, i, &barrier, &lock, &cond, partCfg, host, port+i, endTime, sumoArgs, args);
     parts.push_back(part);
   }
 

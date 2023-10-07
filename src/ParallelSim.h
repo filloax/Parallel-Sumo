@@ -12,6 +12,7 @@ Author: Phillip Taylor
 #include <cstdlib>
 #include "libs/TraCIAPI.h"
 #include "PartitionManager.h"
+#include "args.hpp"
 
 
 class ParallelSim {
@@ -28,14 +29,15 @@ class ParallelSim {
     std::string dataFolder;
     int port;
     int numThreads;
-    std::vector<std::string>& extraArgs;
+    std::vector<std::string>& sumoArgs;
     int endTime;
+    Args args;
     // sets the border edges for all partitions
     void setBorderEdges(std::vector<border_edge_t>[], std::vector<PartitionManager*>&);
     void loadRealNumThreads();
 
   public:
-    ParallelSim(const std::string& host, int port, const char* file, bool gui, int threads, std::vector<std::string>& extraArgs);
+    ParallelSim(const std::string& host, int port, const char* file, bool gui, int threads, std::vector<std::string>& sumoArgs, Args& args);
     // gets network and route file paths
     void getFilePaths();
     // partition the SUMO network
