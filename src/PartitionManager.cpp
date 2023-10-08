@@ -92,9 +92,9 @@ void PartitionManager::setSynching(bool b) {
   synching = b;
 }
 
-// bool PartitionManager::isSynching() {
-//   return synching;
-// }
+bool PartitionManager::isSynching() {
+  return synching;
+}
 
 bool PartitionManager::isWaiting() {
   return waiting;
