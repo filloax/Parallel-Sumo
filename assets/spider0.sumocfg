@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<!-- generated on 2023-10-09 00:18:46 by Eclipse SUMO sumo Version 1.18.0
+<!-- generated on 2023-10-09 01:01:30 by Eclipse SUMO sumo Version 1.18.0
 -->
 
 <configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
@@ -11,6 +11,7 @@
     </input>
 
     <time>
+        <begin value="0"/>
         <end value="1000"/>
     </time>
 

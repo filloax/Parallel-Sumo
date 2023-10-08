@@ -20,4 +20,4 @@ END_TIME="1000"
 
 python "$SUMO_HOME/tools/randomTrips.py" -n "$NETFILE" -r "$ROUFILE" -e "$END_TIME"
 
-"$SUMO_HOME/bin/sumo" -n "$NETFILE" -r "$ROUFILE" -e "$END_TIME" --save-configuration "$CFGFILE"
+"$SUMO_HOME/bin/sumo" -n "$NETFILE" -r "$ROUFILE" -b 0 -e "$END_TIME" --save-configuration "$CFGFILE"

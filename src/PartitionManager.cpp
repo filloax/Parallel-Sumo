@@ -228,9 +228,6 @@ void PartitionManager::handleFromEdges(int num, std::vector<std::string> prevFro
 
 void PartitionManager::internalSim() {
   pid_t pid;
-  // ISSUE: currently this prints the right value, but prints are inconsistent (sometimes 2 threads have same port in one print but not another)
-  // and mainly sometimes the simulation is started with two threads having the same port, which of course leads to errors
-  // Probably an issue with memory and pointers in the original program?
   std::string portStr = std::to_string(port);
   std::vector<std::string> simArgs {
     SUMO_BINARY, 
@@ -260,9 +257,9 @@ void PartitionManager::internalSim() {
   // ensure all servers have started before simulation begins
   pthread_barrier_wait(barrierAddr);
   connect();
-  pthread_mutex_lock(lockAddr);
+  // pthread_mutex_lock(lockAddr);
   std::cout << "partition " << id << " started in thread " << pthread_self() << " (port " << simArgs[4] << ")" << std::endl;
-  pthread_mutex_unlock(lockAddr);
+  // pthread_mutex_unlock(lockAddr);
   int numFromEdges = fromBorderEdges.size();
   int numToEdges = toBorderEdges.size();
   std::vector<std::string> prevToVehicles[numToEdges];
@@ -283,5 +280,6 @@ void PartitionManager::internalSim() {
     waiting = true;
     pthread_barrier_wait(barrierAddr);
   }
+  std::cout << "partition " << id << " ended in thread " << pthread_self() << ", closing connection..." << std::endl;
   closePartition();
 }
