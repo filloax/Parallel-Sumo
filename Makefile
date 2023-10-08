@@ -1,4 +1,6 @@
-CC=g++
+# change to gcc if clang not installed
+CC=clang
+CCX=clang++
 CXXFLAGS= -g -std=c++17 -I.
 BIN_DIR = bin
 OBJ_DIR = .obj
@@ -18,7 +20,7 @@ main: $(BIN_DIR)/main
 $(BIN_DIR)/main: $(OBJECTS)
 	@echo "Linking"
 	@mkdir -p $(@D)
-	$(CC) -g $^ -o $@
+	$(CCX) -g $^ -o $@
 
 # %.o: %.cpp
 # 	$(CC) $(CXXFLAGS) -c $< -o $@
@@ -27,10 +29,10 @@ $(BIN_DIR)/main: $(OBJECTS)
 $(OBJECTS): $(OBJ_DIR)/%.o: $$(wildcard %.c*)
 	@mkdir -p $(@D)
 ifeq "$(suffix $<)" ".cpp"
-	$(CC) -MMD -MP $(CXXFLAGS) -c $< -o $@ 
+	$(CCX) -MMD -MP $(CXXFLAGS) -c $< -o $@ 
 else
 #equal for now
-	$(CC) -MMD -MP $(CXXFLAGS) -c $< -o $@
+	$(CCX) -MMD -MP $(CXXFLAGS) -c $< -o $@
 endif
 
 -include $(OBJECTS:.o=.d)

@@ -22,8 +22,8 @@ Author: Phillip Taylor
 #include <vector>
 #include "libs/Pthread_barrier.h"
 #include "libs/tinyxml2.h"
-#include "ParallelSim.h"
-#include "utils.h"
+#include "ParallelSim.hpp"
+#include "utils.hpp"
 #include "args.hpp"
 #include <filesystem> // C++17
 
@@ -31,43 +31,37 @@ namespace fs = std::filesystem;
 
 typedef std::unordered_multimap<std::string, int>::iterator umit;
 
-ParallelSim::ParallelSim(const std::string& host, int port, const char* cfg, bool gui, int threads, std::vector<std::string>& sumoArgs, Args& args) :
+ParallelSim::ParallelSim(const std::string& host, int port, std::string cfg, bool gui, int threads, std::vector<std::string>& sumoArgs, Args& args) :
   host(host),
   port(port),
   cfgFile(cfg),
   numThreads(threads),
   sumoArgs(sumoArgs),
-  args(args) {
-  dataFolder = "data";
+  args(args),
+  dataFolder("data")
+  {
 
   // set paths for sumo executable binaries
-  const char* sumoExe;
+  std::string sumoExe;
   if(gui)
     sumoExe = "/bin/sumo-gui";
   else
     sumoExe = "/bin/sumo";
 
-  char* sumoPath(getenv("SUMO_HOME"));
-  if (sumoPath == NULL) {
+  std::string sumoPath;
+  char* sumoPathPtr(getenv("SUMO_HOME"));
+  if (sumoPathPtr == NULL) {
     std::cout << "$SUMO_HOME is not set! Must set $SUMO_HOME." << std::endl;
     exit(EXIT_FAILURE);
   }
   else {
+    sumoPath = sumoPathPtr;
     std::cout << "$SUMO_HOME is set to '" << sumoPath << "'" << std::endl;
-    int len = strlen(sumoPath);
-    char* tmp1 = new char[len+14];
-    char* tmp2 = new char[len+16];
-    char* tmp3 = new char[len+26];
-    strcpy(tmp1, sumoPath);
-    strcpy(tmp2, sumoPath);
-    strcpy(tmp3, sumoPath);
-    SUMO_BINARY = strcat(tmp1, sumoExe);
-    NETCONVERT_BINARY = strcat(tmp2, "/bin/netconvert");
-    CUT_ROUTES_SCRIPT = strcat(tmp3, "/tools/route/cutRoutes.py");
+    SUMO_BINARY = sumoPath + sumoExe;
   }
   // get end time
   tinyxml2::XMLDocument cfgDoc;
-  tinyxml2::XMLError e = cfgDoc.LoadFile(cfgFile);
+  tinyxml2::XMLError e = cfgDoc.LoadFile(cfgFile.c_str());
   if(e) {
     std::cout << cfgDoc.ErrorIDToName(e) << std::endl;
     exit(EXIT_FAILURE);
@@ -98,7 +92,7 @@ void ParallelSim::getFilePaths(){
   path = cfgStr.substr(0,found+1);
   // load sumo cfg file
   tinyxml2::XMLDocument cfgDoc;
-  tinyxml2::XMLError e = cfgDoc.LoadFile(cfgFile);
+  tinyxml2::XMLError e = cfgDoc.LoadFile(cfgFile.c_str());
   if(e) {
     std::cout << cfgDoc.ErrorIDToName(e) << std::endl;
     exit(EXIT_FAILURE);
@@ -147,7 +141,7 @@ void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
     pythonCommand = pythonPathStr / pythonCommand;
   }
   std::string numThreadsStr = std::to_string(numThreads);
-  std::vector<std::string> args {
+  std::vector<std::string> partArgs {
     pythonCommand, "scripts/createParts.py",
     "-n", numThreadsStr,
     "-C", cfgFile,
@@ -155,10 +149,10 @@ void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
   };
 
   if (!metis) {
-    args.push_back("--no-metis");
+    partArgs.push_back("--no-metis");
   }
   if (keepPoly) {
-    args.push_back("--keep-poly");
+    partArgs.push_back("--keep-poly");
   }
 
   pid_t pid;
@@ -171,9 +165,9 @@ void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
     case 0:
       std::cout << "Running createParts.py to split graph and create partition files..." << std::endl;
       std::cout << "command: ";
-      for (int i = 0; i < args.size(); i++) std::cout << args[i] << " ";
+      for (int i = 0; i < partArgs.size(); i++) std::cout << partArgs[i] << " ";
       std::cout << std::endl;
-      EXECVP_CPP(args);
+      EXECVP_CPP(partArgs);
       std::cerr << "execvp() for createParts.py has failed: " << errno << std::endl;
       exit(EXIT_FAILURE);
       break;
@@ -208,7 +202,7 @@ void ParallelSim::loadRealNumThreads() {
   }
 }
 
-void ParallelSim::setBorderEdges(std::vector<border_edge_t> borderEdges[], std::vector<PartitionManager*>& parts){
+void ParallelSim::setBorderEdges(std::vector<border_edge_t> borderEdges[], const std::vector<PartitionManager*>& parts){
   std::unordered_multimap<std::string, int> allEdges;
   // add all edges to map, mapping edge ids to partition ids
   for(int i=0; i<parts.size(); i++) {
@@ -247,11 +241,11 @@ void ParallelSim::setBorderEdges(std::vector<border_edge_t> borderEdges[], std::
             (borderEdge2.lanes).push_back(laneEl->Attribute("id"));
           }
           // determine from and to partitions -  find junction to determine if dead end
-          const char* fromJunc = el->Attribute("from");
+          const std::string fromJunc = el->Attribute("from");
           PartitionManager* from;
           PartitionManager* to;
           for(tinyxml2::XMLElement* junEl = netEl->FirstChildElement("junction"); junEl != NULL; junEl = junEl->NextSiblingElement("junction")) {
-            if(strcmp(fromJunc, junEl->Attribute("id"))==0) {
+            if(strcmp(fromJunc.c_str(), junEl->Attribute("id"))==0) {
               if(strcmp(junEl->Attribute("type"), "dead_end")==0) {
                 from = parts[edgeIt2->second];
                 to = parts[edgeIt1->second];

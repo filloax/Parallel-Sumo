@@ -9,7 +9,7 @@ Author: Phillip Taylor
 #include <iostream>
 #include <cstdlib>
 #include <vector>
-#include "ParallelSim.h"
+#include "ParallelSim.hpp"
 #include <libs/argparse.hpp>
 #include "args.hpp"
 

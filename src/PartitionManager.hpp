@@ -22,7 +22,7 @@ typedef struct border_edge_t border_edge_t;
 
 class PartitionManager {
   private:
-    const char* SUMO_BINARY;
+    const std::string SUMO_BINARY;
     int id;
     std::vector<border_edge_t> toBorderEdges;
     std::vector<border_edge_t> fromBorderEdges;
@@ -42,7 +42,7 @@ class PartitionManager {
     Args args;
     // thread helper function
     static void * internalSimFunc(void* This){
-      ((PartitionManager*)This)->internalSim();
+      static_cast<PartitionManager*>(This)->internalSim();
       return NULL;
     }
     // handle border edges where vehicles are incoming
@@ -56,7 +56,7 @@ class PartitionManager {
 
 public:
    // params: sumo binary, id, barrier, lock, cond, sumo config, host, port, end time
-   PartitionManager(const char* binary, int id, pthread_barrier_struct* barr,
+   PartitionManager(const std::string binary, int id, pthread_barrier_struct* barr,
     pthread_mutex_t* lock, pthread_cond_t* cond, std::string& cfg, std::string& host, int port, int t,
     std::vector<std::string> sumoArgs, Args& args);
   // set this partition's border edges

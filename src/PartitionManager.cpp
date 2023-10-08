@@ -17,11 +17,11 @@ Author: Phillip Taylor
 #include <unistd.h>
 #include <vector>
 #include "libs/TraCIAPI.h"
-#include "PartitionManager.h"
-#include "utils.h"
+#include "PartitionManager.hpp"
+#include "utils.hpp"
 #include "args.hpp"
 
-PartitionManager::PartitionManager(const char* binary, int id, pthread_barrier_struct* barr,
+PartitionManager::PartitionManager(const std::string binary, int id, pthread_barrier_struct* barr,
   pthread_mutex_t* lock, pthread_cond_t* cond, std::string& cfg, std::string& host, int port, int t,
   std::vector<std::string> sumoArgs, Args& args) :
   SUMO_BINARY(binary),
@@ -34,9 +34,10 @@ PartitionManager::PartitionManager(const char* binary, int id, pthread_barrier_s
   port(port),
   endT(t),
   sumoArgs(sumoArgs),
-  args(args)
+  args(args),
+  dataFolder("data")
   {
-    dataFolder = "data";
+
   }
 
 void PartitionManager::setMyBorderEdges(std::vector<border_edge_t> borderEdges) {
@@ -91,9 +92,9 @@ void PartitionManager::setSynching(bool b) {
   synching = b;
 }
 
-bool PartitionManager::isSynching() {
-  return synching;
-}
+// bool PartitionManager::isSynching() {
+//   return synching;
+// }
 
 bool PartitionManager::isWaiting() {
   return waiting;
@@ -231,15 +232,15 @@ void PartitionManager::internalSim() {
   // and mainly sometimes the simulation is started with two threads having the same port, which of course leads to errors
   // Probably an issue with memory and pointers in the original program?
   std::string portStr = std::to_string(port);
-  std::vector<std::string> args {
+  std::vector<std::string> simArgs {
     SUMO_BINARY, 
     "-c", cfg, 
     "--remote-port", portStr, 
     "--start",
     "--netstate-dump", dataFolder+"/output"+std::to_string(id)+".xml"
   };
-  args.reserve(args.size() + distance(sumoArgs.begin(), sumoArgs.end()));
-  args.insert(args.end(),sumoArgs.begin(),sumoArgs.end());
+  simArgs.reserve(simArgs.size() + distance(sumoArgs.begin(), sumoArgs.end()));
+  simArgs.insert(simArgs.end(),sumoArgs.begin(),sumoArgs.end());
 
   switch(pid = fork()){
     case -1:
@@ -248,8 +249,8 @@ void PartitionManager::internalSim() {
       break;
     case 0:
       // execute sumo simulation
-      for (int i = 0; i < args.size(); i++) printf("%s ", args[i].c_str()); printf("\n");
-      EXECVP_CPP(args);
+      for (int i = 0; i < simArgs.size(); i++) printf("%s ", simArgs[i].c_str()); printf("\n");
+      EXECVP_CPP(simArgs);
       std::cout << "execv() has failed" << std::endl;
       exit(EXIT_FAILURE);
       break;
@@ -260,7 +261,7 @@ void PartitionManager::internalSim() {
   pthread_barrier_wait(barrierAddr);
   connect();
   pthread_mutex_lock(lockAddr);
-  std::cout << "partition " << id << " started in thread " << pthread_self() << " (port " << args[4] << ")" << std::endl;
+  std::cout << "partition " << id << " started in thread " << pthread_self() << " (port " << simArgs[4] << ")" << std::endl;
   pthread_mutex_unlock(lockAddr);
   int numFromEdges = fromBorderEdges.size();
   int numToEdges = toBorderEdges.size();

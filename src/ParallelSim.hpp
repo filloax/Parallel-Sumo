@@ -11,19 +11,17 @@ Author: Phillip Taylor
 
 #include <cstdlib>
 #include "libs/TraCIAPI.h"
-#include "PartitionManager.h"
+#include "PartitionManager.hpp"
 #include "args.hpp"
 
 
 class ParallelSim {
   private:
-    const char* SUMO_BINARY;
-    const char* NETCONVERT_BINARY;
-    const char* CUT_ROUTES_SCRIPT;
+    std::string SUMO_BINARY;
     TraCIAPI conn;
     std::string host;
     std::string path;
-    const char* cfgFile;
+    std::string cfgFile;
     std::string netFile;
     std::string routeFile;
     std::string dataFolder;
@@ -33,11 +31,11 @@ class ParallelSim {
     int endTime;
     Args args;
     // sets the border edges for all partitions
-    void setBorderEdges(std::vector<border_edge_t>[], std::vector<PartitionManager*>&);
+    void setBorderEdges(std::vector<border_edge_t>[], const std::vector<PartitionManager*>&);
     void loadRealNumThreads();
 
   public:
-    ParallelSim(const std::string& host, int port, const char* file, bool gui, int threads, std::vector<std::string>& sumoArgs, Args& args);
+    ParallelSim(const std::string& host, int port, const std::string file, bool gui, int threads, std::vector<std::string>& sumoArgs, Args& args);
     // gets network and route file paths
     void getFilePaths();
     // partition the SUMO network
