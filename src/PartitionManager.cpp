@@ -258,7 +258,9 @@ void PartitionManager::internalSim() {
   pthread_barrier_wait(barrierAddr);
   connect();
   // pthread_mutex_lock(lockAddr);
-  std::cout << "partition " << id << " started in thread " << pthread_self() << " (port " << simArgs[4] << ")" << std::endl;
+  std::stringstream msg;
+  msg << "partition " << id << " started in thread " << pthread_self() << " (port " << simArgs[4] << ")" << std::endl << std::endl;
+  std::cout << msg.str();
   // pthread_mutex_unlock(lockAddr);
   int numFromEdges = fromBorderEdges.size();
   int numToEdges = toBorderEdges.size();
@@ -280,6 +282,8 @@ void PartitionManager::internalSim() {
     waiting = true;
     pthread_barrier_wait(barrierAddr);
   }
-  std::cout << "partition " << id << " ended in thread " << pthread_self() << ", closing connection..." << std::endl;
+  std::stringstream msg2;
+  msg2 << "partition " << id << " ended in thread " << pthread_self() << std::endl;
+  std::cout << msg2.str();
   closePartition();
 }
