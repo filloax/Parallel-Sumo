@@ -59,7 +59,14 @@ void PartitionManager::waitForPartition() {
 }
 
 void PartitionManager::closePartition() {
-  myConn.close();
+  try {
+    myConn.close();
+  } catch(std::exception& e) {
+    std::stringstream msg;
+    msg << "Partition " << id << " | Exception in closing TraCI API: " << e.what() << std::endl;
+    msg << getStackTrace() << std::endl;
+    std::cerr << msg.str();
+  }
   pthread_exit(NULL);
 }
 
@@ -69,7 +76,8 @@ void PartitionManager::connect() {
   } catch(std::exception& e) {
     std::stringstream msg;
     msg << "Partition " << id << " | Exception in connecting to TraCI API: " << e.what() << std::endl;
-    // std::cerr << msg;
+    msg << getStackTrace() << std::endl;
+    std::cerr << msg.str();
   }
 }
 
@@ -280,7 +288,7 @@ void PartitionManager::internalSim() {
     // synchronize border edges
     handleToEdges(numToEdges, prevToVehicles);
     // msg << "partition " << id << " stepped!" << std::endl;
-    std::cout << msg.str();
+    // std::cout << msg.str();
 
   //  waiting = true;
   //  pthread_barrier_wait(barrierAddr);

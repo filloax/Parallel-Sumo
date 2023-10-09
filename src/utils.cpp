@@ -1,12 +1,22 @@
+#include <string>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
+#include <iterator>
+
+#if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
+    #include <windows.h>
+    #include <dbghelp.h>
+#else
+    #include <execinfo.h>
+#endif
+
+
+std::string getStackTrace() {
+    std::stringstream outStream;
 
 #if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
 
-#include <windows.h>
-#include <dbghelp.h>
-
-void printStackTrace() {
     const int maxFrames = 128;
     HANDLE process = GetCurrentProcess();
     HANDLE thread = GetCurrentThread();
@@ -35,16 +45,12 @@ void printStackTrace() {
         }
 
         if (SymFromAddr(process, (DWORD64)(stackFrame.AddrPC.Offset), NULL, &symbolInfo.si)) {
-            std::cout << "Frame " << frame << ": " << symbolInfo.si.Name << std::endl;
+            outStream << "Frame " << frame << ": " << symbolInfo.si.Name << std::endl;
         }
     }
-}
 
-#else // Assume Unix-like system
+#else
 
-#include <execinfo.h>
-
-void printStackTrace() {
     void* callstack[128];
     int frames = backtrace(callstack, 128);
     char** symbols = backtrace_symbols(callstack, frames);
@@ -55,10 +61,15 @@ void printStackTrace() {
     }
 
     for (int i = 0; i < frames; ++i) {
-        std::cerr << "Frame " << i << ": " << symbols[i] << std::endl;
+        outStream << "Frame " << i << ": " << symbols[i] << std::endl;
     }
 
     free(symbols);
-}
 
 #endif
+    return outStream.str();
+}
+
+void printStackTrace() {
+    std::cerr << getStackTrace();
+}

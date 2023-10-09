@@ -11,3 +11,4 @@
     } while (0)
 
 void printStackTrace();
+std::string getStackTrace();
