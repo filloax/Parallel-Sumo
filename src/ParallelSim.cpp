@@ -20,7 +20,6 @@ Author: Phillip Taylor
 #include <iterator>
 #include <unordered_map>
 #include <vector>
-#include "libs/Pthread_barrier.h"
 #include "libs/tinyxml2.h"
 #include "ParallelSim.hpp"
 #include "utils.hpp"
@@ -286,8 +285,10 @@ void ParallelSim::startSim(){
   std::vector<PartitionManager*> parts;
   std::vector<border_edge_t> borderEdges[numThreads];
   pthread_mutex_t lock;
-  pthread_barrier_struct barrier;
+  pthread_barrier_t barrier;
   pthread_cond_t cond;
+
+  std::cout << "Will end at time " << endTime << std::endl;
 
   // create partitions
   pthread_mutex_init(&lock, NULL);

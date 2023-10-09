@@ -10,7 +10,7 @@ Author: Phillip Taylor
 #define PARALLELSIM_INCLUDED
 
 #include <cstdlib>
-#include "libs/TraCIAPI.h"
+#include "libs/traciapi/TraCIAPI.h"
 #include "PartitionManager.hpp"
 #include "args.hpp"
 

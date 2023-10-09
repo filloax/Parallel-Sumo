@@ -1,7 +1,7 @@
 # change to gcc if clang not installed
 CC=clang
 CCX=clang++
-CXXFLAGS= -g -std=c++17 -I.
+CXXFLAGS= -std=gnu++17 -I. -g -I./libs/traciapi "-I${SUMO_HOME}/include"
 BIN_DIR = bin
 OBJ_DIR = .obj
 SOURCES := $(shell find * -type f -name "*.cpp" -o -name "*.c")

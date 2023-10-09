@@ -16,12 +16,12 @@ Author: Phillip Taylor
 #include <algorithm>
 #include <unistd.h>
 #include <vector>
-#include "libs/TraCIAPI.h"
+#include "libs/traciapi/TraCIAPI.h"
 #include "PartitionManager.hpp"
 #include "utils.hpp"
 #include "args.hpp"
 
-PartitionManager::PartitionManager(const std::string binary, int id, pthread_barrier_struct* barr,
+PartitionManager::PartitionManager(const std::string binary, int id, pthread_barrier_t* barr,
   pthread_mutex_t* lock, pthread_cond_t* cond, std::string& cfg, std::string& host, int port, int t,
   std::vector<std::string> sumoArgs, Args& args) :
   SUMO_BINARY(binary),
@@ -273,6 +273,9 @@ void PartitionManager::internalSim() {
     pthread_mutex_unlock(lockAddr);
     // synchronize border edges
     handleToEdges(numToEdges, prevToVehicles);
+    // msg << "partition " << id << " stepped!" << std::endl;
+    std::cout << msg.str();
+
   //  waiting = true;
   //  pthread_barrier_wait(barrierAddr);
   //  waiting = false;

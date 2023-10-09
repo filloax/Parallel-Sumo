@@ -6,12 +6,8 @@
  ** file in the root of the Shawn source tree for further details.     **
  ************************************************************************/
 
-#ifndef __SHAWN_APPS_TCPIP_SOCKET_H
-#define __SHAWN_APPS_TCPIP_SOCKET_H
-
-#if defined(_WIN32) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
-	#define WIN_SOCKET
-#endif
+#pragma once
+#include <config.h>
 
 #ifdef SHAWN
      #include <shawn_config.h>
@@ -114,7 +110,8 @@ namespace tcpip
 	private:
 		void init();
 		static void BailOnSocketError(std::string context);
-#ifdef WIN_SOCKET
+//#if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
+#ifdef WIN32
 		static std::string GetWinsockErrorString(int err);
 #endif
 		bool atoaddr(std::string, struct sockaddr_in& addr);
@@ -127,7 +124,8 @@ namespace tcpip
 		bool blocking_;
 
 		bool verbose_;
-#ifdef WIN_SOCKET
+//#if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
+#ifdef WIN32
 		static bool init_windows_sockets_;
 		static bool windows_sockets_initialized_;
 		static int instance_count_;
@@ -137,13 +135,3 @@ namespace tcpip
 }	// namespace tcpip
 
 #endif // BUILD_TCPIP
-
-#endif
-
-/*-----------------------------------------------------------------------
-* Source  $Source: $
-* Version $Revision: 612 $
-* Date    $Date: 2011-06-14 15:16:52 +0200 (Tue, 14 Jun 2011) $
-*-----------------------------------------------------------------------
-* $Log:$
-*-----------------------------------------------------------------------*/

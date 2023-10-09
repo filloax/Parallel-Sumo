@@ -15,25 +15,11 @@
 
 #ifdef BUILD_TCPIP
 
-#ifdef WIN_SOCKET
-	#ifdef ERROR
-		#undef ERROR
-	#endif
-	
-	#ifndef _WIN32_WINNT
-	#define _WIN32_WINNT 0x501
-	#endif
-	#include <w32api/winsock2.h>
-	#include <w32api/ws2tcpip.h>
 
-	#ifndef vsnprintf
-		#define vsnprintf _vsnprintf
-	#endif
-
-#else
+//#if !( defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__) )
+#ifndef WIN32
 	#include <sys/types.h>
 	#include <sys/socket.h>
-	#include <sys/select.h>
 	#include <netinet/in.h>
 	#include <netinet/tcp.h>
 	#include <arpa/inet.h>
@@ -41,6 +27,18 @@
 	#include <errno.h>
 	#include <fcntl.h>
 	#include <unistd.h>
+#else
+	#ifdef ERROR
+		#undef ERROR
+	#endif
+
+	#include <winsock2.h>
+	#include <ws2tcpip.h>
+
+	#ifndef vsnprintf
+		#define vsnprintf _vsnprintf
+	#endif
+
 #endif
 
 #include <cstdio>
@@ -65,7 +63,8 @@ namespace tcpip
 {
 	const int Socket::lengthLen = 4;
 
-#ifdef WIN_SOCKET
+//#if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
+#ifdef WIN32
 	bool Socket::init_windows_sockets_ = true;
 	bool Socket::windows_sockets_initialized_ = false;
 	int Socket::instance_count_ = 0;
@@ -102,7 +101,8 @@ namespace tcpip
 		Socket::
 		init()
 	{
-#ifdef WIN_SOCKET
+//#if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
+#ifdef WIN32
 		instance_count_++;
 
 		if( init_windows_sockets_ && !windows_sockets_initialized_ )
@@ -120,6 +120,7 @@ namespace tcpip
         Socket::
         getFreeSocketPort()
     {
+        Socket dummy(0); // just to trigger initialization on Windows and cleanup on end
         // Create socket to find a random free port that can be handed to the app
         int sock = static_cast<int>(socket( AF_INET, SOCK_STREAM, 0 ));
         struct sockaddr_in self;
@@ -136,7 +137,8 @@ namespace tcpip
         if ( getsockname(sock, (struct sockaddr*) &self, &address_len) < 0)
             BailOnSocketError("tcpip::Socket::getFreeSocketPort() Unable to get socket name");
         const int port = ntohs(self.sin_port);
-#ifdef WIN_SOCKET
+//#if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
+#ifdef WIN32
         ::closesocket( sock );
 #else
         ::close( sock );
@@ -151,14 +153,16 @@ namespace tcpip
 	{
 		// Close first an existing client connection ...
 		close();
-#ifdef WIN_SOCKET
+//#if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
+#ifdef WIN32
 		instance_count_--;
 #endif
 
 		// ... then the server socket
 		if( server_socket_ >= 0 )
 		{
-#ifdef WIN_SOCKET
+//#if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
+#ifdef WIN32
 			::closesocket( server_socket_ );
 #else
 			::close( server_socket_ );
@@ -166,7 +170,8 @@ namespace tcpip
 			server_socket_ = -1;
 		}
 
-#ifdef WIN_SOCKET
+//#if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
+#ifdef WIN32
 		if( server_socket_ == -1 && socket_ == -1 
 		    && init_windows_sockets_ && instance_count_ == 0 )
 				WSACleanup();
@@ -179,7 +184,8 @@ namespace tcpip
 		Socket::
 		BailOnSocketError( std::string context)
 	{
-#ifdef WIN_SOCKET
+//#if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
+#ifdef WIN32
 		int e = WSAGetLastError();
 		std::string msg = GetWinsockErrorString( e );
 #else
@@ -198,7 +204,12 @@ namespace tcpip
 
 
 	// ----------------------------------------------------------------------
-	bool 
+#ifdef _MSC_VER
+#pragma warning(push)
+/* Disable warning about while (0, 0) in the expansion of FD_SET, see https://developercommunity.visualstudio.com/t/fd-clr-and-fd-set-macros-generate-warning-c4548/172702 */
+#pragma warning(disable: 4548)
+#endif
+	bool
 		Socket::
 		datawaiting(int sock) 
 		const
@@ -207,16 +218,12 @@ namespace tcpip
 		FD_ZERO( &fds );
 		FD_SET( (unsigned int)sock, &fds );
 
-	#ifndef WIN_SOCKET
 		struct timeval tv;
 		tv.tv_sec = 0;
 		tv.tv_usec = 0;
-	#else
-		TIMEVAL tv;
-		tv.tv_sec = 0;
-		tv.tv_usec = 0;
-	#endif
+
 		int r = select( sock+1, &fds, nullptr, nullptr, &tv);
+
 		if (r < 0)
 			BailOnSocketError("tcpip::Socket::datawaiting @ select");
 
@@ -225,6 +232,9 @@ namespace tcpip
 		else
 			return false;
 	}
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 	// ----------------------------------------------------------------------
 	bool
@@ -270,7 +280,8 @@ namespace tcpip
 			return nullptr;
 
 		struct sockaddr_in client_addr;
-#ifdef WIN_SOCKET
+//#if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
+#ifdef WIN32
 		int addrlen = sizeof(client_addr);
 #else
 		socklen_t addrlen = sizeof(client_addr);
@@ -288,7 +299,8 @@ namespace tcpip
 			//"Address already in use" error protection
 			{
 
-				#ifdef WIN_SOCKET
+//#if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
+				#ifdef WIN32
 					//setsockopt(server_socket_, SOL_SOCKET, SO_REUSEADDR, (const char*)&reuseaddr, sizeof(reuseaddr));
 					// No address reuse in Windows!!!
 				#else
@@ -341,7 +353,8 @@ namespace tcpip
 
 		if( server_socket_ > 0 )
 		{
-#ifdef WIN_SOCKET
+//#if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
+#ifdef WIN32
 			ULONG NonBlock = blocking_ ? 0 : 1;
 		    if (ioctlsocket(server_socket_, FIONBIO, &NonBlock) == SOCKET_ERROR)
 				BailOnSocketError("tcpip::Socket::set_blocking() Unable to initialize non blocking I/O");
@@ -391,7 +404,8 @@ namespace tcpip
 		// Close client-connection 
 		if( socket_ >= 0 )
 		{
-#ifdef WIN_SOCKET
+//#if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
+#ifdef WIN32
 			::closesocket( socket_ );
 #else
 			::close( socket_ );
@@ -415,7 +429,8 @@ namespace tcpip
 		unsigned char const *bufPtr = &buffer[0];
 		while( numbytes > 0 )
 		{
-#ifdef WIN_SOCKET
+//#if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
+#ifdef WIN32
 			int bytesSent = ::send( socket_, (const char*)bufPtr, static_cast<int>(numbytes), 0 );
 #else
 			int bytesSent = ::send( socket_, bufPtr, numbytes, 0 );
@@ -456,7 +471,8 @@ namespace tcpip
 		recvAndCheck(unsigned char * const buffer, std::size_t len)
 		const
 	{
-#ifdef WIN_SOCKET
+//#if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
+#ifdef WIN32
 		const int bytesReceived = recv( socket_, (char*)buffer, static_cast<int>(len), 0 );
 #else
 		const int bytesReceived = static_cast<int>(recv( socket_, buffer, len, 0 ));
@@ -578,7 +594,8 @@ namespace tcpip
 	}
 
 
-#ifdef WIN_SOCKET
+//#if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
+#ifdef WIN32
 	// ----------------------------------------------------------------------
 	std::string 
 		Socket::
@@ -642,7 +659,7 @@ namespace tcpip
 		return "unknown";
 	}
 
-#endif // WIN_SOCKET
+#endif // WIN32
 
 } // namespace tcpip
 

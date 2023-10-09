@@ -1,5 +1,6 @@
 CC=g++
-CXXFLAGS= -std=c++17 -I. -g
+# include traciapi to fix config file path
+CXXFLAGS= -std=gnu++17 -I. -g -I./libs/traciapi -I "${SUMO_HOME}/include"
 BIN_DIR = bin
 OBJ_DIR = .obj
 SOURCES := $(shell find * -type f -name "*.cpp" -o -name "*.c")

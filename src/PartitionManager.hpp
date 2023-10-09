@@ -14,8 +14,7 @@ Author: Phillip Taylor
 #include <pthread.h>
 #include <string>
 #include <vector>
-#include "libs/Pthread_barrier.h"
-#include "libs/TraCIAPI.h"
+#include "libs/traciapi/TraCIAPI.h"
 #include "args.hpp"
 
 typedef struct border_edge_t border_edge_t;
@@ -35,7 +34,7 @@ class PartitionManager {
     bool synching = false;
     bool waiting = false;
     pthread_t myThread;
-    pthread_barrier_struct* barrierAddr;
+    pthread_barrier_t* barrierAddr;
     pthread_mutex_t* lockAddr;
     pthread_cond_t* condAddr;
     TraCIAPI myConn;
@@ -56,7 +55,7 @@ class PartitionManager {
 
 public:
    // params: sumo binary, id, barrier, lock, cond, sumo config, host, port, end time
-   PartitionManager(const std::string binary, int id, pthread_barrier_struct* barr,
+   PartitionManager(const std::string binary, int id, pthread_barrier_t* barr,
     pthread_mutex_t* lock, pthread_cond_t* cond, std::string& cfg, std::string& host, int port, int t,
     std::vector<std::string> sumoArgs, Args& args);
   // set this partition's border edges
