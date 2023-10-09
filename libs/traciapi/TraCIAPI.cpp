@@ -68,10 +68,10 @@ TraCIAPI::connect(const std::string& host, int port) {
     mySocket = new tcpip::Socket(host, port);
     try {
         mySocket->connect();
-    } catch (tcpip::SocketException&) {
+    } catch (tcpip::SocketException& e) {
         delete mySocket;
         mySocket = nullptr;
-        throw;
+        throw e;
     }
 }
 

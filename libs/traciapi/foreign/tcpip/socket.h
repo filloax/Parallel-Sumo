@@ -6,6 +6,8 @@
  ** file in the root of the Shawn source tree for further details.     **
  ************************************************************************/
 
+// Modified by Filippo Lenzi for Windows compilation compatibility
+
 #pragma once
 #include <config.h>
 
@@ -110,8 +112,8 @@ namespace tcpip
 	private:
 		void init();
 		static void BailOnSocketError(std::string context);
-//#if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
-#ifdef WIN32
+#ifdef USING_WIN
+// #ifdef WIN32
 		static std::string GetWinsockErrorString(int err);
 #endif
 		bool atoaddr(std::string, struct sockaddr_in& addr);
@@ -124,8 +126,8 @@ namespace tcpip
 		bool blocking_;
 
 		bool verbose_;
-//#if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
-#ifdef WIN32
+#ifdef USING_WIN
+// #ifdef WIN32
 		static bool init_windows_sockets_;
 		static bool windows_sockets_initialized_;
 		static int instance_count_;

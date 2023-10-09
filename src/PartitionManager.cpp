@@ -64,7 +64,13 @@ void PartitionManager::closePartition() {
 }
 
 void PartitionManager::connect() {
-  myConn.connect(host, port);
+  try {
+    myConn.connect(host, port);
+  } catch(std::exception& e) {
+    std::stringstream msg;
+    msg << "Partition " << id << " | Exception in connecting to TraCI API: " << e.what() << std::endl;
+    // std::cerr << msg;
+  }
 }
 
 std::vector<std::string> PartitionManager::getEdgeVehicles(const std::string& edgeID) {

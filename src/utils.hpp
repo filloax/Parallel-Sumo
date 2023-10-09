@@ -9,3 +9,5 @@
         c_args.push_back(nullptr); \
         execvp(c_args[0], c_args.data()); \
     } while (0)
+
+void printStackTrace();

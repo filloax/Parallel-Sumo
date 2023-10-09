@@ -92,6 +92,7 @@ download_repo p-ranav/argparse master . "${files_argparse[@]}"
 echo Updated argparse
 
 echo Updating TraCIAPI...
+echo "//Needed for SUMO compilation" > "$root_dir/libs/traciapi/config.h"
 files_traciapi=(
   "src/utils/traci/TraCIAPI.h"
 )

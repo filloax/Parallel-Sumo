@@ -1,6 +1,8 @@
 # change to gcc if clang not installed
 CC=clang
 CCX=clang++
+# include traciapi to fix config file path
+# gnu++ for pthread barriers
 CXXFLAGS= -std=gnu++17 -I. -g -I./libs/traciapi "-I${SUMO_HOME}/include"
 BIN_DIR = bin
 OBJ_DIR = .obj

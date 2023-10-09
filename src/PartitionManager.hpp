@@ -7,8 +7,7 @@ Author: Phillip Taylor
 */
 
 
-#ifndef PARTITIONMANAGER_INCLUDED
-#define PARTITIONMANAGER_INCLUDED
+#pragma once
 
 #include <cstdlib>
 #include <pthread.h>
@@ -97,5 +96,3 @@ struct border_edge_t {
     PartitionManager* from;
     PartitionManager* to;
 };
-
-#endif

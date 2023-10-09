@@ -76,6 +76,8 @@ ParallelSim::ParallelSim(const std::string& host, int port, std::string cfg, boo
     if (endTimeEl == nullptr) {
       std::cout << "No end time specified. Setting default end time at 1000 steps." << std::endl;
       endTime = 1000;
+    } else {
+      endTime = std::stoi(endTimeEl->Attribute("value"));
     }
   }
   else {

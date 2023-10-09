@@ -1,6 +1,10 @@
 CC=g++
-# include traciapi to fix config file path
-CXXFLAGS= -std=gnu++17 -I. -g -I./libs/traciapi -I "${SUMO_HOME}/include"
+# include traciapi to fix config file path.
+# wininit is needed in all files to properly initialize windows flags to avoid
+# GNU compilation conflicts (mainly winsock select vs sys/select).
+# Some files might still include it manually for better IDE recognition.
+CXXFLAGS= -std=gnu++17 -I. -g -I./libs/traciapi -I "${SUMO_HOME}/include" -include "libs/wininit.h"
+LIBS= -lws2_32 -ldbghelp
 BIN_DIR = bin
 OBJ_DIR = .obj
 SOURCES := $(shell find * -type f -name "*.cpp" -o -name "*.c")
@@ -19,7 +23,7 @@ main: $(BIN_DIR)/main
 $(BIN_DIR)/main: $(OBJECTS)
 	@echo "Linking"
 	@mkdir -p $(@D)
-	$(CC) $^ -lws2_32 -g -o $(BIN_DIR)/main.exe
+	$(CC) $^ ${LIBS} -o $(BIN_DIR)/main.exe
 
 # %.o: %.cpp
 # 	$(CC) $(CXXFLAGS) -c $< -o $@

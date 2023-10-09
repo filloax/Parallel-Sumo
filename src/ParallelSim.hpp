@@ -6,8 +6,7 @@ Class definition for ParallelSim.
 Author: Phillip Taylor
 */
 
-#ifndef PARALLELSIM_INCLUDED
-#define PARALLELSIM_INCLUDED
+#pragma once
 
 #include <cstdlib>
 #include "libs/traciapi/TraCIAPI.h"
@@ -45,5 +44,3 @@ class ParallelSim {
     void startSim();
 
 };
-
-#endif
