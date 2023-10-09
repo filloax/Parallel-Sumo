@@ -10,3 +10,5 @@ data/**
 .obj/libs/storage.d
 *.whl
 *.stackdump
+assets/grid_large.*
+err.txt
