@@ -42,13 +42,17 @@ for i, match in enumerate(matches):
     performance_block_count += 1
 
 # Calculate the averages
-avg_duration = total_duration / performance_block_count
-avg_traci_duration = total_traci_duration / performance_block_count
-avg_real_time_factor = total_real_time_factor / performance_block_count
-avg_ups = total_ups / performance_block_count
-
-# Create a CSV row with the averaged values
-csv_row = f"{avg_duration:.2f},{avg_traci_duration:.2f},{avg_real_time_factor:.2f},{avg_ups:.2f}"
+if performance_block_count > 0:
+    avg_duration = total_duration / performance_block_count
+    avg_traci_duration = total_traci_duration / performance_block_count
+    avg_real_time_factor = total_real_time_factor / performance_block_count
+    avg_ups = total_ups / performance_block_count
+    
+    # Create a CSV row with the averaged values
+    csv_row = f"{avg_duration:.2f},{avg_traci_duration:.2f},{avg_real_time_factor:.2f},{avg_ups:.2f}"
+else:
+    print("No output in SUMO! Errored?", file=sys.stderr)
+    csv_row = "-1,-1,-1,-1"
 
 # Print the CSV row
 print(csv_row)

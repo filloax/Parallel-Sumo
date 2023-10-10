@@ -14,8 +14,14 @@ $CFGFILE = "$WORKDIR\$NAME.sumocfg"
 
 $END_TIME = "1000"
 
+Write-Host "Generating network $NETFILE..."
+
 & "$env:SUMO_HOME/bin/netgenerate" -o "$NETFILE" $args
 
+Write-Host "Generating random trips $ROUFILE..."
+
 python "$env:SUMO_HOME/tools/randomTrips.py" -n "$NETFILE" -r "$ROUFILE" -e "$END_TIME"
+
+Write-Host "Writing config $CFGFILE..."
 
 & "$env:SUMO_HOME/bin/sumo" -n "$NETFILE" -r "$ROUFILE" -b 0 -e "$END_TIME" --save-configuration "$CFGFILE"

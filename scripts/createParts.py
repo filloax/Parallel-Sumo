@@ -16,6 +16,8 @@ import re
 import contextily as cx
 from threading import Thread, Lock
 from prefixing import ThreadPrefixStream
+from multiprocessing.pool import ThreadPool
+from typing import Callable
 
 from convertToMetis import main as convert_to_metis, weight_funs, WEIGHT_ROUTE_NUM
 from sumobin import run_duarouter, run_netconvert
@@ -37,21 +39,21 @@ if 'SUMO_HOME' in os.environ:
 else:
     sys.exit("please declare environment variable 'SUMO_HOME'")
 
-def check_nthreads(value):
+def check_nparts(value):
     ivalue = int(value)
     if ivalue <= 0:
         raise argparse.ArgumentTypeError(f"{value} is an invalid thread num (positive int value)")
     return ivalue
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-n', '--num-threads', required=True, type=check_nthreads)
+parser.add_argument('-n', '--num-parts', required=True, type=check_nparts)
 parser.add_argument('-C', '--cfg-file', required=True, type=str, help="Path to the SUMO .sumocfg simulation config")
 parser.add_argument('--data-folder', default='data', help="Folder to store output in")
 parser.add_argument('--keep-poly', action='store_true', help="Keep poly files from the sumocfg (disabled by default for performance)")
 parser.add_argument('--no-metis', action='store_true', help="Partition network using grid (unsupported)")
 parser.add_argument('-w', '--weight-fun', choices=weight_funs, nargs="*", default=[WEIGHT_ROUTE_NUM], help="One or more weighting methods to use")
 parser.add_argument('-nw', '--no-weight', action='store_true', help="Do not use edge weights in partitioning")
-parser.add_argument('--threads', action='store_true', help="Multithread partitioning")
+parser.add_argument('-T', '--threads', type=int, default=1, help="Multithread partitioning thread num")
 # remove default True later
 parser.add_argument('--dev-mode', action='store_false', help="Remove some currently unhandled edge cases from the routes (not ideal in release, currently works inversely for easier development)")
 parser.add_argument('--png', action='store_true', help="Output network images for each partition")
@@ -71,7 +73,7 @@ class NetworkPartitioning:
         keep_poly: bool = False,
         png: bool = False,
         weight_functions: list[str] = [WEIGHT_ROUTE_NUM],
-        multithreading: bool = False,
+        threads: int | None = None,
     ) -> None:
         self.cfg_file = cfg_file
         self.use_metis = use_metis
@@ -79,7 +81,7 @@ class NetworkPartitioning:
         self.keep_poly = keep_poly
         self.png = png
         self.weight_functions = weight_functions
-        self.multithreading = multithreading
+        self.threads = threads if (threads and threads > 1) else None
         
         cfg_tree = ET.parse(self.cfg_file)
         cfg_root = cfg_tree.getroot()
@@ -92,12 +94,8 @@ class NetworkPartitioning:
         if not self.keep_poly:
             self.additional_files = list(filter(lambda x: not _is_poly_file(x), self.additional_files))
 
-        # vehicle_id: depart_time
-        self.min_depart_times = {}
-        self.min_depart_times_lock = Lock()
         self.temp_files = set()
         self.temp_files_lock = Lock()
-
 
     def partition_network(self, num_parts: int):
         if devmode:
@@ -121,8 +119,8 @@ class NetworkPartitioning:
         network_tree = ET.parse(self.net_file)
         network = network_tree.getroot()
 
-        part_bounds = []
-        netconvert_options = []
+        part_bounds_list = []
+        netconvert_options = tuple([])
         edge_weights_file = os.path.join("data", "edge_weights.json")
 
         # Partition network with METIS
@@ -153,7 +151,7 @@ class NetworkPartitioning:
             except ValueError:
                 print("Failed to read metis output partition num from file.")
 
-            netconvert_options.append("--keep-edges.input-file")
+            netconvert_options += ("--keep-edges.input-file",)
         else:
             # not tested as unused in original repo at time of forking
             locEl = network.find("location")
@@ -163,10 +161,10 @@ class NetworkPartitioning:
             yCenter = (bound[1] + bound[3]) // 2
 
             if num_parts == 2:
-                part_bounds.append(f"{bound[0]},{bound[1]},{xCenter},{bound[2]}")
-                part_bounds.append(f"{xCenter},{bound[1]},{bound[2]},{bound[2]}")
+                part_bounds_list.append(f"{bound[0]},{bound[1]},{xCenter},{bound[2]}")
+                part_bounds_list.append(f"{xCenter},{bound[1]},{bound[2]},{bound[2]}")
 
-            netconvert_options.append("--keep-edges.in-boundary")
+            netconvert_options += ("--keep-edges.in-boundary",)
 
         part_threads = []
 
@@ -176,34 +174,53 @@ class NetworkPartitioning:
         self.temp_files = set()
         self.temp_files_lock = Lock()
 
-        def mkargs(i):
-            return [ 
-                i, processed_routes_path, netconvert_options.copy(), part_bounds
-            ]
+        # Make immutable for multithreading
+        part_bounds = tuple(part_bounds_list)
 
-        for i in range(num_parts):
-            if self.multithreading:
-                thread = Thread(target=self._process_partition, args=mkargs(i))
-                thread.start()
+        if self.threads:
+            thread_part_ids = self._split_parts_in_threads(num_parts, self.threads)
+
+            print("Multithreaded partitioning assignment:")
+            for (i, ids) in enumerate(thread_part_ids):
+                print(f"\tThread {i}: {ids}")
+
+            for (i, ids) in enumerate(thread_part_ids):
+                thread = self._partition_work(
+                    self._process_partition, ids, processed_routes_path, netconvert_options, part_bounds,
+                    thread_no=i,
+                )
                 part_threads.append(thread)
-            else:
-                self._process_partition(*mkargs(i))
+        else:
+            print("Running single-threaded")
+            self._partition_work(
+                self._process_partition, list(range(num_parts)), processed_routes_path, netconvert_options, part_bounds, 
+                create_thread=False
+            )
 
         for thread in part_threads:
             thread.join()
 
         part_threads.clear()
             
-        for i in range(num_parts):
-            if self.multithreading:
-                thread = Thread(target=self._postprocess_partition, args = [i])
-                thread.start()
+        print("Processing done, postprocessing...")
+
+        if self.threads:
+            for (i, ids) in enumerate(thread_part_ids):
+                thread = self._partition_work(
+                    self._postprocess_partition, ids,
+                    thread_no=i,
+                )
                 part_threads.append(thread)
-            else:
-                self._postprocess_partition(i)
+        else:
+            self._partition_work(
+                self._postprocess_partition, list(range(num_parts)),
+                create_thread=False
+            )
         
         for thread in part_threads:
             thread.join()
+
+        print("Postprocessing done")
 
         if self.png:
             generate_network_image([os.path.join(self.data_folder, f"part{i}.net.xml") for i in range(num_parts)], 
@@ -218,9 +235,28 @@ class NetworkPartitioning:
                 self.temp_files,
                 edge_weights_file,
             )
+        
+        print("Cleaning up temp files...")
 
         for file in self.temp_files:
             os.remove(file)
+
+        print("Finished partitioning network!")
+
+    def _split_parts_in_threads(self, num_parts: int, num_threads: int) -> list[list[int]]:
+        range_size = num_parts // num_threads
+        remainder = num_parts % num_threads
+
+        start = 0
+
+        split_ranges = []
+        for _ in range(num_threads):
+            end = start + range_size + (1 if remainder > 0 else 0)
+            split_ranges.append(list(range(start, end)))
+            start = end
+            remainder -= 1
+
+        return split_ranges
 
     def _preprocess_routes(self):
         processed_routes_path = os.path.join(self.data_folder, "processed_routes.rou.xml")
@@ -256,22 +292,51 @@ class NetworkPartitioning:
 
         return processed_routes_path
 
+    def _partition_work(
+            self, method: Callable, part_ids: list[int], *shared_args, 
+            create_thread=True, start_thread=True, thread_no:int|None=None,
+            reduce_returns: Callable = None,
+        ):
+        """Process some partitions, used in multithreading.
+
+        Args:
+            method (Callable): Method to run once per partition in each thread.
+            part_ids (list[int]): List of partition integers to work on, will be passed as first arg to method.
+            shared_args: Other arguments to pass to the method, should be either immutable/thread-safe, or 
+                use locks to make them so.
+            create_thread (bool, optional): Also create a thread with this work assigned, and return it. Defaults to True.
+            start_thread (bool, optional): Start the thread created with create_thread. Defaults to True.
+            thread_no (int, optional): If multithreading, thread number to print.
+            reduce_returns (Callable, optional): A function to transform the returns into one single value that then gets returned.
+        """
+        if not create_thread:
+            if type(sys.stdout) is ThreadPrefixStream and thread_no:
+                sys.stdout.add_thread_prefix(f"[Thread {thread_no:2d}]")
+
+            returns = []
+            for part_idx in part_ids:
+                ret = method(part_idx, *shared_args)
+                returns.append(ret)
+        else:
+            thread = Thread(target=self._partition_work, args = [method, part_ids, *shared_args], kwargs={'create_thread': False, 'thread_no': thread_no})
+            if start_thread:
+                thread.start()
+            return thread
+
     def _process_partition(self, 
         part_idx: int,
         processed_routes_path: str,
-        netconvert_options: list[str],
-        part_bounds: dict,
+        netconvert_options_base: tuple[str],
+        part_bounds: tuple[str],
     ):
         cfg_dir = os.path.dirname(self.cfg_file)
-
-        if type(sys.stdout) is ThreadPrefixStream:
-            sys.stdout.add_thread_prefix(f"[Process: {part_idx}]")
 
         net_part = os.path.abspath(os.path.join(self.data_folder, f"part{part_idx}.net.xml"))
         interm_rou_part = os.path.abspath(os.path.join(self.data_folder, f"part{part_idx}.interm.rou.xml"))
         rou_part = os.path.abspath(os.path.join(self.data_folder, f"part{part_idx}.rou.xml"))
         cfg_part = os.path.abspath(os.path.join(self.data_folder, f"part{part_idx}.sumocfg"))
 
+        netconvert_options = list(netconvert_options_base)
         if self.use_metis:
             netconvert_options.append(os.path.join(self.data_folder, f"edgesPart{part_idx}.txt"))
         else:
@@ -290,8 +355,8 @@ class NetworkPartitioning:
             "--orig-net", self.net_file,
             "--disconnected-action", "keep"
         ]))
-        with self.temp_files_lock:
-            self.temp_files.add(interm_rou_part)
+
+        vehicle_depart_times: dict[str, float] = {}
         
         with open(interm_rou_part, 'r', encoding='utf-8') as f:
             route_part_el: Element = ET.parse(f).getroot()
@@ -299,11 +364,12 @@ class NetworkPartitioning:
             for vehicle in vehicles:
                 id = vehicle.attrib["id"]
                 depart = float(vehicle.attrib["depart"])
-                with self.min_depart_times_lock:
-                    if id not in self.min_depart_times:
-                        self.min_depart_times[id] = depart
-                    elif self.min_depart_times[id] > depart:
-                        self.min_depart_times[id] = depart
+
+                if id not in vehicle_depart_times:
+                    vehicle_depart_times[id] = depart
+                # Shouldn't happen (means vehicle has duplicate id), but check anyways
+                elif vehicle_depart_times[id] > depart:
+                    vehicle_depart_times[id] = depart
 
         # Create sumo cfg file for partition
         with open(self.cfg_file, "r") as source, open(cfg_part, "w") as dest:
@@ -346,6 +412,12 @@ class NetworkPartitioning:
                     parent_map[additional_files].remove(additional_files)
 
         cfg_part_tree.write(cfg_part)
+
+        # Do all non-thread-safe/locking operations at the end
+        with self.temp_files_lock:
+            self.temp_files.add(interm_rou_part)
+
+        return vehicle_depart_times
 
     def _devmode_remove_vehicle(self, vehicle: Element):
         id = vehicle.attrib["id"]
@@ -435,7 +507,7 @@ def main(args):
         args.threads,
     )
     
-    partitioning.partition_network(args.num_threads)
+    partitioning.partition_network(args.num_parts)
 
 if __name__ == '__main__':
     main(parser.parse_args())

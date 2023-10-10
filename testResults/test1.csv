@@ -1,0 +1,7 @@
+file,threads,avg. time,avg. traci time
+assets\spider0.sumocfg,1,8.47,0.15
+assets\spider0.sumocfg,4,15.11,13.02
+assets\spider1.sumocfg,1,38.63,0.21
+assets\spider1.sumocfg,4,15.13,13.06
+assets\spider2.sumocfg,1,60.90,0.21
+assets\spider2.sumocfg,4,15.77,13.65

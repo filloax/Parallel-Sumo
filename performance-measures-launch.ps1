@@ -1,8 +1,8 @@
 $files = @(
-    "./assets/spider0.sumocfg",
-    "./assets/spider1.sumocfg",
-    "./assets/spider2.sumocfg",
-    # generated with \scripts\Random-Simulation.ps1 grid_large --grid --grid.number 300 --grid.length 20
+    # "./assets/spider0.sumocfg",
+    # "./assets/spider1.sumocfg",
+    # "./assets/spider2.sumocfg",
+    # generated with scripts\Random-Simulation.ps1 grid_large --grid --grid.number 100 --grid.length 20
     # about 1GB large, so gitignored
     "./assets/grid_large.sumocfg" 
 )
@@ -19,6 +19,6 @@ Write-Output "cfg,thread no.,duration,traci duration,realtime factor,UPS" > "tes
 foreach ($cfg in $files) {
     foreach ($N in $threadNumbers) {
         Write-Host "Running with: -N $N -c $cfg"
-        Write-Output "$cfg,$N,$(python .\measure-performance.py -N $N -c $cfg)" 2>err.txt >> "testResults/test2.csv"
+        Write-Output "$cfg,$N,$(python .\measure-performance.py -N $N -c $cfg)" >> "testResults/test2.csv"
     }
 }

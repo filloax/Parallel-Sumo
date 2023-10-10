@@ -143,7 +143,11 @@ def main(
         neighbors[i] = [nodes_dict[nnode] for nnode in neighs]
         num_neighs_total += len(neighbors[i])
 
-    is_connected = _is_connected(neighbors)
+    try:
+        is_connected = _is_connected(neighbors)
+    except RecursionError:
+        print("Graph too big for connection check, will assume it is", file=sys.stderr)
+        is_connected = True
 
     print(f"Graph connected: {is_connected}")
 
