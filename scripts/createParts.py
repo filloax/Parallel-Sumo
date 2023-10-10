@@ -466,7 +466,7 @@ def worker(args):
     cx.set_cache_dir(cache_dir)
     os.makedirs(cache_dir, exist_ok=True)
 
-    if args.threads:
+    if args.threads > 1:
         sys.stdout = ThreadPrefixStream()
 
     weight_funs = args.weight_fun

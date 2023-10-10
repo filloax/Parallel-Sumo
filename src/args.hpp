@@ -24,6 +24,11 @@ public:
             .default_value(4)
             .scan<'i', int>();
             ;
+        program.add_argument("--part-threads")
+            .help("Threads used while partitioning")
+            .default_value(2)
+            .scan<'i', int>();
+            ;
         program.add_argument("--gui")
             .help("Displays SUMO gui. Note that this launches one GUI application per thread.")
             .default_value(false)
@@ -45,6 +50,7 @@ public:
         port = program.get<int>("--port");
         cfg = program.get<std::string>("--cfg");
         numThreads = program.get<int>("--num-threads");
+        partitioningThreads = program.get<int>("--part-threads");
         gui = program.get<bool>("--gui");
         skipPart = program.get<bool>("--skip-part");
         keepPoly = program.get<bool>("--keep-poly");
@@ -53,9 +59,14 @@ public:
             std::cerr << "Error: wrong number of threads, must be positive number (can be 1 for testing), is " << numThreads << std::endl;
             exit(-1);
         }
+        if (partitioningThreads <= 0) {
+            std::cerr << "Error: wrong number of partitioning threads, must be positive number (can be 1 for testing), is " << partitioningThreads << std::endl;
+            exit(-1);
+        }
 
         std::cout << "host=" << host << ", port=" << port << ", cfg=" << cfg
-            << ", numThreads=" << numThreads << ", gui=" << gui << ", skipPart=" << skipPart
+            << ", numThreads=" << numThreads << ", partitioningThreads=" << partitioningThreads
+            << ", gui=" << gui << ", skipPart=" << skipPart
             << ", keepPoly=" << keepPoly
             << std::endl;
     }
@@ -64,6 +75,7 @@ public:
     int port;
     std::string cfg;
     int numThreads;
+    int partitioningThreads;
     bool gui;
     bool skipPart;
     bool keepPoly;

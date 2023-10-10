@@ -141,10 +141,10 @@ void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
     std::cout << "PYTHONPATH set to " << pythonPathStr << ", using it" << std::endl;
     pythonCommand = pythonPathStr / pythonCommand;
   }
-  std::string numThreadsStr = std::to_string(numThreads);
+
   std::vector<std::string> partArgs {
     pythonCommand, "scripts/createParts.py",
-    "-n", numThreadsStr,
+    "-n", std::to_string(numThreads),
     "-C", cfgFile,
     "--data-folder", dataFolder
   };
@@ -154,6 +154,10 @@ void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
   }
   if (keepPoly) {
     partArgs.push_back("--keep-poly");
+  }
+  if (args.partitioningThreads) {
+    partArgs.push_back("--threads");
+    partArgs.push_back(std::to_string(args.partitioningThreads));
   }
 
   pid_t pid;

@@ -78,6 +78,7 @@ void PartitionManager::connect() {
     msg << "Partition " << id << " | Exception in connecting to TraCI API: " << e.what() << std::endl;
     msg << getStackTrace() << std::endl;
     std::cerr << msg.str();
+    std::exit(-10);
   }
 }
 
@@ -139,6 +140,7 @@ void PartitionManager::handleToEdges(int num, std::vector<std::string> prevToVeh
 
           // handle case where partitions update each other (e.g. two-way road)
           if(synching)
+            // NOTE: THIS FREEZES UP ALL LOCKS IN ALL PARTITIONS FOR ITS DURATION
             waitForSynch();
 
           fromPart->setSynching(true);
@@ -156,8 +158,11 @@ void PartitionManager::handleToEdges(int num, std::vector<std::string> prevToVeh
             try {
               fromPart->slowDown(veh, myConn.vehicle.getSpeed(veh));
             }
-            catch(libsumo::TraCIException){}
-
+            catch(libsumo::TraCIException& e){
+              std::stringstream err;
+              err << "Part " << id << " | Exception in vehicle slowdown: " << e.what() << std::endl;
+              std::cerr << err.str();
+            }
           }
 
           fromPart->setSynching(false);
@@ -185,6 +190,7 @@ void PartitionManager::handleFromEdges(int num, std::vector<std::string> prevFro
 
           // handle case where partitions update each other (e.g. two-way road)
           if(synching)
+            // NOTE: THIS FREEZES UP ALL LOCKS IN ALL PARTITIONS FOR ITS DURATION
             waitForSynch();
 
           // make sure next partition is available to be updated
@@ -209,6 +215,8 @@ void PartitionManager::handleFromEdges(int num, std::vector<std::string> prevFro
             if(pos != std::string::npos) {
               int routePos = route.find("_part");
               std::string routeSub = route.substr(0,routePos+5);
+              // NOTE: Route is now always "_part0"
+              // ERROR
               route = routeSub+"0";
               int routePart = 0;
               std::string firstEdge = (toPart->getRouteEdges(route))[0];
@@ -220,13 +228,20 @@ void PartitionManager::handleFromEdges(int num, std::vector<std::string> prevFro
             }
             try {
               // add vehicle to next partition
-              toPart->add(veh, route, myConn.vehicle.getTypeID(veh),
-              std::to_string(myConn.vehicle.getLaneIndex(veh)), std::to_string(myConn.vehicle.getLanePosition(veh)),
-              std::to_string(myConn.vehicle.getSpeed(veh)));
+              toPart->add(
+                veh, route, myConn.vehicle.getTypeID(veh),
+                std::to_string(myConn.vehicle.getLaneIndex(veh)), 
+                std::to_string(myConn.vehicle.getLanePosition(veh)),
+                std::to_string(myConn.vehicle.getSpeed(veh))
+              );
               // move vehicle to proper lane position in next partition
               toPart->moveTo(veh, myConn.vehicle.getLaneID(veh), myConn.vehicle.getLanePosition(veh));
             }
-            catch(libsumo::TraCIException){}
+            catch(libsumo::TraCIException& e){
+              std::stringstream err;
+              err << "Part " << id << " | Exception in adding vehicle: " << e.what() << std::endl;
+              std::cerr << err.str();
+            }
           }
 
           toPart->setSynching(false);
