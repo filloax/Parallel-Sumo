@@ -6,6 +6,7 @@ from matplotlib import pyplot as plt
 from PIL import Image
 import geopandas as gpd
 import matplotlib.pyplot as plt
+from xml.etree import ElementTree as ET
 
 from sumobin import run_net2geojson
 
@@ -19,7 +20,24 @@ def generate_network_image(net_files: list[str], output_png_file:str, data_folde
         with open(edge_value_file, 'r', encoding='utf-8') as f:
             edge_value_dict = json.load(f)
 
+    has_location_data = True
+
     for net_file, color in zip(net_files, cycle(colors)):
+        tree = ET.parse(net_file)
+        root = tree.getroot()
+        location = root.find("location")
+        if not location:
+            has_location_data = False
+            location = ET.Element("location")
+            location.attrib["netOffset"] = "0,0"
+            location.attrib["convBoundary"] = "0,0,3000,3000"
+            location.attrib["origBoundary"] = "0,0,3000,3000"
+            root.append(location)
+        if "projParameter" not in location.attrib or location.attrib["projParameter"] == "!":
+            has_location_data = False
+            location.attrib["projParameter"] = "+proj=utm +zone=32 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
+        tree.write(net_file)
+
         name = os.path.basename(net_file).replace('.net.xml', '')
         geo_json_path = os.path.join(data_folder, f"{name}.geo.json")
         try:
@@ -35,8 +53,13 @@ def generate_network_image(net_files: list[str], output_png_file:str, data_folde
             gdf.plot("value", ax=ax)#, legend=True)
         else:
             gdf.plot(ax=ax, color=color)
-    print("Adding background with contextily...")
-    cx.add_basemap(ax, crs='epsg:4326', source=cx.providers.OpenStreetMap.Mapnik, alpha=0.8)
+
+    if has_location_data:
+        print("Adding background with contextily...")
+        cx.add_basemap(ax, crs='epsg:4326', source=cx.providers.OpenStreetMap.Mapnik, alpha=0.8)
+    else:
+        print("Cannot add background with contextily, not real road network")
+    
     plt.savefig(output_png_file, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"Saved network png to {output_png_file}")

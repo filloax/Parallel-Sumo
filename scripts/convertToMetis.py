@@ -25,6 +25,7 @@ weight_funs = [
 parser = argparse.ArgumentParser()
 parser.add_argument('netfile', help="SUMO network file to partition (in .net.xml format)")
 parser.add_argument('numparts', type=int, help="Amount of partitions to create. Might end up being lower in the output in small graphs.")
+parser.add_argument('--check-connection', action='store_true', help="Check if the graph is connected")
 
 if 'SUMO_HOME' in os.environ:
     tools = os.path.join(os.environ['SUMO_HOME'], 'tools')
@@ -59,6 +60,7 @@ def main(
     weight_functions: list[str]|str = WEIGHT_ROUTE_NUM,
     routefile: str = None,
     output_weights_file: str = None,
+    check_connection: bool = False,
 ):
     f"""Partition a SUMO network using METIS
 
@@ -70,6 +72,7 @@ def main(
             "{WEIGHT_ROUTE_NUM}" requires a routefile to be set.
         routefile (str, optional): path to route file to use for weighting.
         output_weights_file (str, optional): if set, path to write a file with the weight of each node, in a json-dict format.
+        check_connection (bool, optional): check if the graph is connected
     """
     if weight_functions is None:
         weight_functions = []
@@ -143,10 +146,14 @@ def main(
         neighbors[i] = [nodes_dict[nnode] for nnode in neighs]
         num_neighs_total += len(neighbors[i])
 
-    try:
-        is_connected = _is_connected(neighbors)
-    except RecursionError:
-        print("Graph too big for connection check, will assume it is", file=sys.stderr)
+    if check_connection:
+        try:
+            is_connected = _is_connected(neighbors)
+        except RecursionError:
+            print("Graph too big for connection check, will assume it is", file=sys.stderr)
+            is_connected = True
+    else:
+        print("Check connection disabled")
         is_connected = True
 
     print(f"Graph connected: {is_connected}")
@@ -303,4 +310,4 @@ def _neighbors_to_xadj(neighbors: list, num_edges: int, *other_lists: list) -> t
 
 if __name__ == "__main__":
     args = parser.parse_args()
-    main(args.netfile, args.numparts)
+    main(args.netfile, args.numparts, check_connection=args.check_connection)

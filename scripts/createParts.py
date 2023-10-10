@@ -14,10 +14,14 @@ from xml.etree.ElementTree import Element
 import argparse
 import re
 import contextily as cx
-from threading import Thread, Lock
+from threading import Thread, Lock, get_ident
 from prefixing import ThreadPrefixStream
+from multiprocessing import Process
 from multiprocessing.pool import ThreadPool
 from typing import Callable
+from collections import defaultdict
+from time import time
+from datetime import timedelta
 
 from convertToMetis import main as convert_to_metis, weight_funs, WEIGHT_ROUTE_NUM
 from sumobin import run_duarouter, run_netconvert
@@ -53,8 +57,9 @@ parser.add_argument('--keep-poly', action='store_true', help="Keep poly files fr
 parser.add_argument('--no-metis', action='store_true', help="Partition network using grid (unsupported)")
 parser.add_argument('-w', '--weight-fun', choices=weight_funs, nargs="*", default=[WEIGHT_ROUTE_NUM], help="One or more weighting methods to use")
 parser.add_argument('-nw', '--no-weight', action='store_true', help="Do not use edge weights in partitioning")
-parser.add_argument('-T', '--threads', type=int, default=1, help="Multithread partitioning thread num")
+parser.add_argument('-T', '--threads', type=int, default=1, help="Threads to use for processing the partitioning of the network")
 # remove default True later
+parser.add_argument('-t', '--timing', action='store_true', help="Measure the timing for the whole process")
 parser.add_argument('--dev-mode', action='store_false', help="Remove some currently unhandled edge cases from the routes (not ideal in release, currently works inversely for easier development)")
 parser.add_argument('--png', action='store_true', help="Output network images for each partition")
 parser.add_argument('-v', '--verbose', action='store_true', help="Additional output")
@@ -73,7 +78,8 @@ class NetworkPartitioning:
         keep_poly: bool = False,
         png: bool = False,
         weight_functions: list[str] = [WEIGHT_ROUTE_NUM],
-        threads: int | None = None,
+        threads: int = 1,
+        timing: bool = False,
     ) -> None:
         self.cfg_file = cfg_file
         self.use_metis = use_metis
@@ -81,7 +87,8 @@ class NetworkPartitioning:
         self.keep_poly = keep_poly
         self.png = png
         self.weight_functions = weight_functions
-        self.threads = threads if (threads and threads > 1) else None
+        self.threads = threads
+        self.timing = timing
         
         cfg_tree = ET.parse(self.cfg_file)
         cfg_root = cfg_tree.getroot()
@@ -94,8 +101,9 @@ class NetworkPartitioning:
         if not self.keep_poly:
             self.additional_files = list(filter(lambda x: not _is_poly_file(x), self.additional_files))
 
-        self.temp_files = set()
-        self.temp_files_lock = Lock()
+        self._temp_files = set()
+        self._temp_files_lock = Lock()
+        self._vehicle_depart_times = None
 
     def partition_network(self, num_parts: int):
         if devmode:
@@ -107,6 +115,9 @@ class NetworkPartitioning:
             print("--   by cutRoutes.py         --")
             print("-------------------------------")
 
+        if self.timing:
+            start_t = time()
+
         os.makedirs(self.data_folder, exist_ok=True)
         for f in glob.glob(f'{self.data_folder}/*'):
             if os.path.basename(f) != "cache":
@@ -114,6 +125,8 @@ class NetworkPartitioning:
 
         # Preprocess routes file for proper input to cutRoutes.py
         processed_routes_path = self._preprocess_routes()
+
+        print("Parsing network file...")
 
         # Load network XML
         network_tree = ET.parse(self.net_file)
@@ -166,97 +179,65 @@ class NetworkPartitioning:
 
             netconvert_options += ("--keep-edges.in-boundary",)
 
-        part_threads = []
-
         # Reset holder variables
         self.min_depart_times = {}
         self.min_depart_times_lock = Lock()
-        self.temp_files = set()
-        self.temp_files_lock = Lock()
+        self._temp_files = set()
+        self._temp_files_lock = Lock()
 
         # Make immutable for multithreading
         part_bounds = tuple(part_bounds_list)
 
-        if self.threads:
-            thread_part_ids = self._split_parts_in_threads(num_parts, self.threads)
-
-            print("Multithreaded partitioning assignment:")
-            for (i, ids) in enumerate(thread_part_ids):
-                print(f"\tThread {i}: {ids}")
-
-            for (i, ids) in enumerate(thread_part_ids):
-                thread = self._partition_work(
-                    self._process_partition, ids, processed_routes_path, netconvert_options, part_bounds,
-                    thread_no=i,
-                )
-                part_threads.append(thread)
+        # Run the partitioning proces
+        if self.threads > 1:
+            print(f"Running partition processing with {self.threads} threads...")
         else:
-            print("Running single-threaded")
-            self._partition_work(
-                self._process_partition, list(range(num_parts)), processed_routes_path, netconvert_options, part_bounds, 
-                create_thread=False
-            )
-
-        for thread in part_threads:
-            thread.join()
-
-        part_threads.clear()
-            
-        print("Processing done, postprocessing...")
-
-        if self.threads:
-            for (i, ids) in enumerate(thread_part_ids):
-                thread = self._partition_work(
-                    self._postprocess_partition, ids,
-                    thread_no=i,
-                )
-                part_threads.append(thread)
-        else:
-            self._partition_work(
-                self._postprocess_partition, list(range(num_parts)),
-                create_thread=False
-            )
+            print("Running partition processing single-threaded...")
         
-        for thread in part_threads:
-            thread.join()
+        def process_part_work(part_idx: int):
+            # Note that all arguments are immutable, to be thread-safe
+            return self._process_partition(part_idx, processed_routes_path, netconvert_options, part_bounds)
 
-        print("Postprocessing done")
+        # ThreadPool (instead of Pool) to make sharing objects etc. possible
+        with ThreadPool(self.threads) as pool:
+            chunksize = num_parts // self.threads
+            partition_vehicle_start_times = pool.map(process_part_work, range(num_parts), chunksize)
+
+            # First reduce into a smaller list in multiple threads,
+            # then do final merging in main thread
+            interm_dicts = pool.map(_merge_float_dicts_min, _split_list(partition_vehicle_start_times, self.threads), chunksize=1)
+            self._vehicle_depart_times = _merge_float_dicts_min(interm_dicts)
+           
+            print("Processing done, postprocessing...")
+
+            pool.map(self._postprocess_partition, range(num_parts), chunksize)
+
+            print("Postprocessing done")
 
         if self.png:
             generate_network_image([os.path.join(self.data_folder, f"part{i}.net.xml") for i in range(num_parts)], 
                 os.path.join(self.data_folder, f"partitions.png"),
                 self.data_folder, 
-                self.temp_files,
+                self._temp_files,
             )
             # weight color image
             generate_network_image([os.path.join(self.data_folder, f"part{i}.net.xml") for i in range(num_parts)], 
                 os.path.join(self.data_folder, f"partitions_weights.png"),
                 self.data_folder, 
-                self.temp_files,
+                self._temp_files,
                 edge_weights_file,
             )
         
         print("Cleaning up temp files...")
 
-        for file in self.temp_files:
+        for file in self._temp_files:
             os.remove(file)
 
         print("Finished partitioning network!")
 
-    def _split_parts_in_threads(self, num_parts: int, num_threads: int) -> list[list[int]]:
-        range_size = num_parts // num_threads
-        remainder = num_parts % num_threads
-
-        start = 0
-
-        split_ranges = []
-        for _ in range(num_threads):
-            end = start + range_size + (1 if remainder > 0 else 0)
-            split_ranges.append(list(range(start, end)))
-            start = end
-            remainder -= 1
-
-        return split_ranges
+        if self.timing:
+            end_t = time()
+            print(f"Took {timedelta(seconds=(end_t - start_t))}")
 
     def _preprocess_routes(self):
         processed_routes_path = os.path.join(self.data_folder, "processed_routes.rou.xml")
@@ -292,43 +273,15 @@ class NetworkPartitioning:
 
         return processed_routes_path
 
-    def _partition_work(
-            self, method: Callable, part_ids: list[int], *shared_args, 
-            create_thread=True, start_thread=True, thread_no:int|None=None,
-            reduce_returns: Callable = None,
-        ):
-        """Process some partitions, used in multithreading.
-
-        Args:
-            method (Callable): Method to run once per partition in each thread.
-            part_ids (list[int]): List of partition integers to work on, will be passed as first arg to method.
-            shared_args: Other arguments to pass to the method, should be either immutable/thread-safe, or 
-                use locks to make them so.
-            create_thread (bool, optional): Also create a thread with this work assigned, and return it. Defaults to True.
-            start_thread (bool, optional): Start the thread created with create_thread. Defaults to True.
-            thread_no (int, optional): If multithreading, thread number to print.
-            reduce_returns (Callable, optional): A function to transform the returns into one single value that then gets returned.
-        """
-        if not create_thread:
-            if type(sys.stdout) is ThreadPrefixStream and thread_no:
-                sys.stdout.add_thread_prefix(f"[Thread {thread_no:2d}]")
-
-            returns = []
-            for part_idx in part_ids:
-                ret = method(part_idx, *shared_args)
-                returns.append(ret)
-        else:
-            thread = Thread(target=self._partition_work, args = [method, part_ids, *shared_args], kwargs={'create_thread': False, 'thread_no': thread_no})
-            if start_thread:
-                thread.start()
-            return thread
-
     def _process_partition(self, 
         part_idx: int,
         processed_routes_path: str,
         netconvert_options_base: tuple[str],
         part_bounds: tuple[str],
     ):
+        if type(sys.stdout) is ThreadPrefixStream:
+            sys.stdout.add_thread_prefix(f"[Thread {get_ident():5}]")
+
         cfg_dir = os.path.dirname(self.cfg_file)
 
         net_part = os.path.abspath(os.path.join(self.data_folder, f"part{part_idx}.net.xml"))
@@ -414,8 +367,8 @@ class NetworkPartitioning:
         cfg_part_tree.write(cfg_part)
 
         # Do all non-thread-safe/locking operations at the end
-        with self.temp_files_lock:
-            self.temp_files.add(interm_rou_part)
+        with self._temp_files_lock:
+            self._temp_files.add(interm_rou_part)
 
         return vehicle_depart_times
 
@@ -425,7 +378,7 @@ class NetworkPartitioning:
 
     def _postprocess_partition(self, part_idx: int):
         if type(sys.stdout) is ThreadPrefixStream:
-            sys.stdout.add_thread_prefix(f"[Post process: {part_idx}]")
+            sys.stdout.add_thread_prefix(f"[Post process: {get_ident():5}]")
 
         interm_rou_part = os.path.abspath(os.path.join(self.data_folder, f"part{part_idx}.interm.rou.xml"))
         rou_part = os.path.abspath(os.path.join(self.data_folder, f"part{part_idx}.rou.xml"))
@@ -441,7 +394,7 @@ class NetworkPartitioning:
             for vehicle in vehicles:
                 id = vehicle.attrib["id"]
                 depart = float(vehicle.attrib["depart"])
-                if depart > self.min_depart_times[id]:
+                if depart > self._vehicle_depart_times[id]:
                     remove.append(vehicle)
                 elif devmode and self._devmode_remove_vehicle(vehicle):
                     remove.append(vehicle)
@@ -475,7 +428,30 @@ class NetworkPartitioning:
         if verbose:
             print(f"Vehicles starting in partition {part_idx}: [ ", ', '.join([v.attrib["id"] for v in belonging]), "]")
 
-def main(args):
+def _merge_float_dicts_min(dicts: list[dict[str, float]]) -> dict[str, float]:
+    result_dict = defaultdict(float)
+    
+    for input_dict in dicts:
+        for key, value in input_dict.items():
+            result_dict[key] = min(result_dict[key], value)
+    
+    return dict(result_dict)
+
+def _split_list(list: list, n: int) -> list[list]:
+    part_size = len(list) // n
+    remainder = len(list) % n
+
+    parts = []
+    start = 0
+
+    for i in range(n):
+        end = start + part_size + (1 if i < remainder else 0)
+        parts.append(list[start:end])
+        start = end
+
+    return parts
+
+def worker(args):
     global verbose, devmode
 
     if args.verbose:
@@ -497,6 +473,8 @@ def main(args):
     if args.no_weight:
         weight_funs = []
 
+    print("Initializing network partitioning...")
+
     partitioning = NetworkPartitioning(
         args.cfg_file,
         not args.no_metis,
@@ -505,9 +483,21 @@ def main(args):
         args.png,
         weight_funs,
         args.threads,
+        args.timing,
     )
     
     partitioning.partition_network(args.num_parts)
+
+def main(args):
+    worker_process = Process(target=worker, args=[args])
+    worker_process.start()
+
+    try:
+        while worker_process.is_alive():
+            worker_process.join(timeout=5)
+    except KeyboardInterrupt:
+        print("Quitting.")
+        worker_process.terminate()
 
 if __name__ == '__main__':
     main(parser.parse_args())

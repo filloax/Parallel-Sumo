@@ -42,7 +42,7 @@ def run_net2geojson(net_file: str, output: str, extra_options: list[str] = []):
         "--net-file", net_file, 
         "--output", output,
         *extra_options
-    ], "net2geojson")
+    ], "net2geojson | ")
 
 def _run_prefix(args: list[str], prefix: str = "PROC | ", **kwargs):
     print("Executing", " ".join(args))
