@@ -3,7 +3,7 @@ CC=g++
 # wininit is needed in all files to properly initialize windows flags to avoid
 # GNU compilation conflicts (mainly winsock select vs sys/select).
 # Some files might still include it manually for better IDE recognition.
-CXXFLAGS= -std=gnu++17 -I. -g -I./libs/traciapi -I "${SUMO_HOME}/include" -include "libs/wininit.h"
+CXXFLAGS= -std=gnu++20 -I. -g -I./libs/traciapi -I "${SUMO_HOME}/include" -include "libs/wininit.h"
 LIBS= -lws2_32 -ldbghelp
 BIN_DIR = bin
 OBJ_DIR = .obj

@@ -14,33 +14,32 @@ Author: Phillip Taylor
 #include <string>
 #include <time.h>
 #include <algorithm>
-#include <unistd.h>
 #include <vector>
+#include <shared_mutex>
+#include <unistd.h>
 #include "libs/traciapi/TraCIAPI.h"
 #include "PartitionManager.hpp"
 #include "utils.hpp"
 #include "args.hpp"
 
-PartitionManager::PartitionManager(const std::string binary, int id, pthread_barrier_t* barr,
-  pthread_mutex_t* lock, pthread_cond_t* cond, std::string& cfg, std::string& host, int port, int t,
+PartitionManager::PartitionManager(const std::string binary, int id, std::barrier<>& syncBarrier, 
+  std::string& cfg, std::string& host, int port, int t,
   std::vector<std::string> sumoArgs, Args& args) :
   SUMO_BINARY(binary),
   id(id),
-  lockAddr(lock),
-  barrierAddr(barr),
-  condAddr(cond),
+  syncBarrier(syncBarrier),
   cfg(cfg),
   host(host),
   port(port),
-  endT(t),
+  endTime(t),
   sumoArgs(sumoArgs),
   args(args),
-  dataFolder("data")
+  dataFolder("data"),
+  running(false)
   {
-
   }
 
-void PartitionManager::setMyBorderEdges(std::vector<border_edge_t> borderEdges) {
+void PartitionManager::setMyBorderEdges(std::vector<border_edge_t>& borderEdges) {
   for(border_edge_t e : borderEdges) {
     if(e.to == this)
       toBorderEdges.push_back(e);
@@ -51,11 +50,12 @@ void PartitionManager::setMyBorderEdges(std::vector<border_edge_t> borderEdges) 
 
 bool PartitionManager::startPartition() {
   printf("Manager %d: creating thread on port %d, cfg %s\n", id, port, cfg.c_str());
-  return (pthread_create(&myThread, NULL, internalSimFunc, this) == 0);
+  running = true;
+  thread = std::thread(&PartitionManager::internalSim, this);
 }
 
 void PartitionManager::waitForPartition() {
-  (void) pthread_join(myThread, NULL);
+  thread.join();
 }
 
 void PartitionManager::closePartition() {
@@ -67,7 +67,17 @@ void PartitionManager::closePartition() {
     msg << getStackTrace() << std::endl;
     std::cerr << msg.str();
   }
-  pthread_exit(NULL);
+  running = false; // stops thread at loop start
+  printf("Manager %d: closing... (not immediate, thread will stop as soon as possible)\n", id);
+}
+
+
+std::vector<std::string> PartitionManager::getEdgeVehicles(const std::string& edgeID) {
+  return myConn.edge.getLastStepVehicleIDs(edgeID);
+}
+
+void PartitionManager::slowDown(const std::string& vehID, double speed) {
+  myConn.vehicle.slowDown(vehID, speed, myConn.simulation.getDeltaT());
 }
 
 void PartitionManager::connect() {
@@ -80,10 +90,6 @@ void PartitionManager::connect() {
     std::cerr << msg.str();
     std::exit(-10);
   }
-}
-
-std::vector<std::string> PartitionManager::getEdgeVehicles(const std::string& edgeID) {
-  return myConn.edge.getLastStepVehicleIDs(edgeID);
 }
 
 std::vector<std::string> PartitionManager::getRouteEdges(const std::string& routeID) {
@@ -99,60 +105,19 @@ void PartitionManager::moveTo(const std::string& vehID, const std::string& laneI
   myConn.vehicle.moveTo(vehID, laneID, pos);
 }
 
-void PartitionManager::slowDown(const std::string& vehID, double speed) {
-  myConn.vehicle.slowDown(vehID, speed, myConn.simulation.getDeltaT());
-}
-
-void PartitionManager::setSynching(bool b) {
-  synching = b;
-}
-
-bool PartitionManager::isSynching() {
-  return synching;
-}
-
-bool PartitionManager::isWaiting() {
-  return waiting;
-}
-
-void PartitionManager::waitForSynch() {
-  pthread_mutex_lock(lockAddr);
-  waiting = true;
-  while(synching) {
-    pthread_cond_wait(condAddr, lockAddr);
-  }
-  waiting = false;
-  pthread_mutex_unlock(lockAddr);
-}
-
-void PartitionManager::handleToEdges(int num, std::vector<std::string> prevToVehicles[]) {
-  for(int i=0; i<num;i++) {
-    pthread_mutex_lock(lockAddr);
-    std::vector<std::string> currVehicles = getEdgeVehicles(toBorderEdges[i].id);
-    pthread_mutex_unlock(lockAddr);
+void PartitionManager::handleIncomingEdges(int num, std::vector<std::vector<std::string>>& prevVehicles) {
+  for(int toEdgeIdx = 0; toEdgeIdx < num; toEdgeIdx++) {
+    std::vector<std::string> currVehicles = getEdgeVehicles(toBorderEdges[toEdgeIdx].id);
 
     if(!currVehicles.empty()) {
       for(std::string veh : currVehicles) {
-        auto it = std::find(prevToVehicles[i].begin(), prevToVehicles[i].end(), veh);
+        auto it = std::find(prevVehicles[toEdgeIdx].begin(), prevVehicles[toEdgeIdx].end(), veh);
         // vehicle speed is to be updated in previous partition
-        if(it != prevToVehicles[i].end()) {
-          PartitionManager* fromPart = toBorderEdges[i].from;
-
-          // handle case where partitions update each other (e.g. two-way road)
-          if(synching)
-            // NOTE: THIS FREEZES UP ALL LOCKS IN ALL PARTITIONS FOR ITS DURATION
-            waitForSynch();
-
-          fromPart->setSynching(true);
-          while(!fromPart->isWaiting()) {
-            // make sure partitions aren't waiting for each other
-            if(synching)
-              break;
-          }
-          pthread_mutex_lock(lockAddr);
+        if(it != prevVehicles[toEdgeIdx].end()) {
+          PartitionManager* fromPart = toBorderEdges[toEdgeIdx].from;
 
           // check if vehicle has been transferred out of partition
-          std::vector<std::string> trans = fromPart->getEdgeVehicles(toBorderEdges[i].id);
+          std::vector<std::string> trans = fromPart->getEdgeVehicles(toBorderEdges[toEdgeIdx].id);
           if(std::find(trans.begin(), trans.end(), veh) != trans.end()) {
             // set from partition vehicle speed to next partition vehicle speed
             try {
@@ -164,48 +129,26 @@ void PartitionManager::handleToEdges(int num, std::vector<std::string> prevToVeh
               std::cerr << err.str();
             }
           }
-
-          fromPart->setSynching(false);
-          pthread_mutex_unlock(lockAddr);
-          pthread_cond_signal(condAddr);
         }
       }
-      prevToVehicles[i] = currVehicles;
     }
+    prevVehicles[toEdgeIdx] = currVehicles;
   }
 }
 
-void PartitionManager::handleFromEdges(int num, std::vector<std::string> prevFromVehicles[]) {
-  for(int i=0; i<num;i++) {
-    pthread_mutex_lock(lockAddr);
-    std::vector<std::string> currVehicles = getEdgeVehicles(fromBorderEdges[i].id);
-    pthread_mutex_unlock(lockAddr);
+void PartitionManager::handleOutgoigEdges(int num, std::vector<std::vector<std::string>>& prevVehicles) {
+  for(int fromEdgeIdx = 0; fromEdgeIdx < num; fromEdgeIdx++) {
+    std::vector<std::string> currVehicles = getEdgeVehicles(fromBorderEdges[fromEdgeIdx].id);
 
     if(!currVehicles.empty()) {
       for(std::string veh : currVehicles) {
-        auto it = std::find(prevFromVehicles[i].begin(), prevFromVehicles[i].end(), veh);
+        auto it = std::find(prevVehicles[fromEdgeIdx].begin(), prevVehicles[fromEdgeIdx].end(), veh);
         // vehicle is to be inserted in next partition
-        if(it == prevFromVehicles[i].end()) {
-          PartitionManager* toPart = fromBorderEdges[i].to;
-
-          // handle case where partitions update each other (e.g. two-way road)
-          if(synching)
-            // NOTE: THIS FREEZES UP ALL LOCKS IN ALL PARTITIONS FOR ITS DURATION
-            waitForSynch();
-
-          // make sure next partition is available to be updated
-          toPart->setSynching(true);
-          while(!toPart->isWaiting()) {
-            // make sure partitions aren't waiting for each other
-            if(synching)
-              break;
-          }
-
-          pthread_mutex_lock(lockAddr);
-
+        if(it == prevVehicles[fromEdgeIdx].end()) {
+          PartitionManager* toPart = fromBorderEdges[fromEdgeIdx].to;
 
           // check if vehicle not already on edge (if a vehicle starts on a border edge)
-          std::vector<std::string> toVehs = toPart->getEdgeVehicles(fromBorderEdges[i].id);
+          std::vector<std::string> toVehs = toPart->getEdgeVehicles(fromBorderEdges[fromEdgeIdx].id);
           std::string route = myConn.vehicle.getRouteID(veh);
 
           if(std::find(toVehs.begin(), toVehs.end(), veh) == toVehs.end()) {
@@ -220,7 +163,7 @@ void PartitionManager::handleFromEdges(int num, std::vector<std::string> prevFro
               route = routeSub+"0";
               int routePart = 0;
               std::string firstEdge = (toPart->getRouteEdges(route))[0];
-              while(firstEdge.compare(fromBorderEdges[i].id)) {
+              while(firstEdge.compare(fromBorderEdges[fromEdgeIdx].id)) {
                 routePart++;
                 route = routeSub+std::to_string(routePart);
                 firstEdge = (toPart->getRouteEdges(route))[0];
@@ -243,14 +186,10 @@ void PartitionManager::handleFromEdges(int num, std::vector<std::string> prevFro
               std::cerr << err.str();
             }
           }
-
-          toPart->setSynching(false);
-          pthread_mutex_unlock(lockAddr);
-          pthread_cond_signal(condAddr);
         }
       }
-      prevFromVehicles[i] = currVehicles;
     }
+    prevVehicles[fromEdgeIdx] = currVehicles;
   }
 }
 
@@ -281,38 +220,28 @@ void PartitionManager::internalSim() {
       exit(EXIT_FAILURE);
       break;
   }
+
   // wait for server to startup (1 second)
   nanosleep((const struct timespec[]){{1, 0}}, NULL);
   // ensure all servers have started before simulation begins
-  pthread_barrier_wait(barrierAddr);
+  syncBarrier.arrive_and_wait();
   connect();
-  // pthread_mutex_lock(lockAddr);
   std::stringstream msg;
   msg << "partition " << id << " started in thread " << pthread_self() << " (port " << simArgs[4] << ")" << std::endl << std::endl;
   std::cout << msg.str();
-  // pthread_mutex_unlock(lockAddr);
+
   int numFromEdges = fromBorderEdges.size();
   int numToEdges = toBorderEdges.size();
-  std::vector<std::string> prevToVehicles[numToEdges];
-  std::vector<std::string> prevFromVehicles[numFromEdges];
-  while(myConn.simulation.getTime() < endT) {
-    waiting = false;
-    pthread_mutex_lock(lockAddr);
-    myConn.simulationStep();
-    pthread_mutex_unlock(lockAddr);
-    // synchronize border edges
-    handleToEdges(numToEdges, prevToVehicles);
-    // msg << "partition " << id << " stepped!" << std::endl;
-    // std::cout << msg.str();
+  std::vector<std::vector<std::string>> prevToVehicles(numToEdges);
+  std::vector<std::vector<std::string>> prevFromVehicles(numFromEdges);
 
-  //  waiting = true;
-  //  pthread_barrier_wait(barrierAddr);
-  //  waiting = false;
-    handleFromEdges(numFromEdges, prevFromVehicles);
+  while(running && myConn.simulation.getTime() < endTime) {
+    myConn.simulationStep();
+    handleIncomingEdges(numToEdges, prevToVehicles);
+    handleOutgoigEdges(numFromEdges, prevFromVehicles);
 
     // make sure every time step across partitions is synchronized
-    waiting = true;
-    pthread_barrier_wait(barrierAddr);
+    syncBarrier.arrive_and_wait();
   }
   std::stringstream msg2;
   msg2 << "partition " << id << " ended in thread " << pthread_self() << std::endl;

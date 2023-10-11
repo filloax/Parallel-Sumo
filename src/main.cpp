@@ -27,7 +27,7 @@ int main(int argc, char* argv[]) {
     }
 
     // params: host server, first port. sumo cfg file, gui option (true), number of threads
-    ParallelSim client(args.host, args.port, args.cfg.c_str(), args.gui, args.numThreads, args.sumoArgs, args);
+    ParallelSim client("localhost", args.port, args.cfg.c_str(), args.gui, args.numThreads, args.sumoArgs, args);
     client.getFilePaths();
     if (!args.skipPart && args.numThreads > 1) {
         // param: true for metis partitioning, false for grid partitioning (only works for 2 partitions currently)

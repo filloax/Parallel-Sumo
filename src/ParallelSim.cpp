@@ -9,7 +9,6 @@ Author: Phillip Taylor
 
 #include <iostream>
 #include <fstream>
-#include <pthread.h>
 #include <ctime>
 #include <string>
 #include <unistd.h>
@@ -25,6 +24,7 @@ Author: Phillip Taylor
 #include "utils.hpp"
 #include "args.hpp"
 #include <filesystem> // C++17
+#include <barrier> // C++20
 
 namespace fs = std::filesystem;
 
@@ -290,23 +290,19 @@ void ParallelSim::startSim(){
   std::string partCfg;
   std::vector<PartitionManager*> parts;
   std::vector<border_edge_t> borderEdges[numThreads];
-  pthread_mutex_t lock;
-  pthread_barrier_t barrier;
-  pthread_cond_t cond;
 
   std::cout << "Will end at time " << endTime << std::endl;
 
+  std::barrier<> syncBarrier(numThreads);
+
   // create partitions
-  pthread_mutex_init(&lock, NULL);
-  pthread_cond_init(&cond, NULL);
-  pthread_barrier_init(&barrier, NULL, numThreads);
   for(int i=0; i<numThreads; i++) {
     if (numThreads > 1)
       partCfg = dataFolder + "/part"+std::to_string(i)+".sumocfg";
     else // Only one thread, so use normal config, for the purpose of benchmarking comparisions
       partCfg = cfgFile;
     printf("Creating partition manager %d on cfg file %s, port=%d\n", i, partCfg.c_str(), port+i);
-    PartitionManager* part = new PartitionManager(SUMO_BINARY, i, &barrier, &lock, &cond, partCfg, host, port+i, endTime, sumoArgs, args);
+    PartitionManager* part = new PartitionManager(SUMO_BINARY, i, syncBarrier, partCfg, host, port+i, endTime, sumoArgs, args);
     parts.push_back(part);
   }
 
@@ -323,10 +319,7 @@ void ParallelSim::startSim(){
   for (int i=0; i<numThreads; i++) {
     parts[i]->waitForPartition();
   }
-
-  pthread_cond_destroy(&cond);
-  pthread_mutex_destroy(&lock);
-  pthread_barrier_destroy(&barrier);
+  
   for(int i=0; i<numThreads; i++) {
     delete parts[i];
   }

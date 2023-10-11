@@ -7,9 +7,6 @@ public:
     Args(argparse::ArgumentParser& program):
     program(program)
     {
-        program.add_argument("-h", "--host")
-            .help("IP for the host server")
-            .default_value("localhost");
         program.add_argument("-p", "--port")
             .help("Port for the first thread's server")
             .default_value(1337)
@@ -46,7 +43,6 @@ public:
     void parse_known_args(int argc, char* argv[]) {
         sumoArgs = program.parse_known_args(argc, argv);
         
-        host = program.get<std::string>("--host");
         port = program.get<int>("--port");
         cfg = program.get<std::string>("--cfg");
         numThreads = program.get<int>("--num-threads");
@@ -64,14 +60,13 @@ public:
             exit(-1);
         }
 
-        std::cout << "host=" << host << ", port=" << port << ", cfg=" << cfg
+        std::cout << "port=" << port << ", cfg=" << cfg
             << ", numThreads=" << numThreads << ", partitioningThreads=" << partitioningThreads
             << ", gui=" << gui << ", skipPart=" << skipPart
             << ", keepPoly=" << keepPoly
             << std::endl;
     }
 
-    std::string host;
     int port;
     std::string cfg;
     int numThreads;

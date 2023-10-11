@@ -3,7 +3,7 @@ CC=clang
 CCX=clang++
 # include traciapi to fix config file path
 # gnu++ for pthread barriers
-CXXFLAGS= -std=gnu++17 -I. -g -I./libs/traciapi "-I${SUMO_HOME}/include"
+CXXFLAGS= -std=gnu++20 -I. -g -I./libs/traciapi "-I${SUMO_HOME}/include"
 BIN_DIR = bin
 OBJ_DIR = .obj
 SOURCES := $(shell find * -type f -name "*.cpp" -o -name "*.c")
