@@ -63,3 +63,44 @@ void SumoConnectionRouter::closeAll() {
         closePartition(partId);
     }
 }
+
+bool SumoConnectionRouter::handlesPartition(int partId) {
+    return partitionPorts[partId] >= 0;
+}
+
+#define SUMO_ROUTER_ARGCHECKS(partId) if (partId == ROUTER_OWNER) partId = ownerId;\
+    if (!handlesPartition(partId)) {\
+        throw std::invalid_argument("Router " + std::to_string(ownerId) + " does not have as neighbor partition " + std::to_string(partId));\
+    }
+
+/*
+Connection methods
+Call the connection on the specified partition, or default to owner
+if -1 is passed (aka ROUTER_OWNER)
+*/
+
+void SumoConnectionRouter::add(const std::string& vehID, const std::string& routeID, const std::string& typeID,
+ const std::string& laneInd, const std::string& depPos, const std::string& speed, int partId) {
+    SUMO_ROUTER_ARGCHECKS(partId);
+    connections[partId].vehicle.add(vehID, routeID, typeID, "-1", laneInd, depPos, speed);
+}
+
+void SumoConnectionRouter::moveTo(const std::string& vehID, const std::string& laneID, double pos, int partId) {
+    SUMO_ROUTER_ARGCHECKS(partId);
+    connections[partId].vehicle.moveTo(vehID, laneID, pos);
+}
+
+std::vector<std::string> SumoConnectionRouter::getRouteEdges(const std::string& routeID, int partId) {
+    SUMO_ROUTER_ARGCHECKS(partId);
+    return connections[partId].route.getEdges(routeID);
+}
+
+std::vector<std::string> SumoConnectionRouter::getEdgeVehicles(const std::string& edgeID, int partId) {
+    SUMO_ROUTER_ARGCHECKS(partId);
+    return connections[partId].edge.getLastStepVehicleIDs(edgeID);
+}
+
+void SumoConnectionRouter::slowDown(const std::string& vehID, double speed, int partId) {
+    SUMO_ROUTER_ARGCHECKS(partId);
+    connections[partId].vehicle.slowDown(vehID, speed, connections[partId].simulation.getDeltaT());
+}

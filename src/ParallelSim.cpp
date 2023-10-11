@@ -209,7 +209,7 @@ void ParallelSim::loadRealNumThreads() {
   }
 }
 
-void ParallelSim::calcBorderEdges(std::vector<std::vector<border_edge_indices_t>>& borderEdgesIndices, std::vector<std::vector<int>>& partNeighbors){
+void ParallelSim::calcBorderEdges(std::vector<std::vector<border_edge_t>>& borderEdges, std::vector<std::vector<int>>& partNeighbors){
   std::unordered_multimap<std::string, int> allEdges;
   std::vector<std::set<int>> partNeighborSets(numThreads);
 
@@ -233,8 +233,8 @@ void ParallelSim::calcBorderEdges(std::vector<std::vector<border_edge_indices_t>
       std::pair<umit, umit> edgePair = allEdges.equal_range(key);
       umit edgeIt1 = edgePair.first;
       umit edgeIt2 = ++edgePair.first;
-      border_edge_indices_t borderEdge1 = {};
-      border_edge_indices_t borderEdge2 = {};
+      border_edge_t borderEdge1 = {};
+      border_edge_t borderEdge2 = {};
       borderEdge1.id = key;
       borderEdge2.id = key;
       std::string currNetFile = dataFolder + "/part"+std::to_string(edgeIt1->second)+".net.xml";
@@ -278,8 +278,8 @@ void ParallelSim::calcBorderEdges(std::vector<std::vector<border_edge_indices_t>
           break;
         }
       }
-      borderEdgesIndices[edgeIt1->second].push_back(borderEdge1);
-      borderEdgesIndices[edgeIt2->second].push_back(borderEdge2);
+      borderEdges[edgeIt1->second].push_back(borderEdge1);
+      borderEdges[edgeIt2->second].push_back(borderEdge2);
 
       it = allEdges.erase(edgePair.first, edgePair.second);
     } else {
@@ -308,9 +308,9 @@ void ParallelSim::startSim(){
 
   std::barrier<> syncBarrier(numThreads);
 
-  std::vector<std::vector<border_edge_indices_t>> borderEdgesIndices(numThreads);
+  std::vector<std::vector<border_edge_t>> borderEdges(numThreads);
   std::vector<std::vector<int>> partNeighbors(numThreads);
-  calcBorderEdges(borderEdgesIndices, partNeighbors);
+  calcBorderEdges(borderEdges, partNeighbors);
 
   // create partitions
   for(int i=0; i<numThreads; i++) {
@@ -334,16 +334,8 @@ void ParallelSim::startSim(){
     routers.push_back(router);
   }
 
-  std::vector<std::vector<border_edge_t>> borderEdges(numThreads);
-
   // start parallel simulations
   for(int i=0; i<numThreads; i++) {
-    for (int j=0; j<borderEdgesIndices[i].size(); j++) {
-      borderEdges[i][j].id    = borderEdgesIndices[i][j].id;
-      borderEdges[i][j].lanes = borderEdgesIndices[i][j].lanes;
-      borderEdges[i][j].from  = parts[borderEdgesIndices[i][j].from];
-      borderEdges[i][j].to    = parts[borderEdgesIndices[i][j].to];
-    }
     parts[i]->setMyBorderEdges(borderEdges[i]);
     if(!parts[i]->startPartition()){
       printf("Error creating partition %d", i);

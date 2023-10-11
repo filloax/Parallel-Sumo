@@ -5,6 +5,8 @@
 
 #include "libs/traciapi/TraCIAPI.h"
 
+#define ROUTER_OWNER -1
+
 typedef struct partitionPort {
     int partIdx;
     int port;
@@ -38,6 +40,7 @@ private:
 
     void connectToPartition(int partId);
     void closePartition(int partId);
+    bool handlesPartition(int partId);
 public:
     /**
      * @param host hostname
@@ -48,4 +51,18 @@ public:
 
     void connectAll();
     void closeAll();
+
+    // -1 = use owner id
+    
+    // get vehicles on edge
+    std::vector<std::string> getEdgeVehicles(const std::string&, int partId = ROUTER_OWNER);
+    // get edges of route
+    std::vector<std::string> getRouteEdges(const std::string&, int partId = ROUTER_OWNER);
+    // move vehicle to specified position on lane
+    void moveTo(const std::string&, const std::string&, double, int partId = ROUTER_OWNER);
+    // set vehicle speed to propagate traffic conditions in next partition
+    void slowDown(const std::string&, double, int partId = ROUTER_OWNER);
+    // add vehicle into simulation
+    void add(const std::string&, const std::string&, const std::string&,
+        const std::string&, const std::string&, const std::string&, int partId = ROUTER_OWNER);
 };

@@ -41,9 +41,9 @@ PartitionManager::PartitionManager(const std::string binary, int id, std::barrie
 
 void PartitionManager::setMyBorderEdges(std::vector<border_edge_t>& borderEdges) {
   for(border_edge_t e : borderEdges) {
-    if(e.to == this)
+    if(e.to == id)
       toBorderEdges.push_back(e);
-    else if(e.from == this)
+    else if(e.from == id)
       fromBorderEdges.push_back(e);
   }
 }
@@ -65,49 +65,27 @@ void PartitionManager::closePartition() {
   printf("Manager %d: closing... (not immediate, thread will stop as soon as possible)\n", id);
 }
 
-
-std::vector<std::string> PartitionManager::getEdgeVehicles(const std::string& edgeID) {
-  return myConn.edge.getLastStepVehicleIDs(edgeID);
-}
-
-void PartitionManager::slowDown(const std::string& vehID, double speed) {
-  myConn.vehicle.slowDown(vehID, speed, myConn.simulation.getDeltaT());
-}
-
 void PartitionManager::connect() {
   router.connectAll();
 }
 
-std::vector<std::string> PartitionManager::getRouteEdges(const std::string& routeID) {
-  return myConn.route.getEdges(routeID);
-}
-
-void PartitionManager::add(const std::string& vehID, const std::string& routeID, const std::string& typeID,
- const std::string& laneInd, const std::string& depPos, const std::string& speed) {
-  myConn.vehicle.add(vehID, routeID, typeID, "-1", laneInd, depPos, speed);
-}
-
-void PartitionManager::moveTo(const std::string& vehID, const std::string& laneID, double pos) {
-  myConn.vehicle.moveTo(vehID, laneID, pos);
-}
-
 void PartitionManager::handleIncomingEdges(int num, std::vector<std::vector<std::string>>& prevVehicles) {
   for(int toEdgeIdx = 0; toEdgeIdx < num; toEdgeIdx++) {
-    std::vector<std::string> currVehicles = getEdgeVehicles(toBorderEdges[toEdgeIdx].id);
+    std::vector<std::string> currVehicles = router.getEdgeVehicles(toBorderEdges[toEdgeIdx].id);
 
     if(!currVehicles.empty()) {
       for(std::string veh : currVehicles) {
         auto it = std::find(prevVehicles[toEdgeIdx].begin(), prevVehicles[toEdgeIdx].end(), veh);
         // vehicle speed is to be updated in previous partition
         if(it != prevVehicles[toEdgeIdx].end()) {
-          PartitionManager* fromPart = toBorderEdges[toEdgeIdx].from;
+          int fromId = toBorderEdges[toEdgeIdx].from;
 
           // check if vehicle has been transferred out of partition
-          std::vector<std::string> trans = fromPart->getEdgeVehicles(toBorderEdges[toEdgeIdx].id);
+          std::vector<std::string> trans = router.getEdgeVehicles(toBorderEdges[toEdgeIdx].id, fromId);
           if(std::find(trans.begin(), trans.end(), veh) != trans.end()) {
             // set from partition vehicle speed to next partition vehicle speed
             try {
-              fromPart->slowDown(veh, myConn.vehicle.getSpeed(veh));
+              router.slowDown(veh, myConn.vehicle.getSpeed(veh), fromId);
             }
             catch(libsumo::TraCIException& e){
               std::stringstream err;
@@ -124,17 +102,17 @@ void PartitionManager::handleIncomingEdges(int num, std::vector<std::vector<std:
 
 void PartitionManager::handleOutgoigEdges(int num, std::vector<std::vector<std::string>>& prevVehicles) {
   for(int fromEdgeIdx = 0; fromEdgeIdx < num; fromEdgeIdx++) {
-    std::vector<std::string> currVehicles = getEdgeVehicles(fromBorderEdges[fromEdgeIdx].id);
+    std::vector<std::string> currVehicles = router.getEdgeVehicles(fromBorderEdges[fromEdgeIdx].id);
 
     if(!currVehicles.empty()) {
       for(std::string veh : currVehicles) {
         auto it = std::find(prevVehicles[fromEdgeIdx].begin(), prevVehicles[fromEdgeIdx].end(), veh);
         // vehicle is to be inserted in next partition
         if(it == prevVehicles[fromEdgeIdx].end()) {
-          PartitionManager* toPart = fromBorderEdges[fromEdgeIdx].to;
+          int toId = fromBorderEdges[fromEdgeIdx].to;
 
           // check if vehicle not already on edge (if a vehicle starts on a border edge)
-          std::vector<std::string> toVehs = toPart->getEdgeVehicles(fromBorderEdges[fromEdgeIdx].id);
+          std::vector<std::string> toVehs = router.getEdgeVehicles(fromBorderEdges[fromEdgeIdx].id, toId);
           std::string route = myConn.vehicle.getRouteID(veh);
 
           if(std::find(toVehs.begin(), toVehs.end(), veh) == toVehs.end()) {
@@ -148,23 +126,24 @@ void PartitionManager::handleOutgoigEdges(int num, std::vector<std::vector<std::
               // ERROR
               route = routeSub+"0";
               int routePart = 0;
-              std::string firstEdge = (toPart->getRouteEdges(route))[0];
+              std::string firstEdge = router.getRouteEdges(route, toId)[0];
               while(firstEdge.compare(fromBorderEdges[fromEdgeIdx].id)) {
                 routePart++;
                 route = routeSub+std::to_string(routePart);
-                firstEdge = (toPart->getRouteEdges(route))[0];
+                firstEdge = router.getRouteEdges(route, toId)[0];
               }
             }
             try {
               // add vehicle to next partition
-              toPart->add(
+              router.add(
                 veh, route, myConn.vehicle.getTypeID(veh),
                 std::to_string(myConn.vehicle.getLaneIndex(veh)), 
                 std::to_string(myConn.vehicle.getLanePosition(veh)),
-                std::to_string(myConn.vehicle.getSpeed(veh))
+                std::to_string(myConn.vehicle.getSpeed(veh)),
+                toId
               );
               // move vehicle to proper lane position in next partition
-              toPart->moveTo(veh, myConn.vehicle.getLaneID(veh), myConn.vehicle.getLanePosition(veh));
+              router.moveTo(veh, myConn.vehicle.getLaneID(veh), myConn.vehicle.getLanePosition(veh), toId);
             }
             catch(libsumo::TraCIException& e){
               std::stringstream err;

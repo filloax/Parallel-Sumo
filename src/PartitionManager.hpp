@@ -20,7 +20,15 @@ Contributions: Filippo Lenzi
 #include "args.hpp"
 #include "SumoConnectionRouter.hpp"
 
-typedef struct border_edge_t border_edge_t;
+/**
+ * from and to are partition ids
+*/
+typedef struct border_edge_t {
+    std::string id;
+    std::vector<std::string> lanes;
+    int from;
+    int to;
+} border_edge_t;
 
 class PartitionManager {
 private:
@@ -47,16 +55,6 @@ private:
 
     // connect to TraCI object
     void connect();
-    // get edges of route
-    std::vector<std::string> getRouteEdges(const std::string&);
-    // move vehicle to specified position on lane
-    void moveTo(const std::string&, const std::string&, double);
-    // set vehicle speed to propagate traffic conditions in next partition
-    void slowDown(const std::string&, double);
-    // add vehicle into simulation
-    void add(const std::string&, const std::string&, const std::string&,
-      const std::string&, const std::string&, const std::string&);
-
 
 protected:
     // start sumo simulation in thread
@@ -81,14 +79,4 @@ public:
     void waitForPartition();
     // set this partition's border edges
     void setMyBorderEdges(std::vector<border_edge_t>&);
-
-    // get vehicles on edge
-    std::vector<std::string> getEdgeVehicles(const std::string&);
-};
-
-struct border_edge_t {
-    std::string id;
-    std::vector<std::string> lanes;
-    PartitionManager* from;
-    PartitionManager* to;
 };
