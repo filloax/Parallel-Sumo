@@ -23,15 +23,15 @@ Author: Phillip Taylor
 #include "args.hpp"
 
 PartitionManager::PartitionManager(const std::string binary, int id, std::barrier<>& syncBarrier, 
-  std::string& cfg, std::string& host, int port, int t,
+  SumoConnectionRouter& router, std::string& cfg, int port, int endTime,
   std::vector<std::string> sumoArgs, Args& args) :
   SUMO_BINARY(binary),
   id(id),
   syncBarrier(syncBarrier),
+  router(router),
   cfg(cfg),
-  host(host),
   port(port),
-  endTime(t),
+  endTime(endTime),
   sumoArgs(sumoArgs),
   args(args),
   dataFolder("data"),
@@ -52,6 +52,7 @@ bool PartitionManager::startPartition() {
   printf("Manager %d: creating thread on port %d, cfg %s\n", id, port, cfg.c_str());
   running = true;
   thread = std::thread(&PartitionManager::internalSim, this);
+  return true; // TODO: check if thread started with success
 }
 
 void PartitionManager::waitForPartition() {
@@ -59,14 +60,7 @@ void PartitionManager::waitForPartition() {
 }
 
 void PartitionManager::closePartition() {
-  try {
-    myConn.close();
-  } catch(std::exception& e) {
-    std::stringstream msg;
-    msg << "Partition " << id << " | Exception in closing TraCI API: " << e.what() << std::endl;
-    msg << getStackTrace() << std::endl;
-    std::cerr << msg.str();
-  }
+  router.closeAll();
   running = false; // stops thread at loop start
   printf("Manager %d: closing... (not immediate, thread will stop as soon as possible)\n", id);
 }
@@ -81,15 +75,7 @@ void PartitionManager::slowDown(const std::string& vehID, double speed) {
 }
 
 void PartitionManager::connect() {
-  try {
-    myConn.connect(host, port);
-  } catch(std::exception& e) {
-    std::stringstream msg;
-    msg << "Partition " << id << " | Exception in connecting to TraCI API: " << e.what() << std::endl;
-    msg << getStackTrace() << std::endl;
-    std::cerr << msg.str();
-    std::exit(-10);
-  }
+  router.connectAll();
 }
 
 std::vector<std::string> PartitionManager::getRouteEdges(const std::string& routeID) {

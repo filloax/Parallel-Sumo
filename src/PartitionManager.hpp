@@ -4,6 +4,8 @@ PartitionManager.h
 Class definition for PartitionManager.
 
 Author: Phillip Taylor
+
+Contributions: Filippo Lenzi
 */
 
 
@@ -16,6 +18,7 @@ Author: Phillip Taylor
 #include <barrier>
 #include "libs/traciapi/TraCIAPI.h"
 #include "args.hpp"
+#include "SumoConnectionRouter.hpp"
 
 typedef struct border_edge_t border_edge_t;
 
@@ -23,10 +26,10 @@ class PartitionManager {
 private:
     const std::string SUMO_BINARY;
     int id;
+    SumoConnectionRouter& router;
     std::vector<border_edge_t> toBorderEdges;
     std::vector<border_edge_t> fromBorderEdges;
     std::string cfg;
-    std::string host;
     int port;
     int endTime;
     std::vector<std::string> sumoArgs;
@@ -66,8 +69,8 @@ public:
 
     // params: sumo binary, id, barrier, lock, cond, sumo config, host, port, end time
     PartitionManager(const std::string binary, int id, std::barrier<>& syncBarrier,
-      std::string& cfg, std::string& host, int port, int t,
-      std::vector<std::string> sumoArgs, Args& args);
+        SumoConnectionRouter& router, std::string& cfg, int port, int t,
+        std::vector<std::string> sumoArgs, Args& args);
     
     /* Starts this partition in a thread. Returns true if the thread was
         successfully started, false if there was an error starting the thread */

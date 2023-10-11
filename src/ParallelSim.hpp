@@ -4,6 +4,8 @@ ParallelSim.h
 Class definition for ParallelSim.
 
 Author: Phillip Taylor
+
+Contributions: Filippo Lenzi
 */
 
 #pragma once
@@ -13,6 +15,12 @@ Author: Phillip Taylor
 #include "PartitionManager.hpp"
 #include "args.hpp"
 
+typedef struct border_edge_indices_t {
+    std::string id;
+    std::vector<std::string> lanes;
+    int from;
+    int to;
+} border_edge_indices_t;
 
 class ParallelSim {
   private:
@@ -30,7 +38,7 @@ class ParallelSim {
     int endTime;
     Args args;
     // sets the border edges for all partitions
-    void setBorderEdges(std::vector<border_edge_t>[], const std::vector<PartitionManager*>&);
+    void calcBorderEdges(std::vector<std::vector<border_edge_indices_t>>& borderEdgesIndices, std::vector<std::vector<int>>& partNeighbors);
     void loadRealNumThreads();
 
   public:

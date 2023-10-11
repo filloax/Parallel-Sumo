@@ -19,12 +19,14 @@ Author: Phillip Taylor
 #include <iterator>
 #include <unordered_map>
 #include <vector>
+#include <set>
 #include "libs/tinyxml2.h"
 #include "ParallelSim.hpp"
 #include "utils.hpp"
 #include "args.hpp"
 #include <filesystem> // C++17
 #include <barrier> // C++20
+#include "SumoConnectionRouter.hpp"
 
 namespace fs = std::filesystem;
 
@@ -207,10 +209,12 @@ void ParallelSim::loadRealNumThreads() {
   }
 }
 
-void ParallelSim::setBorderEdges(std::vector<border_edge_t> borderEdges[], const std::vector<PartitionManager*>& parts){
+void ParallelSim::calcBorderEdges(std::vector<std::vector<border_edge_indices_t>>& borderEdgesIndices, std::vector<std::vector<int>>& partNeighbors){
   std::unordered_multimap<std::string, int> allEdges;
+  std::vector<std::set<int>> partNeighborSets(numThreads);
+
   // add all edges to map, mapping edge ids to partition ids
-  for(int i=0; i<parts.size(); i++) {
+  for(int i=0; i<numThreads; i++) {
     std::string currNetFile = dataFolder + "/part"+std::to_string(i)+".net.xml";
     tinyxml2::XMLDocument currNet;
     tinyxml2::XMLError e = currNet.LoadFile(currNetFile.c_str());
@@ -229,8 +233,8 @@ void ParallelSim::setBorderEdges(std::vector<border_edge_t> borderEdges[], const
       std::pair<umit, umit> edgePair = allEdges.equal_range(key);
       umit edgeIt1 = edgePair.first;
       umit edgeIt2 = ++edgePair.first;
-      border_edge_t borderEdge1 = {};
-      border_edge_t borderEdge2 = {};
+      border_edge_indices_t borderEdge1 = {};
+      border_edge_indices_t borderEdge2 = {};
       borderEdge1.id = key;
       borderEdge2.id = key;
       std::string currNetFile = dataFolder + "/part"+std::to_string(edgeIt1->second)+".net.xml";
@@ -247,35 +251,44 @@ void ParallelSim::setBorderEdges(std::vector<border_edge_t> borderEdges[], const
           }
           // determine from and to partitions -  find junction to determine if dead end
           const std::string fromJunc = el->Attribute("from");
-          PartitionManager* from;
-          PartitionManager* to;
+          int from;
+          int to;
           for(tinyxml2::XMLElement* junEl = netEl->FirstChildElement("junction"); junEl != NULL; junEl = junEl->NextSiblingElement("junction")) {
             if(strcmp(fromJunc.c_str(), junEl->Attribute("id"))==0) {
               if(strcmp(junEl->Attribute("type"), "dead_end")==0) {
-                from = parts[edgeIt2->second];
-                to = parts[edgeIt1->second];
+                from = edgeIt2->second;
+                to = edgeIt1->second;
               }
               else {
-                from = parts[edgeIt1->second];
-                to = parts[edgeIt2->second];
+                from = edgeIt1->second;
+                to = edgeIt2->second;
               }
               borderEdge1.from = from;
               borderEdge2.from = from;
               borderEdge1.to = to;
               borderEdge2.to = to;
+              
+              // Insert explored parts to the set (unique values, so only get added once)
+              partNeighborSets[from].insert(to);
+              partNeighborSets[to].insert(from);
+
               break;
             }
           }
           break;
         }
       }
-      borderEdges[edgeIt1->second].push_back(borderEdge1);
-      borderEdges[edgeIt2->second].push_back(borderEdge2);
+      borderEdgesIndices[edgeIt1->second].push_back(borderEdge1);
+      borderEdgesIndices[edgeIt2->second].push_back(borderEdge2);
 
       it = allEdges.erase(edgePair.first, edgePair.second);
     } else {
       it = allEdges.erase(it);
     }
+  }
+
+  for (int i = 0; i < numThreads; i++) {
+    partNeighbors[i].insert(partNeighbors[i].begin(), partNeighborSets[i].begin(), partNeighborSets[i].end());
   }
 }
 
@@ -289,11 +302,15 @@ void ParallelSim::startSim(){
 
   std::string partCfg;
   std::vector<PartitionManager*> parts;
-  std::vector<border_edge_t> borderEdges[numThreads];
+  std::vector<SumoConnectionRouter*> routers;
 
   std::cout << "Will end at time " << endTime << std::endl;
 
   std::barrier<> syncBarrier(numThreads);
+
+  std::vector<std::vector<border_edge_indices_t>> borderEdgesIndices(numThreads);
+  std::vector<std::vector<int>> partNeighbors(numThreads);
+  calcBorderEdges(borderEdgesIndices, partNeighbors);
 
   // create partitions
   for(int i=0; i<numThreads; i++) {
@@ -302,13 +319,31 @@ void ParallelSim::startSim(){
     else // Only one thread, so use normal config, for the purpose of benchmarking comparisions
       partCfg = cfgFile;
     printf("Creating partition manager %d on cfg file %s, port=%d\n", i, partCfg.c_str(), port+i);
-    PartitionManager* part = new PartitionManager(SUMO_BINARY, i, syncBarrier, partCfg, host, port+i, endTime, sumoArgs, args);
+
+    // Memory shared in stack but not an issue as it gets used only in the constructor
+    std::vector<partitionPort> partitionPorts(partNeighbors[i].size() + 1);
+    partitionPorts[0] = {i, port+i};
+    for (int j = 0; j < partNeighbors[i].size(); j++) {
+      int neighborIdx = partNeighbors[i][j];
+      partitionPorts[j+1] = {neighborIdx, port+neighborIdx};
+    }
+
+    SumoConnectionRouter* router = new SumoConnectionRouter(host, partitionPorts, numThreads, i);
+    PartitionManager* part = new PartitionManager(SUMO_BINARY, i, syncBarrier, *router, partCfg, port+i, endTime, sumoArgs, args);
     parts.push_back(part);
+    routers.push_back(router);
   }
 
-  setBorderEdges(borderEdges, parts);
+  std::vector<std::vector<border_edge_t>> borderEdges(numThreads);
+
   // start parallel simulations
   for(int i=0; i<numThreads; i++) {
+    for (int j=0; j<borderEdgesIndices[i].size(); j++) {
+      borderEdges[i][j].id    = borderEdgesIndices[i][j].id;
+      borderEdges[i][j].lanes = borderEdgesIndices[i][j].lanes;
+      borderEdges[i][j].from  = parts[borderEdgesIndices[i][j].from];
+      borderEdges[i][j].to    = parts[borderEdgesIndices[i][j].to];
+    }
     parts[i]->setMyBorderEdges(borderEdges[i]);
     if(!parts[i]->startPartition()){
       printf("Error creating partition %d", i);
@@ -322,5 +357,6 @@ void ParallelSim::startSim(){
   
   for(int i=0; i<numThreads; i++) {
     delete parts[i];
+    delete routers[i];
   }
 }
