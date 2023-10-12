@@ -44,12 +44,20 @@ int main(int argc, char* argv[]) {
     auto addr = getIpcSocketName("../data", MY_ID, TARG_ID);
     socket.connect(addr);
 
+    vector<int> v{
+        0,
+        10,
+        -1
+    };
+
     for (auto request_num = 0; request_num < 10; ++request_num) 
     {
         // send the request message
         std::cout << "Sending message no. " << request_num << "..." << std::endl;
-        setVehicleSpeed(socket, "veh" + to_string(request_num), request_num * 2);
-        
+        // setVehicleSpeed(socket, "veh" + to_string(request_num), request_num * 2);
+        v[2] = request_num;
+        socket.send(zmq::buffer(v));
+
         // wait for reply from server
         zmq::message_t reply{};
         auto result = socket.recv(reply, zmq::recv_flags::none);

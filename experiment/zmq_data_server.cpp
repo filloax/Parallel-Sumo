@@ -33,13 +33,12 @@ int main(int argc, char* argv[]) {
         // receive a request from client
         auto result = socket.recv(request, zmq::recv_flags::none);
 
-        double speed;
+        // double speed;
+        // std::memcpy(&speed, request.data(), sizeof(double));
+        // string veh(static_cast<char*>(request.data()) + sizeof(double), static_cast<char*>(request.data()) + request.size());
+        // std::cout << "Received " << speed <<  " " << veh << " (size " << request.size() << ")" << std::endl;
 
-        std::memcpy(&speed, request.data(), sizeof(double));
-
-        string veh(static_cast<char*>(request.data()) + sizeof(double), static_cast<char*>(request.data()) + request.size());
-
-        std::cout << "Received " << speed <<  " " << veh << " (size " << request.size() << ")" << std::endl;
+        
 
         // simulate work
         sleep(1);
