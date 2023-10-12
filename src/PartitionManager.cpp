@@ -11,23 +11,36 @@ Author: Phillip Taylor
 #include <iostream>
 #include <algorithm>
 #include <iterator>
+#include <libsumo/Edge.h>
+#include <libsumo/Simulation.h>
+#include <libsumo/Vehicle.h>
 #include <string>
 #include <time.h>
 #include <algorithm>
 #include <vector>
 #include <shared_mutex>
 #include <unistd.h>
+
+#include <libsumo/libsumo.h>
+#include <boost/interprocess/managed_shared_memory.hpp>
+
 #include "PartitionManager.hpp"
 #include "utils.hpp"
 #include "args.hpp"
 
-PartitionManager::PartitionManager(const std::string binary, int id, std::barrier<>& syncBarrier, 
-  SumoConnectionRouter& router, std::string& cfg, int port, int endTime,
+static int numInstancesRunning = 0;
+
+using namespace libsumo;
+
+/**
+Uses LibSumo methods to handle the partition internally.
+Note that LibSumo is static, so each PartitionManager must be on its own process.
+*/
+PartitionManager::PartitionManager(const std::string binary, partId_t id, 
+  std::string& cfg, int port, int endTime,
   std::vector<std::string> sumoArgs, Args& args) :
   SUMO_BINARY(binary),
   id(id),
-  syncBarrier(syncBarrier),
-  router(router),
   cfg(cfg),
   port(port),
   endTime(endTime),
@@ -37,7 +50,11 @@ PartitionManager::PartitionManager(const std::string binary, int id, std::barrie
   running(false),
   numPartitions(1)
   {
+
   }
+
+PartitionManager::~PartitionManager() {
+}
 
 void PartitionManager::setMyBorderEdges(std::vector<border_edge_t>& borderEdges) {
   for(border_edge_t e : borderEdges) {
@@ -53,32 +70,22 @@ void PartitionManager::setNumPartitions(int numParts) {
 }
 
 bool PartitionManager::startPartition() {
-  printf("Manager %d: creating thread on port %d, cfg %s\n", id, port, cfg.c_str());
+  printf("Manager %d: creating process, cfg %s\n", id, cfg.c_str());
   running = true;
-  thread = std::thread(&PartitionManager::internalSim, this);
-  return true; // TODO: check if thread started with success
-}
-
-void PartitionManager::waitForPartition() {
-  thread.join();
-}
-
-void PartitionManager::closePartition() {
-  router.closeAll();
-  running = false; // stops thread at loop start
-  printf("Manager %d: closing... (not immediate, thread will stop as soon as possible)\n", id);
-}
-
-void PartitionManager::connect() {
-  router.connectAll();
+  int pid = fork();
+  if (pid == 0) {
+    runSimulation();
+  } else {
+    return true;
+  }
 }
 
 void PartitionManager::handleIncomingEdges(int num, std::vector<std::vector<std::string>>& prevVehicles) {
   for(int toEdgeIdx = 0; toEdgeIdx < num; toEdgeIdx++) {
-    std::vector<std::string> currVehicles = router.getEdgeVehicles(toBorderEdges[toEdgeIdx].id);
+    std::vector<std::string> edgeVehicles = Edge::getLastStepVehicleIDs(toBorderEdges[toEdgeIdx].id);
 
-    if(!currVehicles.empty()) {
-      for(std::string veh : currVehicles) {
+    if(!edgeVehicles.empty()) {
+      for(std::string veh : edgeVehicles) {
         auto it = std::find(prevVehicles[toEdgeIdx].begin(), prevVehicles[toEdgeIdx].end(), veh);
         // vehicle speed is to be updated in previous partition
         if(it != prevVehicles[toEdgeIdx].end()) {
@@ -89,7 +96,7 @@ void PartitionManager::handleIncomingEdges(int num, std::vector<std::vector<std:
           if(std::find(trans.begin(), trans.end(), veh) != trans.end()) {
             // set from partition vehicle speed to next partition vehicle speed
             try {
-              router.slowDown(veh, router.getVehicleSpeed(veh), fromId);
+              router.slowDown(veh, Vehicle::getSpeed(veh), fromId);
             }
             catch(libsumo::TraCIException& e){
               std::stringstream err;
@@ -100,16 +107,16 @@ void PartitionManager::handleIncomingEdges(int num, std::vector<std::vector<std:
         }
       }
     }
-    prevVehicles[toEdgeIdx] = currVehicles;
+    prevVehicles[toEdgeIdx] = edgeVehicles;
   }
 }
 
 void PartitionManager::handleOutgoigEdges(int num, std::vector<std::vector<std::string>>& prevVehicles) {
   for(int fromEdgeIdx = 0; fromEdgeIdx < num; fromEdgeIdx++) {
-    std::vector<std::string> currVehicles = router.getEdgeVehicles(fromBorderEdges[fromEdgeIdx].id);
+    std::vector<std::string> edgeVehicles = Edge::getLastStepVehicleIDs(toBorderEdges[fromEdgeIdx].id);
 
-    if(!currVehicles.empty()) {
-      for(std::string veh : currVehicles) {
+    if(!edgeVehicles.empty()) {
+      for(std::string veh : edgeVehicles) {
         auto it = std::find(prevVehicles[fromEdgeIdx].begin(), prevVehicles[fromEdgeIdx].end(), veh);
         // vehicle is to be inserted in next partition
         if(it == prevVehicles[fromEdgeIdx].end()) {
@@ -117,11 +124,12 @@ void PartitionManager::handleOutgoigEdges(int num, std::vector<std::vector<std::
 
           // check if vehicle not already on edge (if a vehicle starts on a border edge)
           std::vector<std::string> toVehs = router.getEdgeVehicles(fromBorderEdges[fromEdgeIdx].id, toId);
-          std::string route = router.getVehicleRouteId(veh);
+          std::string route = Vehicle::getRouteID(veh);
 
           if(std::find(toVehs.begin(), toVehs.end(), veh) == toVehs.end()) {
 
             // check if vehicle is on split route
+            /*
             int pos = veh.find("_part");
             if(pos != std::string::npos) {
               int routePos = route.find("_part");
@@ -137,6 +145,7 @@ void PartitionManager::handleOutgoigEdges(int num, std::vector<std::vector<std::
                 firstEdge = router.getRouteEdges(route, toId)[0];
               }
             }
+            */
             try {
               // add vehicle to next partition
               router.addVehicle(
@@ -147,7 +156,7 @@ void PartitionManager::handleOutgoigEdges(int num, std::vector<std::vector<std::
                 toId
               );
               // move vehicle to proper lane position in next partition
-              router.moveTo(veh, router.getVehicleLaneId(veh), router.getVehicleLanePosition(veh), toId);
+              router.moveTo(veh, Vehicle::getLaneID(veh), Vehicle::getLanePosition(veh), toId);
             }
             catch(libsumo::TraCIException& e){
               std::stringstream err;
@@ -158,12 +167,12 @@ void PartitionManager::handleOutgoigEdges(int num, std::vector<std::vector<std::
         }
       }
     }
-    prevVehicles[fromEdgeIdx] = currVehicles;
+    prevVehicles[fromEdgeIdx] = edgeVehicles;
   }
 }
 
-
-void PartitionManager::internalSim() {
+// Only run in new process
+void PartitionManager::runSimulation() {
   pid_t pid;
   std::string portStr = std::to_string(port);
   std::string numPartitionsStr = std::to_string(numPartitions);
@@ -178,22 +187,19 @@ void PartitionManager::internalSim() {
   simArgs.reserve(simArgs.size() + distance(sumoArgs.begin(), sumoArgs.end()));
   simArgs.insert(simArgs.end(),sumoArgs.begin(),sumoArgs.end());
 
-  switch(pid = fork()){
-    case -1:
-      // fork() has failed
-      perror("fork");
-      break;
-    case 0:
-      // execute sumo simulation
-      for (int i = 0; i < simArgs.size(); i++) printf("%s ", simArgs[i].c_str()); printf("\n");
-      EXECVP_CPP(simArgs);
-      std::cout << "execv() has failed" << std::endl;
-      exit(EXIT_FAILURE);
-      break;
+  numInstancesRunning++;
+  if (numInstancesRunning > 0) {
+    std::stringstream msg;
+    msg << "[WARN] More than one instance of PartitionManager running in this process, "
+      << "remember that only one simulation can be run with LibSumo per process."
+      << std::endl;
+    std::cerr << msg.str();
   }
 
-  // wait for server to startup (1 second)
-  nanosleep((const struct timespec[]){{1, 0}}, NULL);
+  // Start simulation in this process
+  // Note: doesn't support GUI
+  Simulation::start(simArgs);
+
   // ensure all servers have started before simulation begins
   syncBarrier.arrive_and_wait();
   connect();
@@ -206,8 +212,8 @@ void PartitionManager::internalSim() {
   std::vector<std::vector<std::string>> prevToVehicles(numToEdges);
   std::vector<std::vector<std::string>> prevFromVehicles(numFromEdges);
 
-  while(running && router.getSimulationTime() < endTime) {
-    router.simulationStep();
+  while(running && Simulation::getTime() < endTime) {
+    Simulation::step();
     handleIncomingEdges(numToEdges, prevToVehicles);
     handleOutgoigEdges(numFromEdges, prevFromVehicles);
 
@@ -217,5 +223,7 @@ void PartitionManager::internalSim() {
   std::stringstream msg2;
   msg2 << "partition " << id << " ended in thread " << pthread_self() << std::endl;
   std::cout << msg2.str();
-  closePartition();
+  
+  Simulation::close("ParallelSim terminated.");
+  numInstancesRunning--;
 }

@@ -11,8 +11,8 @@ Contributions: Filippo Lenzi
 #pragma once
 
 #include <cstdlib>
-#include "PartitionManager.hpp"
 #include "args.hpp"
+#include "PartitionManager.hpp"
 
 class ParallelSim {
   private:
@@ -29,7 +29,7 @@ class ParallelSim {
     int endTime;
     Args args;
     // sets the border edges for all partitions
-    void calcBorderEdges(std::vector<std::vector<border_edge_t>>& borderEdges, std::vector<std::vector<int>>& partNeighbors);
+    void calcBorderEdges(std::vector<std::vector<border_edge_t>>& borderEdges, std::vector<std::vector<partId_t>>& partNeighbors);
     void loadRealNumThreads();
 
   public:

@@ -25,8 +25,6 @@ Author: Phillip Taylor
 #include "utils.hpp"
 #include "args.hpp"
 #include <filesystem> // C++17
-#include <barrier> // C++20
-#include "SumoConnectionRouter.hpp"
 
 namespace fs = std::filesystem;
 
@@ -209,9 +207,9 @@ void ParallelSim::loadRealNumThreads() {
   }
 }
 
-void ParallelSim::calcBorderEdges(std::vector<std::vector<border_edge_t>>& borderEdges, std::vector<std::vector<int>>& partNeighbors){
+void ParallelSim::calcBorderEdges(std::vector<std::vector<border_edge_t>>& borderEdges, std::vector<std::vector<partId_t>>& partNeighbors){
   std::unordered_multimap<std::string, int> allEdges;
-  std::vector<std::set<int>> partNeighborSets(numThreads);
+  std::vector<std::set<partId_t>> partNeighborSets(numThreads);
 
   // add all edges to map, mapping edge ids to partition ids
   for(int i=0; i<numThreads; i++) {
@@ -302,7 +300,6 @@ void ParallelSim::startSim(){
 
   std::string partCfg;
   std::vector<PartitionManager*> parts;
-  std::vector<SumoConnectionRouter*> routers;
 
   std::cout << "Will end at time " << endTime << std::endl;
 
@@ -313,30 +310,21 @@ void ParallelSim::startSim(){
   calcBorderEdges(borderEdges, partNeighbors);
 
   // create partitions
-  for(int i=0; i<numThreads; i++) {
+  for(partId_t i=0; i<numThreads; i++) {
     if (numThreads > 1)
       partCfg = dataFolder + "/part"+std::to_string(i)+".sumocfg";
     else // Only one thread, so use normal config, for the purpose of benchmarking comparisions
       partCfg = cfgFile;
     printf("Creating partition manager %d on cfg file %s, port=%d\n", i, partCfg.c_str(), port+i);
 
-    // Memory shared in stack but not an issue as it gets used only in the constructor
-    std::vector<partitionPort> partitionPorts(partNeighbors[i].size() + 1);
-    partitionPorts[0] = {i, port+i};
-    for (int j = 0; j < partNeighbors[i].size(); j++) {
-      int neighborIdx = partNeighbors[i][j];
-      partitionPorts[j+1] = {neighborIdx, port+neighborIdx};
-    }
-
-    SumoConnectionRouter* router = new SumoConnectionRouter(i, host, partitionPorts, numThreads);
-    PartitionManager* part = new PartitionManager(SUMO_BINARY, i, syncBarrier, *router, partCfg, port+i, endTime, sumoArgs, args);
+    PartitionManager* part = new PartitionManager(SUMO_BINARY, i, syncBarrier, partCfg, port+i, endTime, sumoArgs, args);
     part->setNumPartitions(numThreads);
     parts.push_back(part);
     routers.push_back(router);
   }
 
   // start parallel simulations
-  for(int i=0; i<numThreads; i++) {
+  for(partId_t i=0; i<numThreads; i++) {
     parts[i]->setMyBorderEdges(borderEdges[i]);
     if(!parts[i]->startPartition()){
       printf("Error creating partition %d", i);
@@ -344,12 +332,11 @@ void ParallelSim::startSim(){
     }
   }
   // join all threads when finished executing
-  for (int i=0; i<numThreads; i++) {
+  for (partId_t i=0; i<numThreads; i++) {
     parts[i]->waitForPartition();
   }
   
-  for(int i=0; i<numThreads; i++) {
+  for(partId_t i=0; i<numThreads; i++) {
     delete parts[i];
-    delete routers[i];
   }
 }
