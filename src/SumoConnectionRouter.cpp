@@ -2,6 +2,7 @@
 #include "utils.hpp"
 #include "libs/traciapi/TraCIAPI.h"
 #include <exception>
+#include <algorithm>
 
 SumoConnectionRouter::SumoConnectionRouter(int ownerId, std::string host, std::vector<partitionPort>& _partitionPorts, int numParts):
 host(host),
