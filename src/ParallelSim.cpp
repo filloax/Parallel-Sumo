@@ -330,6 +330,7 @@ void ParallelSim::startSim(){
 
     SumoConnectionRouter* router = new SumoConnectionRouter(host, partitionPorts, numThreads, i);
     PartitionManager* part = new PartitionManager(SUMO_BINARY, i, syncBarrier, *router, partCfg, port+i, endTime, sumoArgs, args);
+    part->setNumPartitions(numThreads);
     parts.push_back(part);
     routers.push_back(router);
   }

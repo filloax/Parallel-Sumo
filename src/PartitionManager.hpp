@@ -39,11 +39,11 @@ private:
     std::vector<border_edge_t> fromBorderEdges;
     std::string cfg;
     int port;
+    int numPartitions;
     int endTime;
     std::vector<std::string> sumoArgs;
     std::string dataFolder = "";
     std::thread thread;
-    TraCIAPI myConn;
     Args args;
     bool running;
     std::barrier<>& syncBarrier; //C++20
@@ -79,4 +79,5 @@ public:
     void waitForPartition();
     // set this partition's border edges
     void setMyBorderEdges(std::vector<border_edge_t>&);
+    void setNumPartitions(int);
 };

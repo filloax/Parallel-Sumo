@@ -33,7 +33,7 @@ private:
 
     std::vector<int> handledPartitions;
     // idx = partition index
-    std::vector<TraCIAPI> connections;
+    std::vector<TraCIAPI*> connections;
     // -1 if unhandled partition
     std::vector<int> partitionPorts;
     std::string host;
@@ -48,6 +48,7 @@ public:
      * @param ownerId optional, used to default the operation to the owner 
     */
     SumoConnectionRouter(std::string host, std::vector<partitionPort>& partitionPorts, int numParts, int ownerId = -1);
+    ~SumoConnectionRouter();
 
     void connectAll();
     void closeAll();
@@ -55,14 +56,24 @@ public:
     // -1 = use owner id
     
     // get vehicles on edge
-    std::vector<std::string> getEdgeVehicles(const std::string&, int partId = ROUTER_OWNER);
+    std::vector<std::string> getEdgeVehicles(const std::string& edgeId, int partId = ROUTER_OWNER);
     // get edges of route
-    std::vector<std::string> getRouteEdges(const std::string&, int partId = ROUTER_OWNER);
+    std::vector<std::string> getRouteEdges(const std::string& routeId, int partId = ROUTER_OWNER);
     // move vehicle to specified position on lane
-    void moveTo(const std::string&, const std::string&, double, int partId = ROUTER_OWNER);
+    void moveTo(const std::string& vehID, const std::string& laneID, double pos, int partId = ROUTER_OWNER);
     // set vehicle speed to propagate traffic conditions in next partition
     void slowDown(const std::string&, double, int partId = ROUTER_OWNER);
     // add vehicle into simulation
-    void add(const std::string&, const std::string&, const std::string&,
-        const std::string&, const std::string&, const std::string&, int partId = ROUTER_OWNER);
+    void addVehicle(const std::string& vehID, const std::string& routeID, const std::string& typeID,
+        const std::string& laneInd, const std::string& depPos, 
+        const std::string& speed, int partId = ROUTER_OWNER);
+    std::string getVehicleRouteId(std::string vehicleId, int partId = ROUTER_OWNER);
+    float getVehicleSpeed(std::string vehicleId, int partId = ROUTER_OWNER);
+    std::string getVehicleType(std::string vehicleId, int partId = ROUTER_OWNER);
+    int getVehicleLaneIndex(std::string vehicleId, int partId = ROUTER_OWNER);
+    std::string getVehicleLaneId(std::string vehicleId, int partId = ROUTER_OWNER);
+    double getVehicleLanePosition(std::string vehicleId, int partId = ROUTER_OWNER);
+    // Only on router owner
+    float getSimulationTime();
+    void simulationStep();
 };
