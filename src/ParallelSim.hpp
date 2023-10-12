@@ -11,14 +11,12 @@ Contributions: Filippo Lenzi
 #pragma once
 
 #include <cstdlib>
-#include "libs/traciapi/TraCIAPI.h"
 #include "PartitionManager.hpp"
 #include "args.hpp"
 
 class ParallelSim {
   private:
     std::string SUMO_BINARY;
-    TraCIAPI conn;
     std::string host;
     std::string path;
     std::string cfgFile;

@@ -17,7 +17,6 @@ Author: Phillip Taylor
 #include <vector>
 #include <shared_mutex>
 #include <unistd.h>
-#include "libs/traciapi/TraCIAPI.h"
 #include "PartitionManager.hpp"
 #include "utils.hpp"
 #include "args.hpp"

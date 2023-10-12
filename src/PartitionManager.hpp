@@ -16,7 +16,6 @@ Contributions: Filippo Lenzi
 #include <vector>
 #include <thread>
 #include <barrier>
-#include "libs/traciapi/TraCIAPI.h"
 #include "args.hpp"
 #include "SumoConnectionRouter.hpp"
 
