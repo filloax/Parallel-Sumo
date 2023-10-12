@@ -26,6 +26,8 @@ Author: Phillip Taylor
 #include "args.hpp"
 #include <filesystem> // C++17
 
+#include <zmq.h>
+
 namespace fs = std::filesystem;
 
 typedef std::unordered_multimap<std::string, int>::iterator umit;
@@ -37,7 +39,7 @@ ParallelSim::ParallelSim(const std::string& host, int port, std::string cfg, boo
   numThreads(threads),
   sumoArgs(sumoArgs),
   args(args),
-  dataFolder("data")
+  dataFolder(args.dataDir)
   {
 
   // set paths for sumo executable binaries

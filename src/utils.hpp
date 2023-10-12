@@ -1,5 +1,8 @@
 #pragma once
 
+#include <string>
+#include <zmq.hpp>
+
 #define EXECVP_CPP(args) \
     do { \
         std::vector<char*> c_args; \
@@ -12,3 +15,6 @@
 
 void printStackTrace();
 std::string getStackTrace();
+
+zmq::message_t createMessageWithStrings(std::vector<std::string>& strings, int offset = 0, int spaceAfter = 0);
+std::vector<std::string> readStringsFromMessage(zmq::message_t& message, int offset = 0);

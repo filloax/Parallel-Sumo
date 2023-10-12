@@ -1,3 +1,6 @@
+#include "src/utils.hpp"
+
+#include <cstring>
 #include <string>
 #include <iostream>
 #include <sstream>
@@ -11,9 +14,55 @@
     #include <execinfo.h>
 #endif
 
+using namespace std;
 
-std::string getStackTrace() {
-    std::stringstream outStream;
+zmq::message_t createMessageWithStrings(vector<string> &strings, int offset, int spaceAfter) {
+    int totalSize = 0;
+    for (auto str: strings) totalSize += strings.size();
+
+    // + vector.size(): account for null characters at end of each string
+    zmq::message_t message(offset + spaceAfter + sizeof(int) + totalSize + strings.size());
+
+    // Also write an int with the vector size
+    int vectorSize = strings.size();
+    std::memcpy(static_cast<int*>(message.data()) + offset, &vectorSize, sizeof(int));
+
+    int writtenBytes = sizeof(int);
+    for (int i = 0; i < strings.size(); i++) {
+        std::memcpy(
+            static_cast<char*>(message.data()) + offset + writtenBytes, 
+            (strings[i] + '\0').data(), strings[i].size() + 1
+        );
+        writtenBytes += strings[i].size() + 1;
+    }
+
+    return message;
+}
+
+std::vector<std::string> readStringsFromMessage(zmq::message_t &message, int offset) {
+    const char* data = static_cast<const char*>(message.data());
+    size_t size = message.size();
+
+    int vectorSize;
+    std::memcpy(&vectorSize, data, sizeof(int));
+
+    std::vector<std::string> result(vectorSize);
+    int currentString = 0;
+
+    size_t start = offset + sizeof(int);
+    for (size_t i = start; i < size && currentString < vectorSize; ++i) {
+        if (data[i] == '\0') {
+            result[i] = string(data + start, i - start);
+            start = i + 1;
+            currentString++;
+        }
+    }
+
+    return result;
+}
+
+string getStackTrace() {
+    stringstream outStream;
 
 #if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
 
@@ -45,7 +94,7 @@ std::string getStackTrace() {
         }
 
         if (SymFromAddr(process, (DWORD64)(stackFrame.AddrPC.Offset), NULL, &symbolInfo.si)) {
-            outStream << "Frame " << frame << ": " << symbolInfo.si.Name << std::endl;
+            outStream << "Frame " << frame << ": " << symbolInfo.si.Name << endl;
         }
     }
 
@@ -61,7 +110,7 @@ std::string getStackTrace() {
     }
 
     for (int i = 0; i < frames; ++i) {
-        outStream << "Frame " << i << ": " << symbols[i] << std::endl;
+        outStream << "Frame " << i << ": " << symbols[i] << endl;
     }
 
     free(symbols);
@@ -71,5 +120,5 @@ std::string getStackTrace() {
 }
 
 void printStackTrace() {
-    std::cerr << getStackTrace();
+    cerr << getStackTrace();
 }

@@ -38,6 +38,9 @@ public:
             .help("Keep poly data if present in the original sumocfg (False by default for performance)")
             .default_value(false)
             .implicit_value(true);
+        program.add_argument("--data-dir")
+            .help("Data directory to store working files in")
+            .default_value("data");
     }
 
     void parse_known_args(int argc, char* argv[]) {
@@ -50,6 +53,7 @@ public:
         gui = program.get<bool>("--gui");
         skipPart = program.get<bool>("--skip-part");
         keepPoly = program.get<bool>("--keep-poly");
+        dataDir = program.get<std::string>("--data-dir");
 
         if (numThreads <= 0) {
             std::cerr << "Error: wrong number of threads, must be positive number (can be 1 for testing), is " << numThreads << std::endl;
@@ -63,7 +67,7 @@ public:
         std::cout << "port=" << port << ", cfg=" << cfg
             << ", numThreads=" << numThreads << ", partitioningThreads=" << partitioningThreads
             << ", gui=" << gui << ", skipPart=" << skipPart
-            << ", keepPoly=" << keepPoly
+            << ", keepPoly=" << keepPoly << ", dataDir=" << dataDir
             << std::endl;
     }
 
@@ -74,6 +78,7 @@ public:
     bool gui;
     bool skipPart;
     bool keepPoly;
+    std::string dataDir;
     std::vector<std::string> sumoArgs;
     argparse::ArgumentParser& program;
 };
