@@ -328,7 +328,7 @@ void ParallelSim::startSim(){
       partitionPorts[j+1] = {neighborIdx, port+neighborIdx};
     }
 
-    SumoConnectionRouter* router = new SumoConnectionRouter(host, partitionPorts, numThreads, i);
+    SumoConnectionRouter* router = new SumoConnectionRouter(i, host, partitionPorts, numThreads);
     PartitionManager* part = new PartitionManager(SUMO_BINARY, i, syncBarrier, *router, partCfg, port+i, endTime, sumoArgs, args);
     part->setNumPartitions(numThreads);
     parts.push_back(part);

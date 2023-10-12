@@ -3,7 +3,7 @@
 #include "libs/traciapi/TraCIAPI.h"
 #include <exception>
 
-SumoConnectionRouter::SumoConnectionRouter(std::string host, std::vector<partitionPort>& _partitionPorts, int numParts, int ownerId):
+SumoConnectionRouter::SumoConnectionRouter(int ownerId, std::string host, std::vector<partitionPort>& _partitionPorts, int numParts):
 host(host),
 ownerId(ownerId)
 {
@@ -12,19 +12,19 @@ ownerId(ownerId)
     for (auto partitionPort : _partitionPorts) {
         handledPartitions.push_back(partitionPort.partIdx);
         partitionPorts[partitionPort.partIdx] = partitionPort.port;
-        connections[partitionPort.partIdx] = new TraCIAPI();
     }
     for (int i = 0; i < numParts; i++) {
         // partition not in handled ones
         if (std::find(handledPartitions.begin(), handledPartitions.end(), i) == handledPartitions.end()) {
             partitionPorts[i] = -1;
         }
+        connections[i] = nullptr;
     }
 }
 
 SumoConnectionRouter::~SumoConnectionRouter() {
     for (int i = 0; i < connections.size(); i++) {
-        if (handlesPartition(i)) {
+        if (connections[i] != nullptr) {
             delete connections[i];
         }
     }
@@ -35,12 +35,25 @@ void SumoConnectionRouter::connectToPartition(int partId) {
     if (port < 0) {
         throw std::invalid_argument("Router " + std::to_string(ownerId) + " | Cannot connect to partition " + std::to_string(partId) + ", not a neighbor!");
     }
-    auto connection = *connections[partId];
+    auto connection = new TraCIAPI();
+    connections[partId] = connection;
+    
+    // SUMO requires all clients in a multi client scenario to send their execution order before running a simulation step
+    if (partId == ownerId) {
+        // Set owner as first in order
+        connection->setOrder(0);
+    } else {
+        int order = (partId < ownerId) ? partId + 1 : partId;
+        connection->setOrder(0);
+    }
+
     try {
         printf("Router %d | Connecting to partition %d, port %d\n", ownerId, partId, port);
-        connection.connect(host, port);
+        connection->connect(host, port);
         printf("Router %d | Connected to partition %d\n", ownerId, partId);
     } catch(std::exception& e) {
+        delete connection;
+        connections[partId] = nullptr;
         std::stringstream msg;
         msg << "Router " << ownerId << " | Exception in connecting to TraCI API at part " << partId << ": " << e.what() << std::endl;
         msg << getStackTrace() << std::endl;
@@ -60,15 +73,17 @@ void SumoConnectionRouter::closePartition(int partId) {
     if (port < 0) {
         throw std::invalid_argument("Router " + std::to_string(ownerId) + " | Cannot close partition " + std::to_string(partId) + ", not a neighbor!");
     }
-    auto connection = *connections[partId];
+    auto connection = connections[partId];
     try {
-        connection.close();
+        connection->close();
     } catch(std::exception& e) {
         std::stringstream msg;
         msg << "Router " << ownerId << " | Exception in closing TraCI API to partition " << partId <<": " << e.what() << std::endl;
         msg << getStackTrace() << std::endl;
         std::cerr << msg.str();
     }
+    delete connection;
+    connections[partId] = nullptr;
 }
 
 void SumoConnectionRouter::closeAll() {

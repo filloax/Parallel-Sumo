@@ -43,11 +43,11 @@ private:
     bool handlesPartition(int partId);
 public:
     /**
+     * @param ownerId Used to default the operation to the owner and mainly simulation step operations/execution order
      * @param host hostname
      * @param partitionPorts vector with the pair of partition/port of each neighbor or owner partition
-     * @param ownerId optional, used to default the operation to the owner 
     */
-    SumoConnectionRouter(std::string host, std::vector<partitionPort>& partitionPorts, int numParts, int ownerId = -1);
+    SumoConnectionRouter(int ownerId, std::string host, std::vector<partitionPort>& partitionPorts, int numParts);
     ~SumoConnectionRouter();
 
     void connectAll();
