@@ -4,7 +4,9 @@
 #include <zmq.hpp>
 #include <string>
 #include <thread>
-#include <queue>
+#include <mutex>
+
+class NeighborPartitionHandler;
 
 #include "PartitionManager.hpp"
 
@@ -39,6 +41,7 @@ private:
   bool stop_; // Stop listening logic, but not thread
   bool term; // Stop listening thread
   std::thread listenThread;
+  std::mutex operationsBufferLock;
 
   std::vector<set_veh_speed_t> setSpeedQueue;
   std::vector<add_veh_t> addVehicleQueue;

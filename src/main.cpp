@@ -12,6 +12,7 @@ Author: Phillip Taylor
 #include "ParallelSim.hpp"
 #include <libs/argparse.hpp>
 #include "args.hpp"
+#include <filesystem>
 
 int main(int argc, char* argv[]) {
     argparse::ArgumentParser program("parallel-sumo", "0.4");
@@ -25,6 +26,9 @@ int main(int argc, char* argv[]) {
         std::cerr << args.program << std::endl;
         std::exit(1);
     }
+
+    std::filesystem::path dataDir(args.dataDir);
+    std::filesystem::create_directories(dataDir / "sockets");
 
     // params: host server, first port. sumo cfg file, gui option (true), number of threads
     ParallelSim client("localhost", args.port, args.cfg.c_str(), args.gui, args.numThreads, args.sumoArgs, args);

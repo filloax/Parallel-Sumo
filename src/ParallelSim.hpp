@@ -32,6 +32,8 @@ class ParallelSim {
     void calcBorderEdges(std::vector<std::vector<border_edge_t>>& borderEdges, std::vector<std::vector<partId_t>>& partNeighbors);
     void loadRealNumThreads();
 
+    void coordinatePartitionsSync();
+
   public:
     ParallelSim(const std::string& host, int port, const std::string file, bool gui, int threads, std::vector<std::string>& sumoArgs, Args& args);
     // gets network and route file paths
@@ -42,4 +44,10 @@ class ParallelSim {
     // execute parallel sumo simulations in created partitions
     void startSim();
 
+    static std::string getSyncSocketId(int partId, std::string dataFolder);
+
+    enum SyncOps {
+        BARRIER,
+        FINISHED
+    };
 };

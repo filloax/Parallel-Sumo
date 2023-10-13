@@ -2,6 +2,8 @@
 
 #include <zmq.hpp>
 
+class PartitionEdgesStub;
+
 #include "PartitionManager.hpp"
 
 class PartitionEdgesStub {
@@ -13,7 +15,6 @@ private:
     zmq::context_t zcontext;
 public:
     enum Operations {
-        SIGNAL_STEP_END,
         GET_EDGE_VEHICLES,
         SET_VEHICLE_SPEED,
         ADD_VEHICLE,
@@ -30,7 +31,5 @@ public:
         const std::string& laneId, int laneIndex, double lanePos, double speed
     );
     void connect();
-
-    // Step sync
-    void signalStepEnd();
+    void disconnect();
 };

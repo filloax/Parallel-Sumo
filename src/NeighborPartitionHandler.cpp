@@ -1,17 +1,34 @@
 #include "NeighborPartitionHandler.hpp"
+
 #include <zmq.hpp>
 #include <thread>
 #include <string>
+#include <mutex>
 
 #include "utils.hpp"
 #include "PartitionManager.hpp"
 
 using namespace std;
 
+#ifdef USING_WIN
+    #define z_transport tcp
+#else
+    #define z_transport ipc
+#endif
+
+string getSocketUri(string dataDir, int clientId, int ownerId) {
+    #if z_transport == ipc
+        return PartitionEdgesStub::getIpcSocketName(dataDir, clientId, ownerId);
+    #else
+        printf("TPC transport not yet implemented!\n");
+        exit(-5);
+    #endif
+}
+
 NeighborPartitionHandler::NeighborPartitionHandler(PartitionManager& owner, int clientId, zmq::context_t& zctx) :
     owner(owner),
     clientId(clientId),
-    socketUri(PartitionEdgesStub::getIpcSocketName(owner.getArgs().dataDir, clientId, owner.getId())),
+    socketUri(getSocketUri(owner.getArgs().dataDir, clientId, owner.getId())),
     listening(false),
     stop_(false),
     term(false)
@@ -69,15 +86,12 @@ void NeighborPartitionHandler::listenCheck() {
 void NeighborPartitionHandler::listenThreadLogic() {
     while(!term) {
         if (listening) {
-            // Clear queues from previous listening loop
-            addVehicleQueue.clear();
-            setSpeedQueue.clear();
             while(!stop_) {
                 listenCheck();
             }
             listening = false;
         } else {
-            // Add some sort of semaphore
+            // TODO: Add some sort of semaphore
         }
     }
 }
@@ -102,7 +116,10 @@ bool NeighborPartitionHandler::handleSetVehicleSpeed(zmq::message_t& request) {
         static_cast<char*>(request.data()) + request.size()
     );
     
+    // lock to be 100% sure with the applying of operations later
+    operationsBufferLock.lock();
     setSpeedQueue.push_back({veh, speed});
+    operationsBufferLock.unlock();
 
     return false;
 }
@@ -117,6 +134,8 @@ bool NeighborPartitionHandler::handleAddVehicle(zmq::message_t& request) {
     int stringsOffset = sizeof(int) * 2 + sizeof(double) * 2;
     auto strings = readStringsFromMessage(request, stringsOffset);
 
+    // lock to be 100% sure with the applying of operations later
+    operationsBufferLock.lock();
     addVehicleQueue.push_back({
         strings[0],
         strings[1],
@@ -126,10 +145,40 @@ bool NeighborPartitionHandler::handleAddVehicle(zmq::message_t& request) {
         lanePos,
         speed
     });
+    operationsBufferLock.unlock();
 
     return false;
 }
 
 bool NeighborPartitionHandler::handleStepEnd(zmq::message_t& request) {
     return false;
+}
+
+// Execute the queued operations that other partitions ran
+void NeighborPartitionHandler::applyMutableOperations() {
+    bool wasListening = listening;
+    if (listening) {
+        listenOff();
+    }
+    // Lock to avoid other threads adding more operations in the meantime
+    // if it was inbetween one of them when we set this to stop
+    operationsBufferLock.lock();
+
+    for (auto addVeh : addVehicleQueue) {
+        owner.addVehicle(
+            addVeh.vehId, addVeh.routeId, addVeh.vehType, 
+            addVeh.laneId, addVeh.laneIndex, addVeh.lanePos, addVeh.speed
+        );
+    }
+
+    for (auto setSpeed : setSpeedQueue) {
+        owner.setVehicleSpeed(setSpeed.vehId, setSpeed.speed);
+    }
+    
+    addVehicleQueue.clear();
+    setSpeedQueue.clear();
+
+    operationsBufferLock.unlock();
+
+    if (wasListening) listenOn();
 }

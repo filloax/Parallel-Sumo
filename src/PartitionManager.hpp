@@ -42,6 +42,7 @@ private:
     std::map<int, PartitionEdgesStub*> neighborPartitionStubs;
     std::map<int, NeighborPartitionHandler*> neighborClientHandlers;
     zmq::context_t zcontext;
+    zmq::socket_t coordinatorSocket;
     std::string cfg;
     int endTime;
     std::vector<std::string> sumoArgs;
@@ -53,9 +54,13 @@ private:
     void handleIncomingEdges(int, std::vector<std::vector<std::string>>&);
     // handle border edges where vehicles are outgoing
     void handleOutgoigEdges(int, std::vector<std::vector<std::string>>&);
+    // barrier-like behavior via message passing
+    void arriveWaitBarrier();
+    // signal to main process that we finished
+    void signalFinish();
 
 protected:
-    // start sumo simulation in thread
+    // start sumo simulation, already inside secondary process
     virtual void runSimulation();
 
 public:
@@ -67,10 +72,7 @@ public:
     
     /* Starts this partition in a process, returning its pid. */
     int startPartition();
-    // close TraCI connection, exit from thread
     void closePartition();
-    // Will not return until the internal thread has exited
-    void waitForPartition();
     // set this partition's border edges
     void setMyBorderEdges(std::vector<border_edge_t>&);
 

@@ -20,7 +20,7 @@ using namespace std;
 
 string PartitionEdgesStub::getIpcSocketName(std::string directory, partId_t from, partId_t to) {
     std::stringstream out;
-    out << "ipc://" << directory << "/" << from << "-" << to;
+    out << "ipc://" << directory << "/sockets/" << from << "-" << to;
     return out.str();
 }
 
@@ -36,6 +36,15 @@ PartitionEdgesStub::PartitionEdgesStub(partId_t ownerId, partId_t targetId, Args
 void PartitionEdgesStub::connect() {
     #if z_transport == ipc
         socket.connect(getIpcSocketName(args.dataDir, ownerId, id));
+    #else
+        printf("TPC transport not yet implemented!\n");
+        exit(-5);
+    #endif
+}
+
+void PartitionEdgesStub::disconnect() {
+    #if z_transport == ipc
+        socket.disconnect(getIpcSocketName(args.dataDir, ownerId, id));
     #else
         printf("TPC transport not yet implemented!\n");
         exit(-5);
@@ -114,18 +123,6 @@ void PartitionEdgesStub::addVehicle(
 
     socket.send(message, zmq::send_flags::none);
 
-    // unused reply, required by zeroMQ
-    zmq::message_t reply;
-    auto response = socket.recv(reply);
-}
-
-void PartitionEdgesStub::signalStepEnd() {
-    int opcode = Operations::SIGNAL_STEP_END;
-    zmq::message_t message(sizeof(int));
-    copy_num(int, opcode, message, 0);
-
-    socket.send(message, zmq::send_flags::none);
-    
     // unused reply, required by zeroMQ
     zmq::message_t reply;
     auto response = socket.recv(reply);

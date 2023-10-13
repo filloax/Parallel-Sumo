@@ -7,9 +7,11 @@ and runs each parallel SUMO network partition in a PartitionManager.
 Author: Phillip Taylor
 */
 
+#include <cstring>
 #include <iostream>
 #include <fstream>
 #include <ctime>
+#include <sstream>
 #include <string>
 #include <unistd.h>
 #include <stdlib.h>
@@ -27,12 +29,15 @@ Author: Phillip Taylor
 #include <filesystem> // C++17
 
 #include <zmq.h>
+#include <zmq.hpp>
 
 namespace fs = std::filesystem;
 
-typedef std::unordered_multimap<std::string, int>::iterator umit;
+using namespace std;
 
-ParallelSim::ParallelSim(const std::string& host, int port, std::string cfg, bool gui, int threads, std::vector<std::string>& sumoArgs, Args& args) :
+typedef std::unordered_multimap<string, int>::iterator umit;
+
+ParallelSim::ParallelSim(const string& host, int port, string cfg, bool gui, int threads, vector<string>& sumoArgs, Args& args) :
   host(host),
   port(port),
   cfgFile(cfg),
@@ -43,13 +48,13 @@ ParallelSim::ParallelSim(const std::string& host, int port, std::string cfg, boo
   {
 
   // set paths for sumo executable binaries
-  std::string sumoExe;
+  string sumoExe;
   if(gui)
     sumoExe = "/bin/sumo-gui";
   else
     sumoExe = "/bin/sumo";
 
-  std::string sumoPath;
+  string sumoPath;
   char* sumoPathPtr(getenv("SUMO_HOME"));
   if (sumoPathPtr == NULL) {
     std::cout << "$SUMO_HOME is not set! Must set $SUMO_HOME." << std::endl;
@@ -90,7 +95,7 @@ ParallelSim::ParallelSim(const std::string& host, int port, std::string cfg, boo
 
 void ParallelSim::getFilePaths(){
   // get paths for net and route files
-  std::string cfgStr(cfgFile);
+  string cfgStr(cfgFile);
   int found = cfgStr.find_last_of("/\\");
   path = cfgStr.substr(0,found+1);
   // load sumo cfg file
@@ -120,11 +125,11 @@ void ParallelSim::getFilePaths(){
   }
 
   // set net-file
-  std::string netText(netFileEl->Attribute("value"));
+  string netText(netFileEl->Attribute("value"));
   netText = path+netText;
   netFile.assign(netText);
   // set routes-file
-  std::string routeText(routeFileEl->Attribute("value"));
+  string routeText(routeFileEl->Attribute("value"));
   routeText= path+routeText;
   routeFile.assign(routeText);
 
@@ -144,7 +149,7 @@ void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
     pythonCommand = pythonPathStr / pythonCommand;
   }
 
-  std::vector<std::string> partArgs {
+  vector<string> partArgs {
     pythonCommand, "scripts/createParts.py",
     "-n", std::to_string(numThreads),
     "-C", cfgFile,
@@ -209,13 +214,13 @@ void ParallelSim::loadRealNumThreads() {
   }
 }
 
-void ParallelSim::calcBorderEdges(std::vector<std::vector<border_edge_t>>& borderEdges, std::vector<std::vector<partId_t>>& partNeighbors){
-  std::unordered_multimap<std::string, int> allEdges;
-  std::vector<std::set<partId_t>> partNeighborSets(numThreads);
+void ParallelSim::calcBorderEdges(vector<vector<border_edge_t>>& borderEdges, vector<vector<partId_t>>& partNeighbors){
+  std::unordered_multimap<string, int> allEdges;
+  vector<std::set<partId_t>> partNeighborSets(numThreads);
 
   // add all edges to map, mapping edge ids to partition ids
   for(int i=0; i<numThreads; i++) {
-    std::string currNetFile = dataFolder + "/part"+std::to_string(i)+".net.xml";
+    string currNetFile = dataFolder + "/part"+std::to_string(i)+".net.xml";
     tinyxml2::XMLDocument currNet;
     tinyxml2::XMLError e = currNet.LoadFile(currNetFile.c_str());
     tinyxml2::XMLElement* netEl = currNet.FirstChildElement("net");
@@ -228,7 +233,7 @@ void ParallelSim::calcBorderEdges(std::vector<std::vector<border_edge_t>>& borde
   // find border edges
   umit it = allEdges.begin();
   while(it != allEdges.end()) {
-    std::string key = it->first;
+    string key = it->first;
     if(allEdges.count(key)>1) {
       std::pair<umit, umit> edgePair = allEdges.equal_range(key);
       umit edgeIt1 = edgePair.first;
@@ -237,7 +242,7 @@ void ParallelSim::calcBorderEdges(std::vector<std::vector<border_edge_t>>& borde
       border_edge_t borderEdge2 = {};
       borderEdge1.id = key;
       borderEdge2.id = key;
-      std::string currNetFile = dataFolder + "/part"+std::to_string(edgeIt1->second)+".net.xml";
+      string currNetFile = dataFolder + "/part"+std::to_string(edgeIt1->second)+".net.xml";
       tinyxml2::XMLDocument currNet;
       tinyxml2::XMLError e = currNet.LoadFile(currNetFile.c_str());
       tinyxml2::XMLElement* netEl = currNet.FirstChildElement("net");
@@ -250,7 +255,7 @@ void ParallelSim::calcBorderEdges(std::vector<std::vector<border_edge_t>>& borde
             (borderEdge2.lanes).push_back(laneEl->Attribute("id"));
           }
           // determine from and to partitions -  find junction to determine if dead end
-          const std::string fromJunc = el->Attribute("from");
+          const string fromJunc = el->Attribute("from");
           int from;
           int to;
           for(tinyxml2::XMLElement* junEl = netEl->FirstChildElement("junction"); junEl != NULL; junEl = junEl->NextSiblingElement("junction")) {
@@ -300,15 +305,13 @@ void ParallelSim::startSim(){
     std::cout << "Running in 1 thread mode, will use the original cfg (not intended? check your --num-threads param or the partitions created)" << std::endl;
   }
 
-  std::string partCfg;
-  std::vector<PartitionManager*> parts;
+  string partCfg;
+  vector<PartitionManager*> parts;
 
   std::cout << "Will end at time " << endTime << std::endl;
 
-  std::barrier<> syncBarrier(numThreads);
-
-  std::vector<std::vector<border_edge_t>> borderEdges(numThreads);
-  std::vector<std::vector<int>> partNeighbors(numThreads);
+  vector<vector<border_edge_t>> borderEdges(numThreads);
+  vector<vector<int>> partNeighbors(numThreads);
   calcBorderEdges(borderEdges, partNeighbors);
 
   // create partitions
@@ -319,26 +322,124 @@ void ParallelSim::startSim(){
       partCfg = cfgFile;
     printf("Creating partition manager %d on cfg file %s, port=%d\n", i, partCfg.c_str(), port+i);
 
-    PartitionManager* part = new PartitionManager(SUMO_BINARY, i, syncBarrier, partCfg, port+i, endTime, sumoArgs, args);
-    part->setNumPartitions(numThreads);
+    PartitionManager* part = new PartitionManager(SUMO_BINARY, i, partCfg, endTime, partNeighbors[i], sumoArgs, args);
     parts.push_back(part);
-    routers.push_back(router);
   }
 
   // start parallel simulations
   for(partId_t i=0; i<numThreads; i++) {
     parts[i]->setMyBorderEdges(borderEdges[i]);
-    if(!parts[i]->startPartition()){
-      printf("Error creating partition %d", i);
-      exit(EXIT_FAILURE);
+    int pid = parts[i]->startPartition();
+    if (pid == 0) {
+      // Finished simulation after it started in the process
+      for(partId_t i=0; i<numThreads; i++) {
+        delete parts[i];
+      }
+      exit(0);
+    } else {
+      // if needed, add pid to a partition pids list later
     }
   }
-  // join all threads when finished executing
-  for (partId_t i=0; i<numThreads; i++) {
-    parts[i]->waitForPartition();
-  }
+
+  // From here, coordination process
   
+  // Partition managers objects no longer needed in this process
   for(partId_t i=0; i<numThreads; i++) {
     delete parts[i];
   }
+
+  coordinatePartitionsSync();
+}
+
+void ParallelSim::coordinatePartitionsSync() {
+  // Initialize sockets used to sync partitions in a barrier-like fashion
+  zmq::context_t zctx{1};
+  vector<zmq::socket_t*> sockets(numThreads);
+  for (int i = 0; i < numThreads; i++) {
+    sockets[i] = new zmq::socket_t{zctx, zmq::socket_type::rep};
+    sockets[i]->bind(getSyncSocketId(i, dataFolder));
+  }
+
+  vector<zmq::pollitem_t> pollitems(numThreads);
+  for (int i = 0; i < numThreads; i++) {
+    pollitems.push_back({sockets[i], 0, ZMQ_POLLIN, 0});
+  }
+
+  vector<bool> partitionReachedBarrier(numThreads);
+  vector<bool> partitionStopped(numThreads);
+  zmq::message_t message;
+
+  for (int i = 0; i < numThreads; i++) {
+    partitionReachedBarrier[i] = false;
+    partitionStopped[i] = false;
+  }
+
+  int barrierPartitions = 0;
+  int stoppedPartitions = 0;
+
+  while (true) {
+    zmq::poll(pollitems);
+
+    for (int i = 0; i < numThreads; i++) {
+      auto item = pollitems[i];
+      // Message arrived on corresponding socket
+      if (item.revents & ZMQ_POLLIN) {
+        auto socket = static_cast<zmq::socket_t*>(item.socket);
+        auto result = socket->recv(message);
+        int opcode;
+        std::memcpy(&opcode, message.data(), sizeof(int));
+
+        switch(opcode) {
+          case SyncOps::BARRIER:
+          if (!partitionReachedBarrier[i]) {
+            partitionReachedBarrier[i] = true;
+            barrierPartitions++;
+          } else {
+            stringstream msg;
+            msg << "Partition sent reached barrier message twice! Is " << i << endl;
+            cerr << msg.str();
+            // Send message just incase, but this is undefined behavior
+            socket->send(zmq::str_buffer("repeated"), zmq::send_flags::none);
+          }
+          break;
+
+          case SyncOps::FINISHED:
+          if (!partitionStopped[i]) {
+            partitionStopped[i] = true;
+            stoppedPartitions++;
+            // Partition stopping doesn't block signaling partition, so immediately respond
+            sockets[i]->send(zmq::str_buffer("ok"), zmq::send_flags::none);
+          } else {
+            stringstream msg;
+            msg << "Partition sent finished message twice! Is " << i << endl;
+            cerr << msg.str();
+            // Send message just incase, but this is undefined behavior
+            socket->send(zmq::str_buffer("repeated"), zmq::send_flags::none);
+          }
+          break;
+        }
+      }
+    }
+
+    if (stoppedPartitions >= numThreads) {
+      break;
+    }
+    if (barrierPartitions >= numThreads) {
+      barrierPartitions = 0;
+      for (int i = 0; i < numThreads; i++) partitionReachedBarrier[i] = false;
+
+      // All partitions reached barrier, reply to each to unlock it
+      for (int i = 0; i < numThreads; i++) {
+        sockets[i]->send(zmq::str_buffer("ok"), zmq::send_flags::none);
+      }
+    }
+  }
+
+  for (int i = 0; i < numThreads; i++) {
+    delete sockets[i];
+  }
+}
+
+string ParallelSim::getSyncSocketId(int partId, string dataFolder) {
+  return dataFolder + "/sockets/" + std::to_string(partId) + "-main-s";
 }

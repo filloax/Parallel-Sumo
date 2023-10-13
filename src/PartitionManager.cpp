@@ -29,6 +29,7 @@ Author: Phillip Taylor
 
 #include "NeighborPartitionHandler.hpp"
 #include "PartitionEdgesStub.hpp"
+#include "src/ParallelSim.hpp"
 #include "utils.hpp"
 #include "args.hpp"
 
@@ -58,6 +59,7 @@ PartitionManager::PartitionManager(
   running(false)
   {
     zcontext = zmq::context_t{1};
+    coordinatorSocket = zmq::socket_t{zcontext, zmq::socket_type::req};
     for (partId_t partId : neighborPartitions) {
       auto stub = new PartitionEdgesStub(id, partId, args);
       neighborPartitionStubs[partId] = stub;
@@ -204,6 +206,28 @@ void PartitionManager::handleOutgoigEdges(int num, std::vector<std::vector<strin
   }
 }
 
+void PartitionManager::arriveWaitBarrier() {
+  int opcode = ParallelSim::SyncOps::BARRIER;
+  zmq::message_t message;
+  std::memcpy(message.data(), &opcode, sizeof(int));
+  coordinatorSocket.send(message, zmq::send_flags::none);
+
+  // Receive response, essentially blocking
+  // output not needed so just pass the previous message
+  auto _ = coordinatorSocket.recv(message);
+}
+
+void PartitionManager::signalFinish() {
+  int opcode = ParallelSim::SyncOps::FINISHED;
+  zmq::message_t message;
+  std::memcpy(message.data(), &opcode, sizeof(int));
+  coordinatorSocket.send(message, zmq::send_flags::none);
+
+  // Receive response, essentially blocking
+  // output not needed so just pass the previous message
+  auto _ = coordinatorSocket.recv(message);
+}
+
 // Only run in new process
 void PartitionManager::runSimulation() {
   pid_t pid;
@@ -232,8 +256,12 @@ void PartitionManager::runSimulation() {
     neighborClientHandlers[partId]->start();
   }
 
+  // Wait for coordinator process to bind socket
+  sleep(1);
+  coordinatorSocket.connect(ParallelSim::getSyncSocketId(id, dataFolder));
+
   // ensure all servers have started before simulation begins
-  // syncBarrier.arrive_and_wait();
+  arriveWaitBarrier();
 
   for (auto stub : neighborPartitionStubs) {
     stub.second->connect();
@@ -248,20 +276,35 @@ void PartitionManager::runSimulation() {
   std::vector<std::vector<string>> prevToVehicles(numToEdges);
   std::vector<std::vector<string>> prevFromVehicles(numFromEdges);
 
-  neighborClientsHandler.listenOn();
+  for (partId_t partId : neighborPartitions) {
+    neighborClientHandlers[partId]->listenOn();
+  }
+
   while(running && Simulation::getTime() < endTime) {
     Simulation::step();
     handleIncomingEdges(numToEdges, prevToVehicles);
     handleOutgoigEdges(numFromEdges, prevFromVehicles);
-
     // make sure every time step across partitions is synchronized
-    
-    neighborClientsHandler.listenOff();
+    arriveWaitBarrier();
 
+    // Neighbor handler buffers add vehicle and set speed operations while the 
+    // edge handling is going on in each barrier, apply them after to avoid
+    // interference and then start again
+    for (partId_t partId : neighborPartitions) {
+      neighborClientHandlers[partId]->applyMutableOperations();
+    }
   }
+
+  for (partId_t partId : neighborPartitions) {
+    neighborClientHandlers[partId]->stop();
+    neighborPartitionStubs[partId]->disconnect();
+  }
+
   stringstream msg2;
   msg2 << "partition " << id << " ended in thread " << pthread_self() << std::endl;
   std::cout << msg2.str();
+
+  signalFinish();
   
   Simulation::close("ParallelSim terminated.");
   numInstancesRunning--;
