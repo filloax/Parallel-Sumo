@@ -8,6 +8,7 @@ Author: Phillip Taylor
 */
 
 #include <cstring>
+#include <exception>
 #include <iostream>
 #include <fstream>
 #include <ctime>
@@ -31,20 +32,23 @@ Author: Phillip Taylor
 #include <zmq.h>
 #include <zmq.hpp>
 
+#ifdef USING_WIN
+  #define z_transport tcp
+#else
+  #define z_transport ipc
+#endif
+
 namespace fs = std::filesystem;
 
 using namespace std;
 
 typedef std::unordered_multimap<string, int>::iterator umit;
 
-ParallelSim::ParallelSim(const string& host, int port, string cfg, bool gui, int threads, vector<string>& sumoArgs, Args& args) :
-  host(host),
-  port(port),
+ParallelSim::ParallelSim(string cfg, bool gui, int threads, vector<string>& sumoArgs, Args& args) :
   cfgFile(cfg),
   numThreads(threads),
   sumoArgs(sumoArgs),
-  args(args),
-  dataFolder(args.dataDir)
+  args(args)
   {
 
   // set paths for sumo executable binaries
@@ -153,7 +157,7 @@ void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
     pythonCommand, "scripts/createParts.py",
     "-n", std::to_string(numThreads),
     "-C", cfgFile,
-    "--data-folder", dataFolder
+    "--data-folder", args.dataDir
   };
 
   if (!metis) {
@@ -197,7 +201,7 @@ void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
 
 void ParallelSim::loadRealNumThreads() {
   // Read actual partition num in case METIS had empty partitions
-  std::ifstream partNumFile(dataFolder + "/numParts.txt"); // Open the input file
+  std::ifstream partNumFile(args.dataDir + "/numParts.txt"); // Open the input file
 
   if (partNumFile.is_open()) {
     int number;
@@ -220,7 +224,7 @@ void ParallelSim::calcBorderEdges(vector<vector<border_edge_t>>& borderEdges, ve
 
   // add all edges to map, mapping edge ids to partition ids
   for(int i=0; i<numThreads; i++) {
-    string currNetFile = dataFolder + "/part"+std::to_string(i)+".net.xml";
+    string currNetFile = args.dataDir + "/part"+std::to_string(i)+".net.xml";
     tinyxml2::XMLDocument currNet;
     tinyxml2::XMLError e = currNet.LoadFile(currNetFile.c_str());
     tinyxml2::XMLElement* netEl = currNet.FirstChildElement("net");
@@ -242,7 +246,7 @@ void ParallelSim::calcBorderEdges(vector<vector<border_edge_t>>& borderEdges, ve
       border_edge_t borderEdge2 = {};
       borderEdge1.id = key;
       borderEdge2.id = key;
-      string currNetFile = dataFolder + "/part"+std::to_string(edgeIt1->second)+".net.xml";
+      string currNetFile = args.dataDir + "/part"+std::to_string(edgeIt1->second)+".net.xml";
       tinyxml2::XMLDocument currNet;
       tinyxml2::XMLError e = currNet.LoadFile(currNetFile.c_str());
       tinyxml2::XMLElement* netEl = currNet.FirstChildElement("net");
@@ -306,9 +310,11 @@ void ParallelSim::startSim(){
   }
 
   string partCfg;
-  vector<PartitionManager*> parts;
 
   std::cout << "Will end at time " << endTime << std::endl;
+
+  // Context for ZeroMQ message-passing, ideally one per program
+  zmq::context_t zctx{1};
 
   vector<vector<border_edge_t>> borderEdges(numThreads);
   vector<vector<int>> partNeighbors(numThreads);
@@ -317,52 +323,53 @@ void ParallelSim::startSim(){
   // create partitions
   for(partId_t i=0; i<numThreads; i++) {
     if (numThreads > 1)
-      partCfg = dataFolder + "/part"+std::to_string(i)+".sumocfg";
+      partCfg = args.dataDir + "/part"+std::to_string(i)+".sumocfg";
     else // Only one thread, so use normal config, for the purpose of benchmarking comparisions
       partCfg = cfgFile;
-    printf("Creating partition manager %d on cfg file %s, port=%d\n", i, partCfg.c_str(), port+i);
 
-    PartitionManager* part = new PartitionManager(SUMO_BINARY, i, partCfg, endTime, partNeighbors[i], sumoArgs, args);
-    parts.push_back(part);
-  }
-
-  // start parallel simulations
-  for(partId_t i=0; i<numThreads; i++) {
-    parts[i]->setMyBorderEdges(borderEdges[i]);
-    int pid = parts[i]->startPartition();
+    int pid = fork();
     if (pid == 0) {
-      // Finished simulation after it started in the process
-      for(partId_t i=0; i<numThreads; i++) {
-        delete parts[i];
-      }
+      printf("Creating partition manager %d on cfg file %s\n", i, partCfg.c_str());
+
+      PartitionManager part(
+        SUMO_BINARY, i, partCfg, endTime, 
+        partNeighbors[i], zctx, 
+        sumoArgs, args
+      );
+      part.setMyBorderEdges(borderEdges[i]);
+      part.startPartitionLocalProcess();
+      printf("Finished partition %d\n", i);
       exit(0);
     } else {
+      printf("Created partition %d on pid %d\n", i, pid);
       // if needed, add pid to a partition pids list later
     }
   }
 
   // From here, coordination process
-  
-  // Partition managers objects no longer needed in this process
-  for(partId_t i=0; i<numThreads; i++) {
-    delete parts[i];
-  }
 
-  coordinatePartitionsSync();
+  coordinatePartitionsSync(zctx);
 }
 
-void ParallelSim::coordinatePartitionsSync() {
+void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
+  printf("Coordinator | Starting coordinator routine...\n");
+
   // Initialize sockets used to sync partitions in a barrier-like fashion
-  zmq::context_t zctx{1};
   vector<zmq::socket_t*> sockets(numThreads);
   for (int i = 0; i < numThreads; i++) {
     sockets[i] = new zmq::socket_t{zctx, zmq::socket_type::rep};
-    sockets[i]->bind(getSyncSocketId(i, dataFolder));
+    sockets[i]->set(zmq::sockopt::linger, 0 );
+    sockets[i]->bind(getSyncSocketId(i, args.dataDir));
   }
+
+  printf("Coordinator | Bound sockets\n");
 
   vector<zmq::pollitem_t> pollitems(numThreads);
   for (int i = 0; i < numThreads; i++) {
-    pollitems.push_back({sockets[i], 0, ZMQ_POLLIN, 0});
+    // operator void* included in the ZeroMQ C++ wrapper, 
+    // needed to make poll work as it operates on the C version
+    pollitems[i].socket = sockets[i]->operator void*();
+    pollitems[i].events = ZMQ_POLLIN;
   }
 
   vector<bool> partitionReachedBarrier(numThreads);
@@ -440,6 +447,14 @@ void ParallelSim::coordinatePartitionsSync() {
   }
 }
 
-string ParallelSim::getSyncSocketId(int partId, string dataFolder) {
-  return dataFolder + "/sockets/" + std::to_string(partId) + "-main-s";
+string ParallelSim::getSyncSocketId(int partId, string dataDir) {
+  std::stringstream out;
+  #if z_transport == ipc
+    out << "ipc://" << dataDir << "/sockets/" << partId << "-main-s";
+  #else
+    printf("TPC transport not yet implemented!\n");
+    exit(-5);
+  #endif
+
+  return out.str();
 }

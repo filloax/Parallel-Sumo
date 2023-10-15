@@ -119,8 +119,8 @@ class NetworkPartitioning:
             start_t = time()
 
         os.makedirs(self.data_folder, exist_ok=True)
-        for f in glob.glob(f'{self.data_folder}/*'):
-            if os.path.basename(f) != "cache":
+        for f in glob.glob(f'{self.data_folder}/**'):
+            if os.path.basename(f) != "cache" and os.path.isfile(f):
                 os.remove(f)
 
         # Preprocess routes file for proper input to cutRoutes.py

@@ -1,5 +1,6 @@
 #include "NeighborPartitionHandler.hpp"
 
+#include <sstream>
 #include <zmq.hpp>
 #include <thread>
 #include <string>
@@ -18,7 +19,7 @@ using namespace std;
 
 string getSocketUri(string dataDir, int clientId, int ownerId) {
     #if z_transport == ipc
-        return PartitionEdgesStub::getIpcSocketName(dataDir, clientId, ownerId);
+        return PartitionEdgesStub::getSocketName(dataDir, clientId, ownerId);
     #else
         printf("TPC transport not yet implemented!\n");
         exit(-5);
@@ -34,6 +35,25 @@ NeighborPartitionHandler::NeighborPartitionHandler(PartitionManager& owner, int 
     term(false)
 {
     socket = zmq::socket_t{zctx, zmq::socket_type::rep};
+    socket.set(zmq::sockopt::linger, 0 );
+}
+
+const int DISCONNECT_CONTEXT_TERMINATED_ERR = 156384765;
+
+NeighborPartitionHandler::~NeighborPartitionHandler() {
+    stop();
+    try {
+        socket.close();
+    } catch (zmq::error_t& e) {
+        // If the context is already terminated, then not a problem if it didn't disconnect
+        if (e.num() != DISCONNECT_CONTEXT_TERMINATED_ERR) {
+            stringstream msg;
+            msg << "Part. handler " << owner.getId() << ":" << clientId << " | "
+                << "Error in disconnecting socket during destructor:" << e.what() << "/" << e.num()
+                << endl;
+            cerr << msg.str();
+        }
+    }
 }
 
 void NeighborPartitionHandler::start() {

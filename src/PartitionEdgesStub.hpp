@@ -11,8 +11,9 @@ private:
     Args& args;
     partId_t ownerId;
     partId_t id;
+    bool connected;
+    std::string socketUri;
     zmq::socket_t socket;
-    zmq::context_t zcontext;
 public:
     enum Operations {
         GET_EDGE_VEHICLES,
@@ -20,9 +21,10 @@ public:
         ADD_VEHICLE,
     };
 
-    static std::string getIpcSocketName(std::string directory, partId_t from, partId_t to);
+    static std::string getSocketName(std::string directory, partId_t from, partId_t to);
 
-    PartitionEdgesStub(partId_t ownerId, partId_t targetId, Args& args);
+    PartitionEdgesStub(partId_t ownerId, partId_t targetId, zmq::context_t& zcontext, Args& args);
+    ~PartitionEdgesStub();
 
     void setVehicleSpeed(const std::string& vehId, double speed);
     std::vector<std::string> getEdgeVehicles(const std::string& edgeId);

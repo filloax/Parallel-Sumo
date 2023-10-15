@@ -15,7 +15,9 @@ Author: Phillip Taylor
 #include <libsumo/Simulation.h>
 #include <libsumo/Vehicle.h>
 #include <queue>
+#include <sstream>
 #include <string>
+#include <sys/types.h>
 #include <thread>
 #include <time.h>
 #include <algorithm>
@@ -46,6 +48,7 @@ PartitionManager::PartitionManager(
   const string binary,
   partId_t id, string& cfg, int endTime,
   std::vector<partId_t> neighborPartitions,
+  zmq::context_t& zcontext,
   std::vector<string> sumoArgs, Args& args
   ) :
   binary(binary),
@@ -53,15 +56,16 @@ PartitionManager::PartitionManager(
   cfg(cfg),
   endTime(endTime),
   neighborPartitions(neighborPartitions),
+  zcontext(zcontext),
   sumoArgs(sumoArgs),
   args(args),
   dataFolder(args.dataDir),
   running(false)
   {
-    zcontext = zmq::context_t{1};
     coordinatorSocket = zmq::socket_t{zcontext, zmq::socket_type::req};
+    coordinatorSocket.set(zmq::sockopt::linger, 0 );
     for (partId_t partId : neighborPartitions) {
-      auto stub = new PartitionEdgesStub(id, partId, args);
+      auto stub = new PartitionEdgesStub(id, partId, zcontext, args);
       neighborPartitionStubs[partId] = stub;
       auto clientHandler = new NeighborPartitionHandler(*this, partId, zcontext);
       neighborClientHandlers[partId] = clientHandler;
@@ -85,14 +89,24 @@ void PartitionManager::setMyBorderEdges(std::vector<border_edge_t>& borderEdges)
 }
 
 // Returns pid of simulation process
-int PartitionManager::startPartition() {
+int PartitionManager::startPartitionNewProcess() {
   printf("Manager %d: creating process, cfg %s\n", id, cfg.c_str());
   running = true;
   int pid = fork();
+  if (pid == -1) {
+    cerr << "Error in forking to create partition process!" << endl;
+    exit(-1);
+  }
   if (pid == 0) {
+    exit(-99);
     runSimulation();
   }
   return pid;
+}
+
+void PartitionManager::startPartitionLocalProcess() {
+  printf("Manager %d: starting simulation, cfg %s\n", id, cfg.c_str());
+  runSimulation();
 }
 
 std::vector<string> PartitionManager::getEdgeVehicles(const string& edgeId) {
@@ -230,6 +244,8 @@ void PartitionManager::signalFinish() {
 
 // Only run in new process
 void PartitionManager::runSimulation() {
+  printf("Manager %d | Starting simulation...\n", id);
+
   pid_t pid;
   std::vector<string> simArgs {
     binary, 
@@ -241,9 +257,9 @@ void PartitionManager::runSimulation() {
   simArgs.insert(simArgs.end(),sumoArgs.begin(),sumoArgs.end());
 
   numInstancesRunning++;
-  if (numInstancesRunning > 0) {
+  if (numInstancesRunning > 1) {
     stringstream msg;
-    msg << "[WARN] More than one instance of PartitionManager running in this process, "
+    msg << "[WARN] [pid=" << getpid() << ",id=" << id << "] More than one instance of PartitionManager running in this process, "
       << "remember that only one simulation can be run with LibSumo per process."
       << std::endl;
     std::cerr << msg.str();
@@ -252,19 +268,41 @@ void PartitionManager::runSimulation() {
   // Start simulation in this process
   // Note: doesn't support GUI
   Simulation::start(simArgs);
-  for (auto partId : neighborPartitions) {
-    neighborClientHandlers[partId]->start();
+  try {
+    for (auto partId : neighborPartitions) {
+      neighborClientHandlers[partId]->start();
+    }
+  } catch(zmq::error_t& e) {
+    stringstream ss;
+    ss << "Manager " << id << " | ZMQ Error in starting neighbor client handlers: " << e.what() << endl;
+    cerr << ss.str();
+    exit(-2);
   }
 
   // Wait for coordinator process to bind socket
   sleep(1);
-  coordinatorSocket.connect(ParallelSim::getSyncSocketId(id, dataFolder));
+
+  try {
+    coordinatorSocket.connect(ParallelSim::getSyncSocketId(id, dataFolder));
+  } catch(zmq::error_t& e) {
+    stringstream ss;
+    ss << "Manager " << id << " | ZMQ Error in connecting to coordinator process: " << e.what() << endl;
+    cerr << ss.str();
+    exit(-3);
+  }
 
   // ensure all servers have started before simulation begins
   arriveWaitBarrier();
 
-  for (auto stub : neighborPartitionStubs) {
-    stub.second->connect();
+  try {
+    for (auto stub : neighborPartitionStubs) {
+      stub.second->connect();
+    }
+  } catch(zmq::error_t& e) {
+    stringstream ss;
+    ss << "Manager " << id << " | ZMQ Error in connecting partition stub: " << e.what() << endl;
+    cerr << ss.str();
+    exit(-4);
   }
 
   stringstream msg;

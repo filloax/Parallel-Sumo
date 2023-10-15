@@ -55,6 +55,7 @@ private:
   bool handleStepEnd(zmq::message_t& request);
 public:
   NeighborPartitionHandler(PartitionManager& owner, int clientId, zmq::context_t& zctx);
+  ~NeighborPartitionHandler();
 
   void start();
   void stop();

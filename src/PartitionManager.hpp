@@ -41,7 +41,7 @@ private:
     const std::vector<partId_t> neighborPartitions;
     std::map<int, PartitionEdgesStub*> neighborPartitionStubs;
     std::map<int, NeighborPartitionHandler*> neighborClientHandlers;
-    zmq::context_t zcontext;
+    zmq::context_t& zcontext;
     zmq::socket_t coordinatorSocket;
     std::string cfg;
     int endTime;
@@ -66,13 +66,14 @@ protected:
 public:
     // params: sumo binary, id, barrier, lock, cond, sumo config, host, port, end time
     PartitionManager(const std::string binary, partId_t id, std::string& cfg, int endTime,
-        std::vector<partId_t> neighborPartitions,
+        std::vector<partId_t> neighborPartitions, zmq::context_t& zcontext,
         std::vector<std::string> sumoArgs, Args& args);
     ~PartitionManager();
     
     /* Starts this partition in a process, returning its pid. */
-    int startPartition();
-    void closePartition();
+    int startPartitionNewProcess();
+    /* Starts this partition in this process */
+    void startPartitionLocalProcess();
     // set this partition's border edges
     void setMyBorderEdges(std::vector<border_edge_t>&);
 

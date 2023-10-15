@@ -18,37 +18,56 @@ using namespace std;
 // size to instantiate messages
 #define SUMO_ID_SIZE 256
 
-string PartitionEdgesStub::getIpcSocketName(std::string directory, partId_t from, partId_t to) {
+string PartitionEdgesStub::getSocketName(std::string directory, partId_t from, partId_t to) {
     std::stringstream out;
-    out << "ipc://" << directory << "/sockets/" << from << "-" << to;
+    #if z_transport == ipc
+        out << "ipc://" << directory << "/sockets/" << from << "-" << to;
+    #else
+        printf("TPC transport not yet implemented!\n");
+        exit(-5);
+    #endif
+
     return out.str();
 }
 
-PartitionEdgesStub::PartitionEdgesStub(partId_t ownerId, partId_t targetId, Args& args):
+PartitionEdgesStub::PartitionEdgesStub(partId_t ownerId, partId_t targetId, zmq::context_t& zcontext, Args& args):
     ownerId(ownerId),
     id(targetId),
+    connected(false),
+    socketUri(getSocketName(args.dataDir, ownerId, targetId)),
     args(args)
 {
-    zcontext = zmq::context_t{1};
     socket = zmq::socket_t{zcontext, zmq::socket_type::req};
+    socket.set(zmq::sockopt::linger, 0 );
+}
+
+const int DISCONNECT_CONTEXT_TERMINATED_ERR = 156384765;
+
+PartitionEdgesStub::~PartitionEdgesStub() {
+    if (connected) {
+        try {
+            socket.close();
+        } catch (zmq::error_t& e) {
+            // If the context is already terminated, then not a problem if it didn't disconnect
+            if (e.num() != DISCONNECT_CONTEXT_TERMINATED_ERR) {
+                stringstream msg;
+                msg << "Part. stub " << ownerId << "->" << id << " | "
+                    << "Error in disconnecting socket during destructor:" << e.what() << "/" << e.num()
+                    << endl;
+                cerr << msg.str();
+            }
+        }
+    }
 }
 
 void PartitionEdgesStub::connect() {
-    #if z_transport == ipc
-        socket.connect(getIpcSocketName(args.dataDir, ownerId, id));
-    #else
-        printf("TPC transport not yet implemented!\n");
-        exit(-5);
-    #endif
+    socket.connect(socketUri);
+    connected = true;
 }
 
 void PartitionEdgesStub::disconnect() {
-    #if z_transport == ipc
-        socket.disconnect(getIpcSocketName(args.dataDir, ownerId, id));
-    #else
-        printf("TPC transport not yet implemented!\n");
-        exit(-5);
-    #endif
+    connected = false;
+    socket.close();
 }
 
 #define copy_num(type, var, message, offset) std::memcpy(\
