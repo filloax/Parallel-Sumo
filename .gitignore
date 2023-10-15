@@ -1,7 +1,6 @@
 *.o
 *.d
-main
-main.exe
+bin/**
 .vscode/**
 **/__pycache__/**
 data/**

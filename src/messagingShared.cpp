@@ -31,7 +31,7 @@ string psumo::getSocketName(std::string dataFolder, partId_t from, partId_t to, 
         out << "ipc://" << dataFolder << "/sockets/" << from << "-" << to;
     #else
         int port = PART_SOCKETS_START + cantorPairing(from, to, numThreads);
-        out << "tpc://localhost:" <<  port;
+        out << "tcp://localhost:" <<  port;
     #endif
 
     return out.str();
@@ -44,7 +44,7 @@ string psumo::getSyncSocketId(std::string dataFolder, partId_t partId) {
     out << "ipc://" << dataFolder << "/sockets/" << partId << "-main-s";
   #else
     int port = SYNC_SOCKETS_START + partId;
-    out << "tpc://localhost:" <<  port;
+    out << "tcp://localhost:" <<  port;
   #endif
 
   return out.str();
