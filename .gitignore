@@ -12,3 +12,6 @@ data/**
 *.stackdump
 assets/grid_large.*
 err.txt
+build/**
+!build/.dir
+.cache/**
