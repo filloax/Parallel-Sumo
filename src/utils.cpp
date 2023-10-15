@@ -1,4 +1,4 @@
-#include "src/utils.hpp"
+#include "utils.hpp"
 
 #include <cstring>
 #include <string>
@@ -7,7 +7,7 @@
 #include <stdexcept>
 #include <iterator>
 
-#if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
+#ifdef USING_WIN
     #include <windows.h>
     #include <dbghelp.h>
 #else

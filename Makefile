@@ -2,8 +2,7 @@
 CC=clang
 CCX=clang++
 # include traciapi to fix config file path
-# gnu++ for pthread barriers
-CXXFLAGS= -std=gnu++20 -I. -g -I./libs/traciapi "-I${SUMO_HOME}/include" "-I${SUMO_HOME}/src" -DDEBUG
+CXXFLAGS= -std=c++17 -I. -g "-I${SUMO_HOME}/include" "-I${SUMO_HOME}/src" -DDEBUG
 LINKFLAGS= "-L${SUMO_HOME}/bin" -lsumocpp -lzmq
 BIN_DIR = bin
 OBJ_DIR = .obj
@@ -29,13 +28,12 @@ $(BIN_DIR)/main: $(OBJECTS)
 # 	$(CC) $(CXXFLAGS) -c $< -o $@
 
 .SECONDEXPANSION:
-$(OBJECTS): $(OBJ_DIR)/%.o: $$(wildcard %.c*)
+$(OBJECTS): $(OBJ_DIR)/%.o: %.c
 	@mkdir -p $(@D)
-ifeq "$(suffix $<)" ".cpp"
-	$(CCX) -MMD -MP $(CXXFLAGS) -c $< -o $@ 
-else
-#equal for now
+	$(CC) -MMD -MP $(CXXFLAGS) -c $< -o $@
+
+$(OBJECTS): $(OBJ_DIR)/%.o: %.cpp
+	@mkdir -p $(@D)
 	$(CCX) -MMD -MP $(CXXFLAGS) -c $< -o $@
-endif
 
 -include $(OBJECTS:.o=.d)

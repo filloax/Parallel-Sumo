@@ -1,13 +1,12 @@
 CC=g++
-# include traciapi to fix config file path.
 # wininit is needed in all files to properly initialize windows flags to avoid
-# GNU compilation conflicts (mainly winsock select vs sys/select).
+# some compilation conflicts (mainly winsock select vs sys/select).
 # Some files might still include it manually for better IDE recognition.
-CXXFLAGS= -std=gnu++20 -I. -g -I./libs/traciapi -I "${SUMO_HOME}/include" -include "libs/wininit.h"
-LIBS= -lws2_32 -ldbghelp
+CXXFLAGS= -std=c++17 -I. -g -I "${SUMO_HOME}/include" -include "libs/wininit.h" "-I${SUMO_HOME}/src"
+LINKFLAGS= "-L${SUMO_HOME}/bin" -lsumocpp -lzmq -lws2_32 -ldbghelp
 BIN_DIR = bin
 OBJ_DIR = .obj
-SOURCES := $(shell find * -type f -name "*.cpp" -o -name "*.c")
+SOURCES := $(shell find * -type d -name "experiment" -prune -o -type f \( -name "*.cpp" -o -name "*.c" \) -print)
 SRC_LST := $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(SOURCES)))
 OBJECTS := $(addprefix $(OBJ_DIR)/,$(SRC_LST))
 
@@ -23,7 +22,7 @@ main: $(BIN_DIR)/main
 $(BIN_DIR)/main: $(OBJECTS)
 	@echo "Linking"
 	@mkdir -p $(@D)
-	$(CC) $^ ${LIBS} -o $(BIN_DIR)/main.exe
+	$(CC) $^ ${LINKFLAGS} -o $(BIN_DIR)/main.exe
 
 # %.o: %.cpp
 # 	$(CC) $(CXXFLAGS) -c $< -o $@
