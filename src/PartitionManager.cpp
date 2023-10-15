@@ -28,12 +28,12 @@ Contributions: Filippo Lenzi
 #include <unistd.h>
 
 #include <libsumo/libsumo.h>
-#include <boost/interprocess/managed_shared_memory.hpp>
 #include <zmq.hpp>
 
+#include "messagingShared.hpp"
 #include "NeighborPartitionHandler.hpp"
 #include "PartitionEdgesStub.hpp"
-#include "src/ParallelSim.hpp"
+#include "ParallelSim.hpp"
 #include "utils.hpp"
 #include "args.hpp"
 
@@ -50,7 +50,7 @@ PartitionManager::PartitionManager(
   const string binary,
   partId_t id, string& cfg, int endTime,
   std::vector<partId_t> neighborPartitions,
-  zmq::context_t& zcontext,
+  zmq::context_t& zcontext, int numThreads,
   std::vector<string> sumoArgs, Args& args
   ) :
   binary(binary),
@@ -61,13 +61,13 @@ PartitionManager::PartitionManager(
   zcontext(zcontext),
   sumoArgs(sumoArgs),
   args(args),
-  dataFolder(args.dataDir),
+  numThreads(numThreads),
   running(false)
   {
     coordinatorSocket = zmq::socket_t{zcontext, zmq::socket_type::req};
     coordinatorSocket.set(zmq::sockopt::linger, 0 );
     for (partId_t partId : neighborPartitions) {
-      auto stub = new PartitionEdgesStub(id, partId, zcontext, args);
+      auto stub = new PartitionEdgesStub(id, partId, numThreads, zcontext, args);
       neighborPartitionStubs[partId] = stub;
       auto clientHandler = new NeighborPartitionHandler(*this, partId);
       neighborClientHandlers[partId] = clientHandler;
@@ -258,7 +258,7 @@ void PartitionManager::runSimulation() {
     binary, 
     "-c", cfg, 
     "--start",
-    "--netstate-dump", dataFolder+"/output"+std::to_string(id)+".xml"
+    "--netstate-dump", args.dataDir+"/output"+std::to_string(id)+".xml"
   };
   simArgs.reserve(simArgs.size() + distance(sumoArgs.begin(), sumoArgs.end()));
   simArgs.insert(simArgs.end(),sumoArgs.begin(),sumoArgs.end());
@@ -290,7 +290,7 @@ void PartitionManager::runSimulation() {
   sleep(1);
 
   try {
-    coordinatorSocket.connect(ParallelSim::getSyncSocketId(id, dataFolder));
+    coordinatorSocket.connect(psumo::getSyncSocketId(args.dataDir, id));
   } catch(zmq::error_t& e) {
     stringstream ss;
     ss << "Manager " << id << " | ZMQ Error in connecting to coordinator process: " << e.what() << endl;

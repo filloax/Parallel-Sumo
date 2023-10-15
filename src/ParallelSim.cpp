@@ -8,6 +8,7 @@ Author: Phillip Taylor
 
 Contributions: Filippo Lenzi
 */
+#include "ParallelSim.hpp"
 
 #include <cstring>
 #include <exception>
@@ -25,20 +26,15 @@ Contributions: Filippo Lenzi
 #include <unordered_map>
 #include <vector>
 #include <set>
-#include "libs/tinyxml2.h"
-#include "ParallelSim.hpp"
-#include "utils.hpp"
-#include "args.hpp"
 #include <filesystem> // C++17
 
 #include <zmq.h>
 #include <zmq.hpp>
 
-#ifdef USING_WIN
-  #define z_transport tcp
-#else
-  #define z_transport ipc
-#endif
+#include "messagingShared.hpp"
+#include "libs/tinyxml2.h"
+#include "utils.hpp"
+#include "args.hpp"
 
 namespace fs = std::filesystem;
 
@@ -335,7 +331,7 @@ void ParallelSim::startSim(){
 
       PartitionManager part(
         SUMO_BINARY, i, partCfg, endTime, 
-        partNeighbors[i], zctx, 
+        partNeighbors[i], zctx, numThreads,
         sumoArgs, args
       );
       part.setMyBorderEdges(borderEdges[i]);
@@ -359,7 +355,7 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
   // Initialize sockets used to sync partitions in a barrier-like fashion
   vector<zmq::socket_t*> sockets(numThreads);
   for (int i = 0; i < numThreads; i++) {
-    string uri = getSyncSocketId(i, args.dataDir);
+    string uri = psumo::getSyncSocketId(args.dataDir, i);
     try {
       sockets[i] = new zmq::socket_t{zctx, zmq::socket_type::rep};
       sockets[i]->set(zmq::sockopt::linger, 0 );
@@ -459,16 +455,4 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
   for (int i = 0; i < numThreads; i++) {
     delete sockets[i];
   }
-}
-
-string ParallelSim::getSyncSocketId(int partId, string dataDir) {
-  std::stringstream out;
-  #if z_transport == ipc
-    out << "ipc://" << dataDir << "/sockets/" << partId << "-main-s";
-  #else
-    printf("TPC transport not yet implemented!\n");
-    exit(-5);
-  #endif
-
-  return out.str();
 }

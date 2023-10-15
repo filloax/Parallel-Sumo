@@ -28,6 +28,7 @@ set(SOURCE_FILES
     ${SRC_DIR}/args.hpp
     ${SRC_DIR}/main.cpp
     ${SRC_DIR}/utils.cpp
+    ${SRC_DIR}/messagingShared.cpp
 )
 
 # Add library files
@@ -43,10 +44,17 @@ include_directories(
     .
 )
 
+add_executable(ParallelSumo ${SOURCE_FILES} ${LIB_FILES})
+
 ## load in pkg-config support
 find_package(PkgConfig)
 ## use pkg-config to get hints for 0mq locations
 pkg_check_modules(PC_ZeroMQ QUIET zmq)
+
+#find cppzmq wrapper, installed by make of cppzmq
+find_package(cppzmq)
+target_link_libraries(ParallelSumo cppzmq)
+message(STATUS "ZMQ CPP dir: " ${cppzmq_INCLUDE_DIR})
 
 ## use the hint from above to find where 'zmq.hpp' is located
 find_path(ZeroMQ_INCLUDE_DIR
@@ -61,12 +69,11 @@ find_library(ZeroMQ_LIBRARY
         PATHS ${PC_ZeroMQ_LIBRARY_DIRS}
         )
 message(STATUS "ZeroMQ library: " ${ZeroMQ_LIBRARY})
+message(STATUS "(If the above is missing, you should properly install zeromq and configure it for your platform")
 
 # Link directories and libraries
 link_directories(${SUMO_HOME}/bin)
 link_libraries(sumocpp zmq)
-
-add_executable(ParallelSumo ${SOURCE_FILES} ${LIB_FILES})
 
 # Add header files for IDEs that support autocompletion
 target_sources(ParallelSumo PRIVATE

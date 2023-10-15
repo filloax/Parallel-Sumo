@@ -16,30 +16,16 @@ Author: Filippo Lenzi
 #include <string>
 #include <mutex>
 
+#include "messagingShared.hpp"
 #include "utils.hpp"
 #include "PartitionManager.hpp"
 
 using namespace std;
 
-#ifdef USING_WIN
-    #define z_transport tcp
-#else
-    #define z_transport ipc
-#endif
-
-string getSocketUri(string dataDir, int clientId, int ownerId) {
-    #if z_transport == ipc
-        return PartitionEdgesStub::getSocketName(dataDir, clientId, ownerId);
-    #else
-        printf("TPC transport not yet implemented!\n");
-        exit(-5);
-    #endif
-}
-
 NeighborPartitionHandler::NeighborPartitionHandler(PartitionManager& owner, int clientId) :
     owner(owner),
     clientId(clientId),
-    socketUri(getSocketUri(owner.getArgs().dataDir, clientId, owner.getId())),
+    socketUri(psumo::getSocketName(owner.getArgs().dataDir, clientId, owner.getId(), owner.getNumThreads())),
     listening(false),
     stop_(false),
     term(false)

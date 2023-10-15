@@ -42,7 +42,6 @@ class ParallelSim {
     // execute parallel sumo simulations in created partitions
     void startSim();
 
-    static std::string getSyncSocketId(int partId, std::string dataFolder);
 
     enum SyncOps {
         BARRIER,

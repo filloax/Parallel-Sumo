@@ -29,9 +29,7 @@ public:
         ADD_VEHICLE,
     };
 
-    static std::string getSocketName(std::string directory, partId_t from, partId_t to);
-
-    PartitionEdgesStub(partId_t ownerId, partId_t targetId, zmq::context_t& zcontext, Args& args);
+    PartitionEdgesStub(partId_t ownerId, partId_t targetId, int numThreads, zmq::context_t& zcontext, Args& args);
     ~PartitionEdgesStub();
 
     void setVehicleSpeed(const std::string& vehId, double speed);

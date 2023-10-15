@@ -46,8 +46,8 @@ private:
     std::string cfg;
     int endTime;
     std::vector<std::string> sumoArgs;
-    std::string dataFolder = "";
-    Args args;
+    int numThreads;
+    Args& args;
     bool running;
 
     // handle border edges where vehicles are incoming
@@ -66,7 +66,7 @@ protected:
 public:
     // params: sumo binary, id, barrier, lock, cond, sumo config, host, port, end time
     PartitionManager(const std::string binary, partId_t id, std::string& cfg, int endTime,
-        std::vector<partId_t> neighborPartitions, zmq::context_t& zcontext,
+        std::vector<partId_t> neighborPartitions, zmq::context_t& zcontext, int numThreads,
         std::vector<std::string> sumoArgs, Args& args);
     ~PartitionManager();
     
@@ -85,5 +85,6 @@ public:
     );
 
     const int getId() { return id; }
+    const int getNumThreads() { return numThreads; }
     const Args getArgs() { return args; }
 };

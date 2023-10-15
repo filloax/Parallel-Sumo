@@ -9,6 +9,7 @@ Author: Filippo Lenzi
 #include "PartitionEdgesStub.hpp"
 #include "PartitionManager.hpp"
 #include "utils.hpp"
+#include "messagingShared.hpp"
 
 #include <cstring>
 #include <sstream>
@@ -26,23 +27,11 @@ using namespace std;
 // size to instantiate messages
 #define SUMO_ID_SIZE 256
 
-string PartitionEdgesStub::getSocketName(std::string directory, partId_t from, partId_t to) {
-    std::stringstream out;
-    #if z_transport == ipc
-        out << "ipc://" << directory << "/sockets/" << from << "-" << to;
-    #else
-        printf("TPC transport not yet implemented!\n");
-        exit(-5);
-    #endif
-
-    return out.str();
-}
-
-PartitionEdgesStub::PartitionEdgesStub(partId_t ownerId, partId_t targetId, zmq::context_t& zcontext, Args& args):
+PartitionEdgesStub::PartitionEdgesStub(partId_t ownerId, partId_t targetId, int numThreads, zmq::context_t& zcontext, Args& args):
     ownerId(ownerId),
     id(targetId),
     connected(false),
-    socketUri(getSocketName(args.dataDir, ownerId, targetId)),
+    socketUri(psumo::getSocketName(args.dataDir, ownerId, targetId, numThreads)),
     args(args)
 {
     socket = zmq::socket_t{zcontext, zmq::socket_type::req};
