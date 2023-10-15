@@ -1,3 +1,11 @@
+/**
+PartitionEdgesStub.hpp
+
+Connects to neighboring partitions, running operations remotely on them.
+
+Author: Filippo Lenzi
+*/
+
 #pragma once
 
 #include <zmq.hpp>

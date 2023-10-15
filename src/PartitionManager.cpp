@@ -5,6 +5,8 @@ Manages partition's internal SUMO simulation and sychronizes
 with other partitions running in parallel.
 
 Author: Phillip Taylor
+
+Contributions: Filippo Lenzi
 */
 #include "PartitionManager.hpp"
 

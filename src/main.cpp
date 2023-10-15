@@ -4,6 +4,8 @@ Can comment out getFilePaths() and partitionNetwork() after these functions
 have already been executed to run startSim() with same partitions.
 
 Author: Phillip Taylor
+
+Contributions: Filippo Lenzi
 */
 
 #include <iostream>

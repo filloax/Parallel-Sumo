@@ -1,3 +1,11 @@
+/**
+PartitionEdgesStub.cpp
+
+Connects to neighboring partitions, running operations remotely on them.
+
+Author: Filippo Lenzi
+*/
+
 #include "PartitionEdgesStub.hpp"
 #include "PartitionManager.hpp"
 #include "utils.hpp"

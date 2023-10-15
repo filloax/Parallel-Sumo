@@ -1,3 +1,12 @@
+/**
+NeighborPartitionHandler.cpp
+
+Handles incoming messages from neighboring partitions, either responding with state
+or queueing modifying operations (like adding vehicles).
+
+Author: Filippo Lenzi
+*/
+
 #include "NeighborPartitionHandler.hpp"
 
 #include <condition_variable>
@@ -69,7 +78,16 @@ NeighborPartitionHandler::~NeighborPartitionHandler() {
 }
 
 void NeighborPartitionHandler::start() {
-    socket.bind(socketUri);
+    try {
+        socket.bind(socketUri);
+    } catch (zmq::error_t& e) {
+      stringstream msg;
+      msg << "Part. Handler "<< owner.getId() <<" | ZMQ error in binding socket " << clientId << " to '" << socketUri
+        << "': " << e.what() << "/" << e.num() << endl;
+      cerr << msg.str();
+      exit(-10);
+    }
+
     listenThread = thread(&NeighborPartitionHandler::listenThreadLogic, this);
 }
 

@@ -5,6 +5,8 @@ Parallelizes a SUMO simulation. Partitions a SUMO network by number of threads,
 and runs each parallel SUMO network partition in a PartitionManager.
 
 Author: Phillip Taylor
+
+Contributions: Filippo Lenzi
 */
 
 #include <cstring>
@@ -357,9 +359,18 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
   // Initialize sockets used to sync partitions in a barrier-like fashion
   vector<zmq::socket_t*> sockets(numThreads);
   for (int i = 0; i < numThreads; i++) {
-    sockets[i] = new zmq::socket_t{zctx, zmq::socket_type::rep};
-    sockets[i]->set(zmq::sockopt::linger, 0 );
-    sockets[i]->bind(getSyncSocketId(i, args.dataDir));
+    string uri = getSyncSocketId(i, args.dataDir);
+    try {
+      sockets[i] = new zmq::socket_t{zctx, zmq::socket_type::rep};
+      sockets[i]->set(zmq::sockopt::linger, 0 );
+      sockets[i]->bind(uri);
+    } catch (zmq::error_t& e) {
+      stringstream msg;
+      msg << "Coordinator | ZMQ error in binding socket " << i << " to '" << uri
+        << "': " << e.what() << "/" << e.num() << endl;
+      cerr << msg.str();
+      exit(-1);
+    }
   }
 
   printf("Coordinator | Bound sockets\n");

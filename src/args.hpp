@@ -1,3 +1,11 @@
+/**
+args.hpp
+
+Wrapper for args, to access them in a single object.
+
+Author: Filippo Lenzi
+*/
+
 #pragma once
 
 #include <libs/argparse.hpp>

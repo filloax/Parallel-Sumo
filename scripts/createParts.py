@@ -7,6 +7,9 @@ Original code by Phillip Taylor
 Adapted by Filippo Lenzi
 """
 
+if __name__ == '__main__':
+    "Initializing partitioning script..."
+
 import os, sys
 import glob
 import xml.etree.ElementTree as ET

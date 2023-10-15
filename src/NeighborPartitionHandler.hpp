@@ -1,3 +1,14 @@
+/**
+NeighborPartitionHandler.hpp
+
+Class definition for NeighborPartitionHandler.
+
+Handles incoming messages from neighboring partitions, either responding with state
+or queueing modifying operations (like adding vehicles).
+
+Author: Filippo Lenzi
+*/
+
 #pragma once
 
 #include <vector>
