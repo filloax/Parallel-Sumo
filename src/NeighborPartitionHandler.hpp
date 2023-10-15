@@ -5,6 +5,7 @@
 #include <string>
 #include <thread>
 #include <mutex>
+#include <condition_variable>
 
 class NeighborPartitionHandler;
 
@@ -33,6 +34,7 @@ due to the Req/Rep model in ZeroMQ.
 */
 class NeighborPartitionHandler {
 private:
+  zmq::context_t zcontext; // Separate context to handle stuff while partition manager waits for barrier
   zmq::socket_t socket;
   const int clientId;
   PartitionManager& owner;
@@ -42,6 +44,8 @@ private:
   bool term; // Stop listening thread
   std::thread listenThread;
   std::mutex operationsBufferLock;
+  std::mutex secondThreadSignalLock;
+  std::condition_variable secondThreadCondition;
 
   std::vector<set_veh_speed_t> setSpeedQueue;
   std::vector<add_veh_t> addVehicleQueue;
@@ -54,7 +58,7 @@ private:
   bool handleAddVehicle(zmq::message_t& request);
   bool handleStepEnd(zmq::message_t& request);
 public:
-  NeighborPartitionHandler(PartitionManager& owner, int clientId, zmq::context_t& zctx);
+  NeighborPartitionHandler(PartitionManager& owner, int clientId);
   ~NeighborPartitionHandler();
 
   void start();

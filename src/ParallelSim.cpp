@@ -402,6 +402,7 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
           if (!partitionReachedBarrier[i]) {
             partitionReachedBarrier[i] = true;
             barrierPartitions++;
+            printf("Coordinator | Partition %d reached barrier (%d/%d)\n", i, barrierPartitions, numThreads); // TEMP
           } else {
             stringstream msg;
             msg << "Partition sent reached barrier message twice! Is " << i << endl;
@@ -433,6 +434,7 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
       break;
     }
     if (barrierPartitions >= numThreads) {
+      printf("Coordinator | All partitions reached barrier\n");
       barrierPartitions = 0;
       for (int i = 0; i < numThreads; i++) partitionReachedBarrier[i] = false;
 

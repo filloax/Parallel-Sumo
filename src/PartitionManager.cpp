@@ -67,7 +67,7 @@ PartitionManager::PartitionManager(
     for (partId_t partId : neighborPartitions) {
       auto stub = new PartitionEdgesStub(id, partId, zcontext, args);
       neighborPartitionStubs[partId] = stub;
-      auto clientHandler = new NeighborPartitionHandler(*this, partId, zcontext);
+      auto clientHandler = new NeighborPartitionHandler(*this, partId);
       neighborClientHandlers[partId] = clientHandler;
     }
   }
@@ -106,6 +106,7 @@ int PartitionManager::startPartitionNewProcess() {
 
 void PartitionManager::startPartitionLocalProcess() {
   printf("Manager %d: starting simulation, cfg %s\n", id, cfg.c_str());
+  running = true;
   runSimulation();
 }
 
@@ -226,9 +227,13 @@ void PartitionManager::arriveWaitBarrier() {
   std::memcpy(message.data(), &opcode, sizeof(int));
   coordinatorSocket.send(message, zmq::send_flags::none);
 
+  printf("Manager %d | Waiting for barrier...\n", id); //TEMP
+
   // Receive response, essentially blocking
   // output not needed so just pass the previous message
   auto _ = coordinatorSocket.recv(message);
+
+  printf("Manager %d | Reached barrier...\n", id); //TEMP
 }
 
 void PartitionManager::signalFinish() {
@@ -306,7 +311,7 @@ void PartitionManager::runSimulation() {
   }
 
   stringstream msg;
-  msg << "partition " << id << " started in thread " << pthread_self() << " (port " << simArgs[4] << ")" << std::endl << std::endl;
+  msg << "-- partition " << id << " started in process " << getpid() << "--" << std::endl;
   std::cout << msg.str();
 
   int numFromEdges = fromBorderEdges.size();
@@ -320,8 +325,11 @@ void PartitionManager::runSimulation() {
 
   while(running && Simulation::getTime() < endTime) {
     Simulation::step();
+    printf("Manager %d | Step done (%d/%d)\n", id, (int) Simulation::getTime(), endTime);
     handleIncomingEdges(numToEdges, prevToVehicles);
+    printf("Manager %d | Handled incoming edges\n", id);
     handleOutgoigEdges(numFromEdges, prevFromVehicles);
+    printf("Manager %d | Handled outgoing edges\n", id);
     // make sure every time step across partitions is synchronized
     arriveWaitBarrier();
 

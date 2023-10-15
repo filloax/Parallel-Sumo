@@ -1,5 +1,6 @@
 #include "NeighborPartitionHandler.hpp"
 
+#include <condition_variable>
 #include <sstream>
 #include <zmq.hpp>
 #include <thread>
@@ -26,7 +27,7 @@ string getSocketUri(string dataDir, int clientId, int ownerId) {
     #endif
 }
 
-NeighborPartitionHandler::NeighborPartitionHandler(PartitionManager& owner, int clientId, zmq::context_t& zctx) :
+NeighborPartitionHandler::NeighborPartitionHandler(PartitionManager& owner, int clientId) :
     owner(owner),
     clientId(clientId),
     socketUri(getSocketUri(owner.getArgs().dataDir, clientId, owner.getId())),
@@ -34,7 +35,8 @@ NeighborPartitionHandler::NeighborPartitionHandler(PartitionManager& owner, int 
     stop_(false),
     term(false)
 {
-    socket = zmq::socket_t{zctx, zmq::socket_type::rep};
+    zcontext = zmq::context_t{1};
+    socket = zmq::socket_t{zcontext, zmq::socket_type::rep};
     socket.set(zmq::sockopt::linger, 0 );
 }
 
@@ -54,6 +56,16 @@ NeighborPartitionHandler::~NeighborPartitionHandler() {
             cerr << msg.str();
         }
     }
+    try {
+        zcontext.shutdown();
+        zcontext.close();
+    } catch (zmq::error_t& e) {
+        stringstream msg;
+        msg << "Part. handler " << owner.getId() << ":" << clientId << " | "
+            << "Error in closing context during destructor:" << e.what() << "/" << e.num()
+            << endl;
+        cerr << msg.str();
+    }
 }
 
 void NeighborPartitionHandler::start() {
@@ -67,7 +79,9 @@ void NeighborPartitionHandler::stop() {
 }
 
 void NeighborPartitionHandler::listenOn() {
+    lock_guard<mutex> lock(secondThreadSignalLock);
     listening = true;
+    secondThreadCondition.notify_one();
 }
 
 void NeighborPartitionHandler::listenOff() {
@@ -77,6 +91,7 @@ void NeighborPartitionHandler::listenOff() {
 
 void NeighborPartitionHandler::listenCheck() {
     zmq::message_t request;
+    printf("Part. handler %d | Waiting for requests...\n", owner.getId());
     auto result = socket.recv(request, zmq::recv_flags::none);
 
     // Read int representing operations to call from the message
@@ -111,7 +126,8 @@ void NeighborPartitionHandler::listenThreadLogic() {
             }
             listening = false;
         } else {
-            // TODO: Add some sort of semaphore
+            unique_lock<mutex> lock(secondThreadSignalLock);
+            secondThreadCondition.wait(lock, [this] { return listening; });
         }
     }
 }
