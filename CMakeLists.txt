@@ -3,8 +3,14 @@ project(ParallelSumo)
 
 set(CMAKE_CXX_STANDARD 17)
 
-# Use Clang as the compiler
-set(CMAKE_CXX_COMPILER "clang++")
+# Check for Clang compiler
+find_program(CLANG_COMPILER clang++)
+if(CLANG_COMPILER)
+    message(STATUS "Found Clang compiler: ${CLANG_COMPILER}")
+    set(CMAKE_CXX_COMPILER ${CLANG_COMPILER})
+else()
+    message(WARNING "Clang compiler not found. Using default C++ compiler.")
+endif()
 
 # Add source files
 set(SRC_DIR src)
@@ -33,8 +39,27 @@ include_directories(
     .
 )
 
+## load in pkg-config support
+find_package(PkgConfig)
+## use pkg-config to get hints for 0mq locations
+pkg_check_modules(PC_ZeroMQ QUIET zmq)
+
+## use the hint from above to find where 'zmq.hpp' is located
+find_path(ZeroMQ_INCLUDE_DIR
+        NAMES zmq.hpp
+        PATHS ${PC_ZeroMQ_INCLUDE_DIRS}
+        )
+message(STATUS "ZeroMQ include dir: " ${ZeroMQ_INCLUDE_DIR})
+
+## use the hint from above to find the location of libzmq
+find_library(ZeroMQ_LIBRARY
+        NAMES zmq
+        PATHS ${PC_ZeroMQ_LIBRARY_DIRS}
+        )
+message(STATUS "ZeroMQ library: " ${ZeroMQ_LIBRARY})
+
 # Link directories and libraries
-link_directories($ENV{SUMO_HOME}/bin)
+link_directories(${SUMO_HOME}/bin)
 link_libraries(sumocpp zmq)
 
 add_executable(ParallelSumo ${SOURCE_FILES} ${LIB_FILES})

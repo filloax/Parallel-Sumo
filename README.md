@@ -10,17 +10,22 @@ First, you need to install Eclipse [SUMO](https://eclipse.dev/sumo/), and the [B
 
 ### How to compile:
 
-**On Linux**: running `make` on the root folder should be enough.
+First, you need to install ZeroMQ on your system, to have it available as a dependency, and also CMake.
 
-**On Windows**: approach I used was
-- Install C compilers and toolkit via [MSYS2](https://www.msys2.org/), follow for instance the [VSCode guide to C++ dev on Windows](https://code.visualstudio.com/docs/cpp/config-mingw)
-- Install **in the MSYS2 environment**\* (instead of UCRT64, as MSYS2 is POSIX-like) the base-devel and gcc packages: `pacman -S base-devel gcc`
-- Optional: add msys64/usr/bin folder to PATH
-- Run `make -f Makefile_win` command either in Powershell with msys folders in path, or from the msys2 terminal. Make sure you're running it in the project's folder!
+The general process for building is:
+- `cd` to the build folder for your system (they are empty, build-windows is meant for Visual Studio generation, build-msys for msys makefiles, build-linux for linux)
+- Run `cmake ..`
+- Run `make`
 
-\* In general, you need a C++ 20 environment with the standard POSIX libraries like *sys/wait.h* available, while Windows by default doesn't have it, and neither does UCRT64.  The MSYS2 default environment has the correct libraries set up.  
-Another way to compile this is using Cygwin, but it does have the side effect of requiring the program to be run through it and having X-style windows.
+It is recommended to use Linux, or WSL if you're on Windows.
 
+<details Old methods>
+    **On Windows**: approach I used was
+    - Install C compilers and toolkit via [MSYS2](https://www.msys2.org/), follow for instance the [VSCode guide to C++ dev on Windows](https://code.visualstudio.com/docs/cpp/config-mingw)
+    - Install **in the MSYS2 environment**\* (instead of UCRT64, as MSYS2 is POSIX-like) the base-devel and gcc packages: `pacman -S base-devel gcc`
+    - Optional: add msys64/usr/bin folder to PATH
+    - Run `make -f Makefile_win` command either in Powershell with msys folders in path, or from the msys2 terminal. Make sure you're running it in the project's folder!
+</details>
 
 ---
 

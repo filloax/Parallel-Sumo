@@ -14,4 +14,8 @@ assets/grid_large.*
 err.txt
 build/**
 !build/.dir
+build-windows/**
+!build-windows/.dir
+build-msys/**
+!build-msys/.dir
 .cache/**
