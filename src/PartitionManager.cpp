@@ -19,7 +19,7 @@ Contributions: Filippo Lenzi
 #include <queue>
 #include <sstream>
 #include <string>
-#include <sys/types.h>
+#include <chrono>
 #include <thread>
 #include <time.h>
 #include <algorithm>
@@ -287,7 +287,7 @@ void PartitionManager::runSimulation() {
   }
 
   // Wait for coordinator process to bind socket
-  sleep(1);
+  std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
   try {
     coordinatorSocket.connect(psumo::getSyncSocketId(args.dataDir, id));

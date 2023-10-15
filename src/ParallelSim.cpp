@@ -19,8 +19,6 @@ Contributions: Filippo Lenzi
 #include <string>
 #include <unistd.h>
 #include <stdlib.h>
-#include <sys/types.h>
-#include <sys/wait.h>
 #include <fcntl.h>
 #include <iterator>
 #include <unordered_map>

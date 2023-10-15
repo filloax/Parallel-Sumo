@@ -17,14 +17,16 @@ The general process for building is:
 - Run `cmake ..`
 - Run `make`
 
-It is recommended to use Linux, or WSL if you're on Windows.
+It is recommended to use Linux, or WSL if you're on Windows. Currently uses POSIX functions (mainly fork) that are hard to get rid of without rewriting much more of the program, so Visual Studio compilation is not yet supported.
 
-<details Old methods>
-    **On Windows**: approach I used was
-    - Install C compilers and toolkit via [MSYS2](https://www.msys2.org/), follow for instance the [VSCode guide to C++ dev on Windows](https://code.visualstudio.com/docs/cpp/config-mingw)
-    - Install **in the MSYS2 environment**\* (instead of UCRT64, as MSYS2 is POSIX-like) the base-devel and gcc packages: `pacman -S base-devel gcc`
-    - Optional: add msys64/usr/bin folder to PATH
-    - Run `make -f Makefile_win` command either in Powershell with msys folders in path, or from the msys2 terminal. Make sure you're running it in the project's folder!
+<details markdown="1">
+<summary>Old methods</summary>
+
+**On Windows**: approach I used was
+- Install C compilers and toolkit via [MSYS2](https://www.msys2.org/), follow for instance the [VSCode guide to C++ dev on Windows](https://code.visualstudio.com/docs/cpp/config-mingw)
+- Install **in the MSYS2 environment**\* (instead of UCRT64, as MSYS2 is POSIX-like) the base-devel and gcc packages: `pacman -S base-devel gcc`
+- Optional: add msys64/usr/bin folder to PATH
+- Run `make -f Makefile_win` command either in Powershell with msys folders in path, or from the msys2 terminal. Make sure you're running it in the project's folder!
 </details>
 
 ---

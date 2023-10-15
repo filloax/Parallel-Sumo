@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Check for Clang compiler
 find_program(CLANG_COMPILER clang++)
@@ -46,30 +47,31 @@ include_directories(
 
 add_executable(ParallelSumo ${SOURCE_FILES} ${LIB_FILES})
 
-## load in pkg-config support
-find_package(PkgConfig)
-## use pkg-config to get hints for 0mq locations
-pkg_check_modules(PC_ZeroMQ QUIET zmq)
+# ## load in pkg-config support
+# find_package(PkgConfig)
+# ## use pkg-config to get hints for 0mq locations
+# pkg_check_modules(PC_ZeroMQ QUIET zmq)
 
 #find cppzmq wrapper, installed by make of cppzmq
 find_package(cppzmq)
 target_link_libraries(ParallelSumo cppzmq)
 message(STATUS "ZMQ CPP dir: " ${cppzmq_INCLUDE_DIR})
+message(STATUS "(If the above is missing, you should properly install zeromq AND cppzmq and configure it for your platform)")
 
-## use the hint from above to find where 'zmq.hpp' is located
-find_path(ZeroMQ_INCLUDE_DIR
-        NAMES zmq.hpp
-        PATHS ${PC_ZeroMQ_INCLUDE_DIRS}
-        )
-message(STATUS "ZeroMQ include dir: " ${ZeroMQ_INCLUDE_DIR})
+# ## use the hint from above to find where 'zmq.hpp' is located
+# find_path(ZeroMQ_INCLUDE_DIR
+#         NAMES zmq.hpp
+#         PATHS ${PC_ZeroMQ_INCLUDE_DIRS}
+#         )
+# message(STATUS "ZeroMQ include dir: " ${ZeroMQ_INCLUDE_DIR})
 
-## use the hint from above to find the location of libzmq
-find_library(ZeroMQ_LIBRARY
-        NAMES zmq
-        PATHS ${PC_ZeroMQ_LIBRARY_DIRS}
-        )
-message(STATUS "ZeroMQ library: " ${ZeroMQ_LIBRARY})
-message(STATUS "(If the above is missing, you should properly install zeromq and configure it for your platform")
+# ## use the hint from above to find the location of libzmq
+# find_library(ZeroMQ_LIBRARY
+#         NAMES zmq
+#         PATHS ${PC_ZeroMQ_LIBRARY_DIRS}
+#         )
+# message(STATUS "ZeroMQ library: " ${ZeroMQ_LIBRARY})
+# message(STATUS "(If the above is missing, you should properly install zeromq and configure it for your platform)")
 
 # Link directories and libraries
 link_directories(${SUMO_HOME}/bin)
