@@ -222,7 +222,7 @@ void PartitionManager::handleOutgoigEdges(int num, std::vector<std::vector<strin
 
 void PartitionManager::arriveWaitBarrier() {
   int opcode = ParallelSim::SyncOps::BARRIER;
-  zmq::message_t message;
+  zmq::message_t message(sizeof(int));
   std::memcpy(message.data(), &opcode, sizeof(int));
   coordinatorSocket.send(message, zmq::send_flags::none);
 
@@ -233,7 +233,7 @@ void PartitionManager::arriveWaitBarrier() {
 
 void PartitionManager::signalFinish() {
   int opcode = ParallelSim::SyncOps::FINISHED;
-  zmq::message_t message;
+  zmq::message_t message(sizeof(int));
   std::memcpy(message.data(), &opcode, sizeof(int));
   coordinatorSocket.send(message, zmq::send_flags::none);
 

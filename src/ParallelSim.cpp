@@ -369,6 +369,7 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
     // operator void* included in the ZeroMQ C++ wrapper, 
     // needed to make poll work as it operates on the C version
     pollitems[i].socket = sockets[i]->operator void*();
+    // pollitems[i].socket = *sockets[i]; // Should be equivalent, but let's use the operator
     pollitems[i].events = ZMQ_POLLIN;
   }
 
@@ -391,7 +392,7 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
       auto item = pollitems[i];
       // Message arrived on corresponding socket
       if (item.revents & ZMQ_POLLIN) {
-        auto socket = static_cast<zmq::socket_t*>(item.socket);
+        auto socket = sockets[i];
         auto result = socket->recv(message);
         int opcode;
         std::memcpy(&opcode, message.data(), sizeof(int));
