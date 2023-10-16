@@ -1,50 +1,50 @@
 [
 {
-  "directory": "D:/Documenti/Universita/tesim/Parallel-Sumo/build-msys",
-  "command": "C:/msys64/usr/bin/clang++.exe -DZMQ_BUILD_DRAFT_API @CMakeFiles/ParallelSumo.dir/includes_CXX.rsp -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/NeighborPartitionHandler.cpp.obj -c D:/Documenti/Universita/tesim/Parallel-Sumo/src/NeighborPartitionHandler.cpp",
-  "file": "D:/Documenti/Universita/tesim/Parallel-Sumo/src/NeighborPartitionHandler.cpp",
-  "output": "CMakeFiles/ParallelSumo.dir/src/NeighborPartitionHandler.cpp.obj"
+  "directory": "/home/fillo/Documents/tesim/Parallel-Sumo/build",
+  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -g -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/NeighborPartitionHandler.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/src/NeighborPartitionHandler.cpp",
+  "file": "/home/fillo/Documents/tesim/Parallel-Sumo/src/NeighborPartitionHandler.cpp",
+  "output": "CMakeFiles/ParallelSumo.dir/src/NeighborPartitionHandler.cpp.o"
 },
 {
-  "directory": "D:/Documenti/Universita/tesim/Parallel-Sumo/build-msys",
-  "command": "C:/msys64/usr/bin/clang++.exe -DZMQ_BUILD_DRAFT_API @CMakeFiles/ParallelSumo.dir/includes_CXX.rsp -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/ParallelSim.cpp.obj -c D:/Documenti/Universita/tesim/Parallel-Sumo/src/ParallelSim.cpp",
-  "file": "D:/Documenti/Universita/tesim/Parallel-Sumo/src/ParallelSim.cpp",
-  "output": "CMakeFiles/ParallelSumo.dir/src/ParallelSim.cpp.obj"
+  "directory": "/home/fillo/Documents/tesim/Parallel-Sumo/build",
+  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -g -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/ParallelSim.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/src/ParallelSim.cpp",
+  "file": "/home/fillo/Documents/tesim/Parallel-Sumo/src/ParallelSim.cpp",
+  "output": "CMakeFiles/ParallelSumo.dir/src/ParallelSim.cpp.o"
 },
 {
-  "directory": "D:/Documenti/Universita/tesim/Parallel-Sumo/build-msys",
-  "command": "C:/msys64/usr/bin/clang++.exe -DZMQ_BUILD_DRAFT_API @CMakeFiles/ParallelSumo.dir/includes_CXX.rsp -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/PartitionEdgesStub.cpp.obj -c D:/Documenti/Universita/tesim/Parallel-Sumo/src/PartitionEdgesStub.cpp",
-  "file": "D:/Documenti/Universita/tesim/Parallel-Sumo/src/PartitionEdgesStub.cpp",
-  "output": "CMakeFiles/ParallelSumo.dir/src/PartitionEdgesStub.cpp.obj"
+  "directory": "/home/fillo/Documents/tesim/Parallel-Sumo/build",
+  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -g -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/PartitionEdgesStub.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/src/PartitionEdgesStub.cpp",
+  "file": "/home/fillo/Documents/tesim/Parallel-Sumo/src/PartitionEdgesStub.cpp",
+  "output": "CMakeFiles/ParallelSumo.dir/src/PartitionEdgesStub.cpp.o"
 },
 {
-  "directory": "D:/Documenti/Universita/tesim/Parallel-Sumo/build-msys",
-  "command": "C:/msys64/usr/bin/clang++.exe -DZMQ_BUILD_DRAFT_API @CMakeFiles/ParallelSumo.dir/includes_CXX.rsp -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/PartitionManager.cpp.obj -c D:/Documenti/Universita/tesim/Parallel-Sumo/src/PartitionManager.cpp",
-  "file": "D:/Documenti/Universita/tesim/Parallel-Sumo/src/PartitionManager.cpp",
-  "output": "CMakeFiles/ParallelSumo.dir/src/PartitionManager.cpp.obj"
+  "directory": "/home/fillo/Documents/tesim/Parallel-Sumo/build",
+  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -g -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/PartitionManager.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/src/PartitionManager.cpp",
+  "file": "/home/fillo/Documents/tesim/Parallel-Sumo/src/PartitionManager.cpp",
+  "output": "CMakeFiles/ParallelSumo.dir/src/PartitionManager.cpp.o"
 },
 {
-  "directory": "D:/Documenti/Universita/tesim/Parallel-Sumo/build-msys",
-  "command": "C:/msys64/usr/bin/clang++.exe -DZMQ_BUILD_DRAFT_API @CMakeFiles/ParallelSumo.dir/includes_CXX.rsp -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/main.cpp.obj -c D:/Documenti/Universita/tesim/Parallel-Sumo/src/main.cpp",
-  "file": "D:/Documenti/Universita/tesim/Parallel-Sumo/src/main.cpp",
-  "output": "CMakeFiles/ParallelSumo.dir/src/main.cpp.obj"
+  "directory": "/home/fillo/Documents/tesim/Parallel-Sumo/build",
+  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -g -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/main.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/src/main.cpp",
+  "file": "/home/fillo/Documents/tesim/Parallel-Sumo/src/main.cpp",
+  "output": "CMakeFiles/ParallelSumo.dir/src/main.cpp.o"
 },
 {
-  "directory": "D:/Documenti/Universita/tesim/Parallel-Sumo/build-msys",
-  "command": "C:/msys64/usr/bin/clang++.exe -DZMQ_BUILD_DRAFT_API @CMakeFiles/ParallelSumo.dir/includes_CXX.rsp -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/utils.cpp.obj -c D:/Documenti/Universita/tesim/Parallel-Sumo/src/utils.cpp",
-  "file": "D:/Documenti/Universita/tesim/Parallel-Sumo/src/utils.cpp",
-  "output": "CMakeFiles/ParallelSumo.dir/src/utils.cpp.obj"
+  "directory": "/home/fillo/Documents/tesim/Parallel-Sumo/build",
+  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -g -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/utils.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/src/utils.cpp",
+  "file": "/home/fillo/Documents/tesim/Parallel-Sumo/src/utils.cpp",
+  "output": "CMakeFiles/ParallelSumo.dir/src/utils.cpp.o"
 },
 {
-  "directory": "D:/Documenti/Universita/tesim/Parallel-Sumo/build-msys",
-  "command": "C:/msys64/usr/bin/clang++.exe -DZMQ_BUILD_DRAFT_API @CMakeFiles/ParallelSumo.dir/includes_CXX.rsp -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/messagingShared.cpp.obj -c D:/Documenti/Universita/tesim/Parallel-Sumo/src/messagingShared.cpp",
-  "file": "D:/Documenti/Universita/tesim/Parallel-Sumo/src/messagingShared.cpp",
-  "output": "CMakeFiles/ParallelSumo.dir/src/messagingShared.cpp.obj"
+  "directory": "/home/fillo/Documents/tesim/Parallel-Sumo/build",
+  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -g -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/messagingShared.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/src/messagingShared.cpp",
+  "file": "/home/fillo/Documents/tesim/Parallel-Sumo/src/messagingShared.cpp",
+  "output": "CMakeFiles/ParallelSumo.dir/src/messagingShared.cpp.o"
 },
 {
-  "directory": "D:/Documenti/Universita/tesim/Parallel-Sumo/build-msys",
-  "command": "C:/msys64/usr/bin/clang++.exe -DZMQ_BUILD_DRAFT_API @CMakeFiles/ParallelSumo.dir/includes_CXX.rsp -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/libs/tinyxml2.cpp.obj -c D:/Documenti/Universita/tesim/Parallel-Sumo/libs/tinyxml2.cpp",
-  "file": "D:/Documenti/Universita/tesim/Parallel-Sumo/libs/tinyxml2.cpp",
-  "output": "CMakeFiles/ParallelSumo.dir/libs/tinyxml2.cpp.obj"
+  "directory": "/home/fillo/Documents/tesim/Parallel-Sumo/build",
+  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -g -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/libs/tinyxml2.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/libs/tinyxml2.cpp",
+  "file": "/home/fillo/Documents/tesim/Parallel-Sumo/libs/tinyxml2.cpp",
+  "output": "CMakeFiles/ParallelSumo.dir/libs/tinyxml2.cpp.o"
 }
 ]

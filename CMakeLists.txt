@@ -74,8 +74,8 @@ message(STATUS "(If the above is missing, you should properly install zeromq AND
 # message(STATUS "(If the above is missing, you should properly install zeromq and configure it for your platform)")
 
 # Link directories and libraries
+target_link_libraries(ParallelSumo sumocpp zmq)
 link_directories(${SUMO_HOME}/bin)
-link_libraries(sumocpp zmq)
 
 # Add header files for IDEs that support autocompletion
 target_sources(ParallelSumo PRIVATE
@@ -85,3 +85,5 @@ target_sources(ParallelSumo PRIVATE
     ${SRC_DIR}/PartitionManager.hpp
     ${SRC_DIR}/utils.hpp
 )
+
+message(STATUS "Include directories = ${INCLUDE_DIRECTORIES}")

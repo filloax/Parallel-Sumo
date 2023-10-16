@@ -17,7 +17,6 @@ Contributions: Filippo Lenzi
 #include <ctime>
 #include <sstream>
 #include <string>
-#include <unistd.h>
 #include <stdlib.h>
 #include <fcntl.h>
 #include <iterator>
@@ -25,6 +24,10 @@ Contributions: Filippo Lenzi
 #include <vector>
 #include <set>
 #include <filesystem> // C++17
+
+// POSIX stuff
+#include <unistd.h>
+#include <sys/wait.h>
 
 #include <zmq.h>
 #include <zmq.hpp>
