@@ -11,6 +11,7 @@ Contributions: Filippo Lenzi
 #include "PartitionManager.hpp"
 
 #include <cstdlib>
+#include <exception>
 #include <iostream>
 #include <algorithm>
 #include <iterator>
@@ -265,8 +266,8 @@ void PartitionManager::runSimulation() {
   pid_t pid;
   std::vector<string> simArgs {
     binary, 
-    "-C", cfg, 
-    "--start",
+    "-c", cfg, 
+    // "--start",
     "--netstate-dump", args.dataDir+"/output"+std::to_string(id)+".xml"
   };
   simArgs.reserve(simArgs.size() + distance(sumoArgs.begin(), sumoArgs.end()));
@@ -288,7 +289,25 @@ void PartitionManager::runSimulation() {
   for (string arg: simArgs) startMsg << arg << " ";
   startMsg << endl;
   cout << startMsg.str();
-  Simulation::start(simArgs);
+
+  bool success = false;
+  pair<int, string> version;
+
+  try {
+    version = Simulation::start(simArgs);
+    success = Simulation::isLoaded();
+  } catch (exception& e) {}
+
+
+  if (success) {
+    printf("Manager %d | Simulation loaded with %d starting vehicles, ver. %d-%s\n", id, 
+      Simulation::getLoadedNumber(), version.first, version.second.c_str());
+  } else {
+    stringstream msg;
+    msg << "[ERR] [pid=" << getPid() << ",id=" << id << "] Simulation failed to load! Quitting" << std::endl;
+    std::cerr << msg.str();
+    exit(EXIT_FAILURE);
+  }
 
   try {
     for (auto partId : neighborPartitions) {

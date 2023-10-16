@@ -169,7 +169,7 @@ void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
 
   std::cout << "Running createParts.py to split graph and create partition files..." << std::endl;
 
-  runProcess(pythonPath, partArgs);
+  runProcess(pythonCommand, partArgs);
 
   int status;
   waitProcess(&status);
