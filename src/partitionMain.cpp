@@ -8,6 +8,7 @@ Author: Phillip Taylor
 Contributions: Filippo Lenzi
 */
 
+#include <exception>
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
@@ -63,7 +64,14 @@ int main(int argc, char* argv[]) {
         args.sumoArgs, args 
     );
     partManager.setMyBorderEdges(borderEdges);
-    partManager.startPartitionLocalProcess();
+
+    try {
+        partManager.startPartitionLocalProcess();
+    } catch (exception& e) {
+        stringstream msg;
+        msg << endl << "[ERR] Partition " << args.partId << " terminating because of an error: "
+            << e.what() << endl;
+    }
 }
 
 void loadPartData(int id, string dataFolder, vector<border_edge_t>& borderEdges, vector<partId_t>& partNeighbors) {

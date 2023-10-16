@@ -32,8 +32,8 @@ class PartitionManager {
 private:
     const std::string binary;
     partId_t id;
-    std::vector<border_edge_t> toBorderEdges;
-    std::vector<border_edge_t> fromBorderEdges;
+    std::vector<border_edge_t> incomingBorderEdges;
+    std::vector<border_edge_t> outgoingBorderEdges;
     const std::vector<partId_t> neighborPartitions;
     std::map<int, PartitionEdgesStub*> neighborPartitionStubs;
     std::map<int, NeighborPartitionHandler*> neighborClientHandlers;

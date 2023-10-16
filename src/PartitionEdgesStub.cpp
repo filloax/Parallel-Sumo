@@ -13,6 +13,7 @@ Author: Filippo Lenzi
 
 #include <cstring>
 #include <sstream>
+#include <string>
 #include <zmq.hpp>
 
 using namespace std;
@@ -87,14 +88,22 @@ std::vector<std::string> PartitionEdgesStub::getEdgeVehicles(const std::string& 
         edgeId.size() + 1
     );
 
-    printf("=== Stub %d->%d | Sending getEdge\n", ownerId, id);
+    printf("\tStub %d->%d | Sending getEdge\n", ownerId, id);
     socket.send(message, zmq::send_flags::none);
 
-    printf("=== Stub %d->%d | Receiving getEdge reply\n", ownerId, id);
+    printf("\tStub %d->%d | Receiving getEdge reply\n", ownerId, id);
     zmq::message_t reply;
     auto response = socket.recv(reply);
 
-    return readStringsFromMessage(reply);
+    auto out =     readStringsFromMessage(reply);
+
+    stringstream msg;
+    msg << "\tStub " << ownerId << "->"<< id << " | Received: ";
+    for (auto s : out) msg << s << ", ";
+    msg << endl;
+    cout << msg.str();
+
+    return out;
 }
 
 void PartitionEdgesStub::setVehicleSpeed(const string& vehId, double speed) {
@@ -112,10 +121,10 @@ void PartitionEdgesStub::setVehicleSpeed(const string& vehId, double speed) {
         vehId.size() + 1
     );
 
-    printf("=== Stub %d->%d | Sending setSpeed\n", ownerId, id);
+    printf("\tStub %d->%d | Sending setSpeed\n", ownerId, id);
     socket.send(message, zmq::send_flags::none);
 
-    printf("=== Stub %d->%d | Receiving setSpeed reply\n", ownerId, id);
+    printf("\tStub %d->%d | Receiving setSpeed reply\n", ownerId, id);
     // unused reply, required by zeroMQ
     zmq::message_t reply;
     auto response = socket.recv(reply);
@@ -141,10 +150,10 @@ void PartitionEdgesStub::addVehicle(
     copy_num(double, lanePos, message, sizeof(int) * 2);
     copy_num(double, speed, message, sizeof(int) * 2 + sizeof(double));
 
-    printf("=== Stub %d->%d | Sending addVehicle\n", ownerId, id);
+    printf("\tStub %d->%d | Sending addVehicle\n", ownerId, id);
     socket.send(message, zmq::send_flags::none);
 
-    printf("=== Stub %d->%d | Receiving addVehicle reply\n", ownerId, id);
+    printf("\tStub %d->%d | Receiving addVehicle reply\n", ownerId, id);
     // unused reply, required by zeroMQ
     zmq::message_t reply;
     auto response = socket.recv(reply);

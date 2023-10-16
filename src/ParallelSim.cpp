@@ -303,18 +303,23 @@ void ParallelSim::startSim(){
 
   // create partitions
   for(partId_t i=0; i<numThreads; i++) {
-    nlohmann::json partData;
-    partData["id"] = i;
-    partData["neighbors"] = partNeighbors[i];
-    // nlohmann::json handles the conversion, see psumoTypes.cpp
-    partData["borderEdges"] = borderEdges[i];
-    std::ofstream out(getPartitionDataFile(args.dataDir, i));
-    out << partData.dump(2);
-    out.close();
-
-    pid_t pid;
-
     #ifndef PSUMO_SINGLE_EXECUTABLE
+      // If in separate executables mode, 
+      // create a new process with the partition
+      // by launching its exe
+
+      // Pass data needed for the partition constructor as json
+      nlohmann::json partData;
+      partData["id"] = i;
+      partData["neighbors"] = partNeighbors[i];
+      // nlohmann::json handles the conversion, see psumoTypes.cpp
+      partData["borderEdges"] = borderEdges[i];
+      std::ofstream out(getPartitionDataFile(args.dataDir, i));
+      out << partData.dump(2);
+      out.close();
+
+      pid_t pid;
+
       auto exeDir = getCurrentExeDirectory();
       vector<string> partArgs ({
         "-P", to_string(i),
@@ -329,8 +334,12 @@ void ParallelSim::startSim(){
       if (args.gui) partArgs.push_back("--gui");
       if (args.skipPart) partArgs.push_back("--skip-part");
       if (args.keepPoly) partArgs.push_back("--keep-poly");
+      printf("Coordinator | Starting process for part %i\n", i);
       pid = runProcess(exeDir / PROGRAM_NAME_PART, partArgs);
     #else
+
+    // If in single executable mode, fork and create the partition here
+    // (still in a new process)
 
     pid = fork();
     if (pid == 0) {

@@ -76,7 +76,7 @@ PartitionManager::PartitionManager(
     for (partId_t partId : neighborPartitions) {
       auto stub = new PartitionEdgesStub(id, partId, numThreads, zcontext, args);
       neighborPartitionStubs[partId] = stub;
-      auto clientHandler = new NeighborPartitionHandler(*this, partId);
+      auto clientHandler = new NeighborPartitionHandler(*this, partId, zcontext);
       neighborClientHandlers[partId] = clientHandler;
     }
   }
@@ -91,9 +91,9 @@ PartitionManager::~PartitionManager() {
 void PartitionManager::setMyBorderEdges(std::vector<border_edge_t>& borderEdges) {
   for(border_edge_t e : borderEdges) {
     if(e.to == id)
-      toBorderEdges.push_back(e);
+      incomingBorderEdges.push_back(e);
     else if(e.from == id)
-      fromBorderEdges.push_back(e);
+      outgoingBorderEdges.push_back(e);
   }
 }
 
@@ -143,8 +143,8 @@ void PartitionManager::addVehicle(
 
 void PartitionManager::handleIncomingEdges(int num, std::vector<std::vector<string>>& prevVehicles) {
   for(int toEdgeIdx = 0; toEdgeIdx < num; toEdgeIdx++) {
-    std::vector<string> edgeVehicles = Edge::getLastStepVehicleIDs(toBorderEdges[toEdgeIdx].id);
-    int fromId = toBorderEdges[toEdgeIdx].from;
+    std::vector<string> edgeVehicles = Edge::getLastStepVehicleIDs(incomingBorderEdges[toEdgeIdx].id);
+    int fromId = incomingBorderEdges[toEdgeIdx].from;
 
     if(!edgeVehicles.empty()) {
       PartitionEdgesStub* partStub = neighborPartitionStubs[fromId];
@@ -154,7 +154,7 @@ void PartitionManager::handleIncomingEdges(int num, std::vector<std::vector<stri
         if(it != prevVehicles[toEdgeIdx].end()) {
 
           // check if vehicle has been transferred out of partition
-          std::vector<string> trans = partStub->getEdgeVehicles(toBorderEdges[toEdgeIdx].id);
+          std::vector<string> trans = partStub->getEdgeVehicles(incomingBorderEdges[toEdgeIdx].id);
           if(std::find(trans.begin(), trans.end(), veh) != trans.end()) {
             // set from partition vehicle speed to next partition vehicle speed
             try {
@@ -174,16 +174,11 @@ void PartitionManager::handleIncomingEdges(int num, std::vector<std::vector<stri
 }
 
 void PartitionManager::handleOutgoigEdges(int num, std::vector<std::vector<string>>& prevVehicles) {
-  printf("=== Manager %d | OUTGOING EDGES\n", id);
   for(int fromEdgeIdx = 0; fromEdgeIdx < num; fromEdgeIdx++) {
-    printf("=== Manager %d | EDGE %d/%d \n", id, fromEdgeIdx, num);
-    std::vector<string> edgeVehicles = Edge::getLastStepVehicleIDs(toBorderEdges[fromEdgeIdx].id);
-    int toId = fromBorderEdges[fromEdgeIdx].to;
-
-    printf("=== Manager %d | %d: A\n", id, fromEdgeIdx);
+    std::vector<string> edgeVehicles = Edge::getLastStepVehicleIDs(outgoingBorderEdges[fromEdgeIdx].id);
+    int toId = outgoingBorderEdges[fromEdgeIdx].to;
 
     if(!edgeVehicles.empty()) {
-      printf("=== Manager %d | %d: B0\n", id, fromEdgeIdx);
       PartitionEdgesStub* partStub = neighborPartitionStubs[toId];
       for(string veh : edgeVehicles) {
         auto it = std::find(prevVehicles[fromEdgeIdx].begin(), prevVehicles[fromEdgeIdx].end(), veh);
@@ -191,8 +186,7 @@ void PartitionManager::handleOutgoigEdges(int num, std::vector<std::vector<strin
         if(it == prevVehicles[fromEdgeIdx].end()) {
 
           // check if vehicle not already on edge (if a vehicle starts on a border edge)
-          printf("=== Manager %d | Getting edge vehicles at %d: %s\n", id, toId, fromBorderEdges[fromEdgeIdx].id.c_str());
-          std::vector<string> toVehs = partStub->getEdgeVehicles(fromBorderEdges[fromEdgeIdx].id);
+          std::vector<string> toVehs = partStub->getEdgeVehicles(outgoingBorderEdges[fromEdgeIdx].id);
           string route = Vehicle::getRouteID(veh);
 
           if(std::find(toVehs.begin(), toVehs.end(), veh) == toVehs.end()) {
@@ -208,7 +202,7 @@ void PartitionManager::handleOutgoigEdges(int num, std::vector<std::vector<strin
               route = routeSub+"0";
               int routePart = 0;
               string firstEdge = router.getRouteEdges(route, toId)[0];
-              while(firstEdge.compare(fromBorderEdges[fromEdgeIdx].id)) {
+              while(firstEdge.compare(outgoingBorderEdges[fromEdgeIdx].id)) {
                 routePart++;
                 route = routeSub+std::to_string(routePart);
                 firstEdge = router.getRouteEdges(route, toId)[0];
@@ -233,12 +227,9 @@ void PartitionManager::handleOutgoigEdges(int num, std::vector<std::vector<strin
           }
         }
       }
-      printf("=== Manager %d | %d: B1\n", id, fromEdgeIdx);
     }
     prevVehicles[fromEdgeIdx] = edgeVehicles;
-    printf("=== Manager %d | %d: C\n", id, fromEdgeIdx);
   }
-  printf("=== Manager %d | DONE\n", id);
 }
 
 void PartitionManager::arriveWaitBarrier() {
@@ -274,7 +265,7 @@ void PartitionManager::runSimulation() {
   pid_t pid;
   std::vector<string> simArgs {
     binary, 
-    "-c", cfg, 
+    "-C", cfg, 
     "--start",
     "--netstate-dump", args.dataDir+"/output"+std::to_string(id)+".xml"
   };
@@ -298,6 +289,7 @@ void PartitionManager::runSimulation() {
   startMsg << endl;
   cout << startMsg.str();
   Simulation::start(simArgs);
+
   try {
     for (auto partId : neighborPartitions) {
       neighborClientHandlers[partId]->start();
@@ -339,8 +331,8 @@ void PartitionManager::runSimulation() {
   msg << "-- partition " << id << " started in process " << getPid() << "--" << std::endl;
   std::cout << msg.str();
 
-  int numFromEdges = fromBorderEdges.size();
-  int numToEdges = toBorderEdges.size();
+  int numFromEdges = outgoingBorderEdges.size();
+  int numToEdges = incomingBorderEdges.size();
   std::vector<std::vector<string>> prevToVehicles(numToEdges);
   std::vector<std::vector<string>> prevFromVehicles(numFromEdges);
 
@@ -350,6 +342,7 @@ void PartitionManager::runSimulation() {
 
   while(running && Simulation::getTime() < endTime) {
     Simulation::step();
+
     printf("Manager %d | Step done (%d/%d)\n", id, (int) Simulation::getTime(), endTime);
     handleIncomingEdges(numToEdges, prevToVehicles);
     printf("Manager %d | Handled incoming edges\n", id);
@@ -369,6 +362,9 @@ void PartitionManager::runSimulation() {
   for (partId_t partId : neighborPartitions) {
     neighborClientHandlers[partId]->stop();
     neighborPartitionStubs[partId]->disconnect();
+  }
+  for (partId_t partId : neighborPartitions) {
+    neighborClientHandlers[partId]->join();
   }
 
   stringstream msg2;
