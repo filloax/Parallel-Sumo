@@ -217,4 +217,15 @@ void printStackTrace() {
     cerr << getStackTrace();
 }
 
+void printVector(
+    const vector<string>& v, const string prefix, 
+    const string sep, const bool newline, ostream& stream
+) {
+    stringstream ss;
+    ss << prefix;
+    for (auto s : v) ss << s << sep;
+    if (newline) ss << endl;
+    stream << ss.str();
+}
+
 }

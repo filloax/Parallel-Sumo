@@ -123,8 +123,12 @@ void PartitionManager::startPartitionLocalProcess() {
 }
 
 std::vector<string> PartitionManager::getEdgeVehicles(const string& edgeId) {
-  return Edge::getLastStepVehicleIDs(edgeId);
+  // For some reason, despite the signature, passing the C++ string
+  // didn't work (as in, it didn't find the data)
+  return Edge::getLastStepVehicleIDs(edgeId.c_str());
 }
+
+
 void PartitionManager::setVehicleSpeed(const string& vehId, double speed) {
   // Using slowDown instead of setspeed as original program did it
   Vehicle::slowDown(vehId, speed, Simulation::getDeltaT());
@@ -286,8 +290,7 @@ void PartitionManager::runSimulation() {
   // Note: doesn't support GUI
   stringstream startMsg;
   startMsg << "Manager " << id << " | Starting simulation with args: ";
-  for (string arg: simArgs) startMsg << arg << " ";
-  startMsg << endl;
+  printVector(simArgs, "", " ", true, startMsg);
   cout << startMsg.str();
 
   bool success = false;
@@ -297,7 +300,6 @@ void PartitionManager::runSimulation() {
     version = Simulation::start(simArgs);
     success = Simulation::isLoaded();
   } catch (exception& e) {}
-
 
   if (success) {
     printf("Manager %d | Simulation loaded with %d starting vehicles, ver. %d-%s\n", id, 

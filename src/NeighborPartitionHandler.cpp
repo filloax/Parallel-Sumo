@@ -155,13 +155,14 @@ void NeighborPartitionHandler::listenThreadLogic() {
     } catch(libsumo::TraCIException& e) {
         stringstream msg;
         msg << "Part. handler " << clientId << "->" << owner.getId() 
-            << " | SUMO error: " << e.what() << endl;
+            << " | SUMO error: " << e.what() << endl << "=== " << getPid() << " QUITTING ===" << endl;
         cerr << msg.str();
         exit(EXIT_FAILURE);
     } catch(zmq::error_t& e) {
         stringstream msg;
         msg << "Part. handler " << clientId << "->" << owner.getId() 
-            << " | ZMQ error: " << e.what() << "/" << e.num() << endl;
+            << " | ZMQ error: " << e.what() << "/" << e.num()
+            << endl << "=== " << getPid() << " QUITTING ===" << endl;
         cerr << msg.str();
         exit(EXIT_FAILURE);
     }

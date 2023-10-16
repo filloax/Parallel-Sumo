@@ -3,6 +3,7 @@
 #include <string>
 #include <zmq.hpp>
 #include <filesystem>
+#include <iostream>
 
 #define EXECVP_CPP(args) \
     std::vector<char*> c_args; \
@@ -19,6 +20,10 @@ namespace psumo {
 
     void printStackTrace();
     std::string getStackTrace();
+    void printVector(
+        const std::vector<std::string>&, const std::string prefix = "vector: ", 
+        const std::string sep = ", ", const bool newline = true, std::ostream& stream = std::cout
+    );
 
     std::filesystem::path getCurrentExePath();
     std::filesystem::path getCurrentExeDirectory();

@@ -53,10 +53,10 @@ set(LIB_FILES
     ${LIBS_DIR}/tinyxml2.cpp
 )
 
+message(STATUS "SUMO_HOME=$ENV{SUMO_HOME}")
+
 # Include directories
 include_directories(
-    $ENV{SUMO_HOME}/include
-    $ENV{SUMO_HOME}/src
     .
 )
 
@@ -87,11 +87,22 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(argparse)
 
+# Sumo
+add_library(sumocpp SHARED IMPORTED)
+# $ENV{SUMO_HOME}/include
+# $ENV{SUMO_HOME}/src
+
+set_target_properties(sumocpp PROPERTIES
+  IMPORTED_LOCATION "$ENV{SUMO_HOME}/bin/libsumocpp.so"
+  INTERFACE_INCLUDE_DIRECTORIES "$ENV{SUMO_HOME}/src"
+)
+
 # Link directories and libraries
+
+link_directories($ENV{SUMO_HOME}/bin)
+
 target_link_libraries(ParallelSumo           cppzmq zmq sumocpp nlohmann_json::nlohmann_json argparse)
 target_link_libraries(ParallelSumo-Partition cppzmq zmq sumocpp nlohmann_json::nlohmann_json argparse)
-
-link_directories(${SUMO_HOME}/bin)
 
 if (PSUMO_SINGLE_EXECUTABLE)
     message(STATUS "PSUMO_SINGLE_EXECUTABLE on")
