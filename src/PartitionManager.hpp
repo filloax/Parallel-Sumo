@@ -18,19 +18,15 @@ Contributions: Filippo Lenzi
 #include <zmq.hpp>
 
 #include "args.hpp"
+#include "psumoTypes.hpp"
+#include "partArgs.hpp"
 
-typedef int partId_t;
 class PartitionManager;
 
 #include "PartitionEdgesStub.hpp"
 #include "NeighborPartitionHandler.hpp"
 
-typedef struct border_edge_t {
-    std::string id;
-    std::vector<std::string> lanes;
-    partId_t from;
-    partId_t to;
-} border_edge_t;
+using namespace psumo;
 
 class PartitionManager {
 private:
@@ -47,7 +43,11 @@ private:
     int endTime;
     std::vector<std::string> sumoArgs;
     int numThreads;
+    #ifdef PSUMO_SINGLE_EXECUTABLE
     Args& args;
+    #else
+    PartArgs& args;
+    #endif
     bool running;
 
     // handle border edges where vehicles are incoming
@@ -67,7 +67,13 @@ public:
     // params: sumo binary, id, barrier, lock, cond, sumo config, host, port, end time
     PartitionManager(const std::string binary, partId_t id, std::string& cfg, int endTime,
         std::vector<partId_t> neighborPartitions, zmq::context_t& zcontext, int numThreads,
-        std::vector<std::string> sumoArgs, Args& args);
+        std::vector<std::string> sumoArgs, 
+        #ifdef PSUMO_SINGLE_EXECUTABLE
+        Args& args
+        #else
+        PartArgs& args
+        #endif
+    );
     ~PartitionManager();
     
     /* Starts this partition in a process, returning its pid. */

@@ -10,7 +10,9 @@ First, you need to install Eclipse [SUMO](https://eclipse.dev/sumo/), and the [B
 
 ### How to compile:
 
-First, you need to install ZeroMQ on your system, to have it available as a dependency, and also CMake.
+CMake is required. Required dependencies are
+- cppzmq (might require more complicated installation depending on system)
+- nlohmann json
 
 The general process for building is:
 - `cd` to the build folder for your system (they are empty, build-windows is meant for Visual Studio generation, build-msys for msys makefiles, build-linux for linux)
@@ -28,6 +30,10 @@ It is recommended to use Linux, or WSL if you're on Windows. Currently uses POSI
 - Optional: add msys64/usr/bin folder to PATH
 - Run `make -f Makefile_win` command either in Powershell with msys folders in path, or from the msys2 terminal. Make sure you're running it in the project's folder!
 </details>
+
+### Other notes
+
+Uses [nlohmann json](https://github.com/nlohmann/json), which is not the most optimized but is robust, as it's used only in passing data when initializing a partition.
 
 ---
 

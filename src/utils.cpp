@@ -12,9 +12,57 @@
     #include <dbghelp.h>
 #else
     #include <execinfo.h>
+    #include <unistd.h>
+    #include <sys/wait.h>
 #endif
 
 using namespace std;
+
+namespace psumo {
+
+pid_t runProcess(string exePath, vector<string>& args) {
+    std::cout << "command: " << exePath << " ";
+    for (int i = 0; i < args.size(); i++) std::cout << args[i] << " ";
+    std::cout << std::endl;
+
+    #ifndef USING_WIN
+        int pid = fork();
+        if (pid == 0) {
+            vector<string> execpvpArgs(args);
+            execpvpArgs.insert(execpvpArgs.begin(), exePath);
+            EXECVP_CPP(execpvpArgs);
+            stringstream msg;
+            msg << "execp for process " << exePath << " [" << getPid() << "] failed!" << endl;
+            cerr << msg.str();
+        } else if (pid == -1) {
+            perror("fork");
+            exit(EXIT_FAILURE);
+        }
+        // printf("Started process %s with pid %d\n", exePath.c_str(), pid);
+        return pid;
+    #else
+        cerr << "Windows runProcess NYI!" << endl;
+        exit(EXIT_FAILURE);
+    #endif
+}
+
+pid_t waitProcess(int *status) {
+    #ifndef USING_WIN
+        return wait(status);
+    #else
+        cerr << "Windows waitProcess NYI!" << endl;
+        exit(EXIT_FAILURE);
+    #endif
+}
+
+pid_t getPid() {
+    #ifndef USING_WIN
+        return getpid();
+    #else
+        cerr << "Windows getpid NYI!" << endl;
+        exit(EXIT_FAILURE);
+    #endif
+}
 
 zmq::message_t createMessageWithStrings(vector<string> &strings, int offset, int spaceAfter) {
     int totalSize = 0;
@@ -60,6 +108,52 @@ std::vector<std::string> readStringsFromMessage(zmq::message_t &message, int off
 
     return result;
 }
+
+string getSumoPath(bool gui) {
+    string sumoExe;
+    if(gui)
+        sumoExe = "/bin/sumo-gui";
+    else
+        sumoExe = "/bin/sumo";
+
+    string sumoPath;
+    char* sumoPathPtr(getenv("SUMO_HOME"));
+    if (sumoPathPtr == NULL) {
+        std::cout << "$SUMO_HOME is not set! Must set $SUMO_HOME." << std::endl;
+        exit(EXIT_FAILURE);
+    } else {
+        sumoPath = sumoPathPtr;
+        std::cout << "$SUMO_HOME is set to '" << sumoPath << "'" << std::endl;
+        return sumoPath + sumoExe;
+    }
+}
+
+filesystem::path getPartitionDataFile(string dataFolder, int partId) {
+    stringstream fname;
+    fname << "partData" << partId << ".json";
+    return filesystem::path(dataFolder) / fname.str();
+}
+
+filesystem::path getCurrentExePath() {
+    char buffer[1024];
+    #ifdef USING_WIN
+        GetModuleFileName(NULL, buffer, sizeof(buffer));
+    #elif __linux__
+        ssize_t count = readlink("/proc/self/exe", buffer, sizeof(buffer));
+        if (count != -1) {
+            buffer[count] = '\0';
+        }
+    #elif __APPLE__ // Half-baked, as the rest of the program doesn't likely support Apple
+        uint32_t size = sizeof(buffer);
+        _NSGetExecutablePath(buffer, &size);
+    #endif
+    return string(buffer);
+}
+
+filesystem::path getCurrentExeDirectory()  {
+    return std::filesystem::path(getCurrentExePath()).parent_path();
+}
+
 
 string getStackTrace() {
     stringstream outStream;
@@ -121,4 +215,6 @@ string getStackTrace() {
 
 void printStackTrace() {
     cerr << getStackTrace();
+}
+
 }

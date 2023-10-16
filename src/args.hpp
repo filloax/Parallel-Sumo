@@ -8,18 +8,17 @@ Author: Filippo Lenzi
 
 #pragma once
 
-#include <libs/argparse.hpp>
+#include <argparse/argparse.hpp>
+#include <cstdlib>
+#include <sstream>
 
 class Args {
+protected:
+    bool printOnParse = true;
 public:
     Args(argparse::ArgumentParser& program):
     program(program)
     {
-        program.add_argument("-p", "--port")
-            .help("Port for the first thread's server")
-            .default_value(1337)
-            .scan<'i', int>();
-            ;
         program.add_argument("-c", "--cfg")
             .help("Sumo config path")
             // For demo purposes
@@ -54,7 +53,6 @@ public:
     void parse_known_args(int argc, char* argv[]) {
         sumoArgs = program.parse_known_args(argc, argv);
         
-        port = program.get<int>("--port");
         cfg = program.get<std::string>("--cfg");
         numThreads = program.get<int>("--num-threads");
         partitioningThreads = program.get<int>("--part-threads");
@@ -63,23 +61,27 @@ public:
         keepPoly = program.get<bool>("--keep-poly");
         dataDir = program.get<std::string>("--data-dir");
 
+        std::stringstream msg;
         if (numThreads <= 0) {
-            std::cerr << "Error: wrong number of threads, must be positive number (can be 1 for testing), is " << numThreads << std::endl;
-            exit(-1);
+            msg << "Error: wrong number of threads, must be positive number (can be 1 for testing), is " << numThreads << std::endl;
+            std::cerr << msg.str();
+            exit(EXIT_FAILURE);
         }
         if (partitioningThreads <= 0) {
-            std::cerr << "Error: wrong number of partitioning threads, must be positive number (can be 1 for testing), is " << partitioningThreads << std::endl;
-            exit(-1);
+            msg << "Error: wrong number of partitioning threads, must be positive number (can be 1 for testing), is " << partitioningThreads << std::endl;
+            std::cerr << msg.str();
+            exit(EXIT_FAILURE);
         }
 
-        std::cout << "port=" << port << ", cfg=" << cfg
-            << ", numThreads=" << numThreads << ", partitioningThreads=" << partitioningThreads
-            << ", gui=" << gui << ", skipPart=" << skipPart
-            << ", keepPoly=" << keepPoly << ", dataDir=" << dataDir
-            << std::endl;
+        if (printOnParse) {
+            std::cout << "cfg=" << cfg << ", numThreads=" << numThreads 
+                << ", partitioningThreads=" << partitioningThreads
+                << ", gui=" << gui << ", skipPart=" << skipPart
+                << ", keepPoly=" << keepPoly << ", dataDir=" << dataDir
+                << std::endl;
+        }
     }
 
-    int port;
     std::string cfg;
     int numThreads;
     int partitioningThreads;

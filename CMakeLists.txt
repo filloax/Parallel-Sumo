@@ -3,6 +3,10 @@ project(ParallelSumo)
 
 set(CMAKE_CXX_STANDARD 17)
 
+option(PSUMO_SINGLE_EXECUTABLE "Create a single executable 
+    using fork instead of making partitions a separate exe
+    (currently doesn't work)" OFF)
+
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
@@ -21,20 +25,31 @@ endif()
 set(SRC_DIR src)
 set(LIBS_DIR libs)
 
-set(SOURCE_FILES
-    ${SRC_DIR}/NeighborPartitionHandler.cpp
+set(SOURCE_FILES_COORDINATOR
     ${SRC_DIR}/ParallelSim.cpp
+    ${SRC_DIR}/args.hpp
+    ${SRC_DIR}/utils.cpp
+    ${SRC_DIR}/messagingShared.cpp
+    ${SRC_DIR}/psumoTypes.hpp
+    ${SRC_DIR}/globals.hpp
+    ${SRC_DIR}/main.cpp
+)
+
+set(SOURCE_FILES_PARTITION
+    ${SRC_DIR}/NeighborPartitionHandler.cpp
     ${SRC_DIR}/PartitionEdgesStub.cpp
     ${SRC_DIR}/PartitionManager.cpp
     ${SRC_DIR}/args.hpp
-    ${SRC_DIR}/main.cpp
+    ${SRC_DIR}/partArgs.hpp
     ${SRC_DIR}/utils.cpp
     ${SRC_DIR}/messagingShared.cpp
+    ${SRC_DIR}/psumoTypes.hpp
+    ${SRC_DIR}/globals.hpp
+    ${SRC_DIR}/partitionMain.cpp
 )
 
 # Add library files
 set(LIB_FILES
-    ${LIBS_DIR}/argparse.hpp
     ${LIBS_DIR}/tinyxml2.cpp
 )
 
@@ -45,7 +60,12 @@ include_directories(
     .
 )
 
-add_executable(ParallelSumo ${SOURCE_FILES} ${LIB_FILES})
+add_executable(ParallelSumo ${SOURCE_FILES_COORDINATOR} ${LIB_FILES})
+if (NOT PSUMO_SINGLE_EXECUTABLE)
+    add_executable(ParallelSumo-Partition ${SOURCE_FILES_PARTITION} ${LIB_FILES})
+    message(STATUS "Added partition executable")
+endif()
+
 
 # ## load in pkg-config support
 # find_package(PkgConfig)
@@ -54,36 +74,49 @@ add_executable(ParallelSumo ${SOURCE_FILES} ${LIB_FILES})
 
 #find cppzmq wrapper, installed by make of cppzmq
 find_package(cppzmq)
-target_link_libraries(ParallelSumo cppzmq)
 message(STATUS "ZMQ CPP dir: " ${cppzmq_INCLUDE_DIR})
 message(STATUS "(If the above is missing, you should properly install zeromq AND cppzmq and configure it for your platform)")
 
-# ## use the hint from above to find where 'zmq.hpp' is located
-# find_path(ZeroMQ_INCLUDE_DIR
-#         NAMES zmq.hpp
-#         PATHS ${PC_ZeroMQ_INCLUDE_DIRS}
-#         )
-# message(STATUS "ZeroMQ include dir: " ${ZeroMQ_INCLUDE_DIR})
+find_package(nlohmann_json 3.2.0 REQUIRED)
 
-# ## use the hint from above to find the location of libzmq
-# find_library(ZeroMQ_LIBRARY
-#         NAMES zmq
-#         PATHS ${PC_ZeroMQ_LIBRARY_DIRS}
-#         )
-# message(STATUS "ZeroMQ library: " ${ZeroMQ_LIBRARY})
-# message(STATUS "(If the above is missing, you should properly install zeromq and configure it for your platform)")
+#fetch argparse
+include(FetchContent)
+FetchContent_Declare(
+    argparse
+    GIT_REPOSITORY https://github.com/p-ranav/argparse.git
+)
+FetchContent_MakeAvailable(argparse)
 
 # Link directories and libraries
-target_link_libraries(ParallelSumo sumocpp zmq)
+target_link_libraries(ParallelSumo           cppzmq zmq sumocpp nlohmann_json::nlohmann_json argparse)
+target_link_libraries(ParallelSumo-Partition cppzmq zmq sumocpp nlohmann_json::nlohmann_json argparse)
+
 link_directories(${SUMO_HOME}/bin)
+
+if (PSUMO_SINGLE_EXECUTABLE)
+    message(STATUS "PSUMO_SINGLE_EXECUTABLE on")
+    add_compile_definitions(PSUMO_SINGLE_EXECUTABLE)
+else()
+    message(STATUS "PSUMO_SINGLE_EXECUTABLE off")
+endif()
 
 # Add header files for IDEs that support autocompletion
 target_sources(ParallelSumo PRIVATE
-    ${SRC_DIR}/NeighborPartitionHandler.hpp
     ${SRC_DIR}/ParallelSim.hpp
+    ${SRC_DIR}/utils.hpp
+    ${SRC_DIR}/psumoTypes.hpp
+    ${SRC_DIR}/args.hpp
+    ${SRC_DIR}/globals.hpp
+)
+target_sources(ParallelSumo-Partition PRIVATE
+    ${SRC_DIR}/NeighborPartitionHandler.hpp
     ${SRC_DIR}/PartitionEdgesStub.hpp
     ${SRC_DIR}/PartitionManager.hpp
     ${SRC_DIR}/utils.hpp
+    ${SRC_DIR}/psumoTypes.hpp
+    ${SRC_DIR}/args.hpp
+    ${SRC_DIR}/partArgs.hpp
+    ${SRC_DIR}/globals.hpp
 )
 
 message(STATUS "Include directories = ${INCLUDE_DIRECTORIES}")

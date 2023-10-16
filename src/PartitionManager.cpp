@@ -10,6 +10,7 @@ Contributions: Filippo Lenzi
 */
 #include "PartitionManager.hpp"
 
+#include <cstdlib>
 #include <iostream>
 #include <algorithm>
 #include <iterator>
@@ -25,7 +26,6 @@ Contributions: Filippo Lenzi
 #include <algorithm>
 #include <vector>
 #include <shared_mutex>
-#include <unistd.h>
 
 #include <libsumo/libsumo.h>
 #include <zmq.hpp>
@@ -34,6 +34,7 @@ Contributions: Filippo Lenzi
 #include "NeighborPartitionHandler.hpp"
 #include "PartitionEdgesStub.hpp"
 #include "ParallelSim.hpp"
+#include "partArgs.hpp"
 #include "utils.hpp"
 #include "args.hpp"
 
@@ -41,6 +42,7 @@ static int numInstancesRunning = 0;
 
 using namespace libsumo;
 using namespace std;
+using namespace psumo;
 
 /**
 Uses LibSumo methods to handle the partition internally.
@@ -51,7 +53,12 @@ PartitionManager::PartitionManager(
   partId_t id, string& cfg, int endTime,
   std::vector<partId_t> neighborPartitions,
   zmq::context_t& zcontext, int numThreads,
-  std::vector<string> sumoArgs, Args& args
+  std::vector<string> sumoArgs,
+  #ifdef PSUMO_SINGLE_EXECUTABLE
+  Args& args
+  #else
+  PartArgs& args
+  #endif
   ) :
   binary(binary),
   id(id),
@@ -92,18 +99,20 @@ void PartitionManager::setMyBorderEdges(std::vector<border_edge_t>& borderEdges)
 
 // Returns pid of simulation process
 int PartitionManager::startPartitionNewProcess() {
-  printf("Manager %d: creating process, cfg %s\n", id, cfg.c_str());
-  running = true;
-  int pid = fork();
-  if (pid == -1) {
-    cerr << "Error in forking to create partition process!" << endl;
-    exit(-1);
-  }
-  if (pid == 0) {
-    exit(-99);
-    runSimulation();
-  }
-  return pid;
+  cerr << "startPartitionNewProcess to be redone for platform-neutral stuff, currently unused" << endl;
+  exit(EXIT_FAILURE);
+  // printf("Manager %d: creating process, cfg %s\n", id, cfg.c_str());
+  // running = true;
+  // int pid = fork();
+  // if (pid == -1) {
+  //   cerr << "Error in forking to create partition process!" << endl;
+  //   exit(-1);
+  // }
+  // if (pid == 0) {
+  //   exit(-99);
+  //   runSimulation();
+  // }
+  // return pid;
 }
 
 void PartitionManager::startPartitionLocalProcess() {
@@ -165,11 +174,16 @@ void PartitionManager::handleIncomingEdges(int num, std::vector<std::vector<stri
 }
 
 void PartitionManager::handleOutgoigEdges(int num, std::vector<std::vector<string>>& prevVehicles) {
+  printf("=== Manager %d | OUTGOING EDGES\n", id);
   for(int fromEdgeIdx = 0; fromEdgeIdx < num; fromEdgeIdx++) {
+    printf("=== Manager %d | EDGE %d/%d \n", id, fromEdgeIdx, num);
     std::vector<string> edgeVehicles = Edge::getLastStepVehicleIDs(toBorderEdges[fromEdgeIdx].id);
     int toId = fromBorderEdges[fromEdgeIdx].to;
 
+    printf("=== Manager %d | %d: A\n", id, fromEdgeIdx);
+
     if(!edgeVehicles.empty()) {
+      printf("=== Manager %d | %d: B0\n", id, fromEdgeIdx);
       PartitionEdgesStub* partStub = neighborPartitionStubs[toId];
       for(string veh : edgeVehicles) {
         auto it = std::find(prevVehicles[fromEdgeIdx].begin(), prevVehicles[fromEdgeIdx].end(), veh);
@@ -177,6 +191,7 @@ void PartitionManager::handleOutgoigEdges(int num, std::vector<std::vector<strin
         if(it == prevVehicles[fromEdgeIdx].end()) {
 
           // check if vehicle not already on edge (if a vehicle starts on a border edge)
+          printf("=== Manager %d | Getting edge vehicles at %d: %s\n", id, toId, fromBorderEdges[fromEdgeIdx].id.c_str());
           std::vector<string> toVehs = partStub->getEdgeVehicles(fromBorderEdges[fromEdgeIdx].id);
           string route = Vehicle::getRouteID(veh);
 
@@ -218,9 +233,12 @@ void PartitionManager::handleOutgoigEdges(int num, std::vector<std::vector<strin
           }
         }
       }
+      printf("=== Manager %d | %d: B1\n", id, fromEdgeIdx);
     }
     prevVehicles[fromEdgeIdx] = edgeVehicles;
+    printf("=== Manager %d | %d: C\n", id, fromEdgeIdx);
   }
+  printf("=== Manager %d | DONE\n", id);
 }
 
 void PartitionManager::arriveWaitBarrier() {
@@ -251,7 +269,7 @@ void PartitionManager::signalFinish() {
 
 // Only run in new process
 void PartitionManager::runSimulation() {
-  printf("Manager %d | Starting simulation...\n", id);
+  printf("Manager %d | Starting simulation logic\n", id);
 
   pid_t pid;
   std::vector<string> simArgs {
@@ -266,7 +284,7 @@ void PartitionManager::runSimulation() {
   numInstancesRunning++;
   if (numInstancesRunning > 1) {
     stringstream msg;
-    msg << "[WARN] [pid=" << getpid() << ",id=" << id << "] More than one instance of PartitionManager running in this process, "
+    msg << "[WARN] [pid=" << getPid() << ",id=" << id << "] More than one instance of PartitionManager running in this process, "
       << "remember that only one simulation can be run with LibSumo per process."
       << std::endl;
     std::cerr << msg.str();
@@ -274,6 +292,11 @@ void PartitionManager::runSimulation() {
 
   // Start simulation in this process
   // Note: doesn't support GUI
+  stringstream startMsg;
+  startMsg << "Manager " << id << " | Starting simulation with args: ";
+  for (string arg: simArgs) startMsg << arg << " ";
+  startMsg << endl;
+  cout << startMsg.str();
   Simulation::start(simArgs);
   try {
     for (auto partId : neighborPartitions) {
@@ -313,7 +336,7 @@ void PartitionManager::runSimulation() {
   }
 
   stringstream msg;
-  msg << "-- partition " << id << " started in process " << getpid() << "--" << std::endl;
+  msg << "-- partition " << id << " started in process " << getPid() << "--" << std::endl;
   std::cout << msg.str();
 
   int numFromEdges = fromBorderEdges.size();

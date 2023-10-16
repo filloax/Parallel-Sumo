@@ -125,10 +125,12 @@ void NeighborPartitionHandler::listenCheck() {
 void NeighborPartitionHandler::listenThreadLogic() {
     while(!term) {
         if (listening) {
+            printf("Part. handler %d | Starting listen loop...\n", owner.getId());
             while(!stop_) {
                 listenCheck();
             }
             listening = false;
+            printf("Part. handler %d | Stopped listen loop\n", owner.getId());
         } else {
             unique_lock<mutex> lock(secondThreadSignalLock);
             secondThreadCondition.wait(lock, [this] { return listening; });

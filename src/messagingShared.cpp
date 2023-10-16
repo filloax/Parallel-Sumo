@@ -14,7 +14,7 @@ Author: Filippo Lenzi
 using namespace std;
 
 // #ifdef USING_WIN
-  #define Z_USES_TCP
+  // #define Z_USES_TCP
 // #endif
 
 #define SYNC_SOCKETS_START 4500
@@ -31,7 +31,7 @@ string psumo::getSocketName(std::string dataFolder, partId_t from, partId_t to, 
         out << "ipc://" << dataFolder << "/sockets/" << from << "-" << to;
     #else
         int port = PART_SOCKETS_START + cantorPairing(from, to, numThreads);
-        out << "tcp://localhost:" <<  port;
+        out << "tcp://127.0.0.1:" <<  port;
     #endif
 
     return out.str();
@@ -44,8 +44,9 @@ string psumo::getSyncSocketId(std::string dataFolder, partId_t partId) {
     out << "ipc://" << dataFolder << "/sockets/" << partId << "-main-s";
   #else
     int port = SYNC_SOCKETS_START + partId;
-    out << "tcp://localhost:" <<  port;
+    out << "tcp://127.0.0.1:" <<  port;
   #endif
 
   return out.str();
 }
+

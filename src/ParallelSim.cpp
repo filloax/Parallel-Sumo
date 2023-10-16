@@ -15,6 +15,7 @@ Contributions: Filippo Lenzi
 #include <iostream>
 #include <fstream>
 #include <ctime>
+#include <nlohmann/json_fwd.hpp>
 #include <sstream>
 #include <string>
 #include <stdlib.h>
@@ -25,21 +26,26 @@ Contributions: Filippo Lenzi
 #include <set>
 #include <filesystem> // C++17
 
-// POSIX stuff
-#include <unistd.h>
-#include <sys/wait.h>
-
 #include <zmq.h>
 #include <zmq.hpp>
+#include <nlohmann/json.hpp>
 
 #include "messagingShared.hpp"
 #include "libs/tinyxml2.h"
+#include "src/globals.hpp"
 #include "utils.hpp"
 #include "args.hpp"
+#include "psumoTypes.hpp"
+
+#ifdef PSUMO_SINGLE_EXECUTABLE
+  #include <unistd.h>
+  #include "PartitionManager.hpp"
+#endif
 
 namespace fs = std::filesystem;
 
 using namespace std;
+using namespace psumo;
 
 typedef std::unordered_multimap<string, int>::iterator umit;
 
@@ -50,24 +56,15 @@ ParallelSim::ParallelSim(string cfg, bool gui, int threads, vector<string>& sumo
   args(args)
   {
 
-  // set paths for sumo executable binaries
-  string sumoExe;
-  if(gui)
-    sumoExe = "/bin/sumo-gui";
-  else
-    sumoExe = "/bin/sumo";
+  #ifdef PSUMO_SINGLE_EXECUTABLE
+    cout << "ParallelSim | Creating in single executable mode!" << endl;
+  #endif
 
-  string sumoPath;
-  char* sumoPathPtr(getenv("SUMO_HOME"));
-  if (sumoPathPtr == NULL) {
-    std::cout << "$SUMO_HOME is not set! Must set $SUMO_HOME." << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  else {
-    sumoPath = sumoPathPtr;
-    std::cout << "$SUMO_HOME is set to '" << sumoPath << "'" << std::endl;
-    SUMO_BINARY = sumoPath + sumoExe;
-  }
+  // set paths for sumo executable binaries
+  #ifdef PSUMO_SINGLE_EXECUTABLE
+  SUMO_BINARY = getSumoPath(gui);
+  #endif
+
   // get end time
   tinyxml2::XMLDocument cfgDoc;
   tinyxml2::XMLError e = cfgDoc.LoadFile(cfgFile.c_str());
@@ -153,7 +150,7 @@ void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
   }
 
   vector<string> partArgs {
-    pythonCommand, "scripts/createParts.py",
+    "scripts/createParts.py",
     "-n", std::to_string(numThreads),
     "-C", cfgFile,
     "--data-folder", args.dataDir
@@ -170,32 +167,17 @@ void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
     partArgs.push_back(std::to_string(args.partitioningThreads));
   }
 
-  pid_t pid;
+  std::cout << "Running createParts.py to split graph and create partition files..." << std::endl;
+
+  runProcess(pythonPath, partArgs);
+
   int status;
-  switch(pid = fork()) {
-    case -1:
-      // fork() has failed
-      perror("fork");
-      break;
-    case 0:
-      std::cout << "Running createParts.py to split graph and create partition files..." << std::endl;
-      std::cout << "command: ";
-      for (int i = 0; i < partArgs.size(); i++) std::cout << partArgs[i] << " ";
-      std::cout << std::endl;
-      EXECVP_CPP(partArgs);
-      std::cerr << "execvp() for createParts.py has failed: " << errno << std::endl;
-      exit(EXIT_FAILURE);
-      break;
-    default:
-      // waiting for convertToMetis.py
-      pid = wait(&status);
-      if(WEXITSTATUS(status)) {
-        std::cout << "failed while partitioning" << std::endl;
-        exit(EXIT_FAILURE);
-      }
-      printf("partitioning successful with status: %d\n", WEXITSTATUS(status));
-      break;
+  waitProcess(&status);
+  if(WEXITSTATUS(status)) {
+    std::cout << "failed while partitioning" << std::endl;
+    exit(EXIT_FAILURE);
   }
+  printf("partitioning successful with status: %d\n", WEXITSTATUS(status));
 }
 
 void ParallelSim::loadRealNumThreads() {
@@ -302,7 +284,7 @@ void ParallelSim::calcBorderEdges(vector<vector<border_edge_t>>& borderEdges, ve
 
 void ParallelSim::startSim(){
   if (numThreads > 1)
-    this->loadRealNumThreads();
+    loadRealNumThreads();
 
   if (numThreads == 1) {
     std::cout << "Running in 1 thread mode, will use the original cfg (not intended? check your --num-threads param or the partitions created)" << std::endl;
@@ -321,28 +303,62 @@ void ParallelSim::startSim(){
 
   // create partitions
   for(partId_t i=0; i<numThreads; i++) {
-    if (numThreads > 1)
-      partCfg = args.dataDir + "/part"+std::to_string(i)+".sumocfg";
-    else // Only one thread, so use normal config, for the purpose of benchmarking comparisions
-      partCfg = cfgFile;
+    nlohmann::json partData;
+    partData["id"] = i;
+    partData["neighbors"] = partNeighbors[i];
+    // nlohmann::json handles the conversion, see psumoTypes.cpp
+    partData["borderEdges"] = borderEdges[i];
+    std::ofstream out(getPartitionDataFile(args.dataDir, i));
+    out << partData.dump(2);
+    out.close();
 
-    int pid = fork();
+    pid_t pid;
+
+    #ifndef PSUMO_SINGLE_EXECUTABLE
+      auto exeDir = getCurrentExeDirectory();
+      vector<string> partArgs ({
+        "-P", to_string(i),
+        "-T", to_string(endTime),
+        // Base ParallelSumo args, not all needed by partition
+        // but pass everything for consistency
+        "-N", to_string(args.numThreads),
+        "-c", args.cfg,
+        "--part-threads", to_string(args.partitioningThreads),
+        "--data-dir", args.dataDir
+      });
+      if (args.gui) partArgs.push_back("--gui");
+      if (args.skipPart) partArgs.push_back("--skip-part");
+      if (args.keepPoly) partArgs.push_back("--keep-poly");
+      pid = runProcess(exeDir / PROGRAM_NAME_PART, partArgs);
+    #else
+
+    pid = fork();
     if (pid == 0) {
       printf("Creating partition manager %d on cfg file %s\n", i, partCfg.c_str());
 
-      PartitionManager part(
-        SUMO_BINARY, i, partCfg, endTime, 
-        partNeighbors[i], zctx, numThreads,
-        sumoArgs, args
-      );
-      part.setMyBorderEdges(borderEdges[i]);
-      part.startPartitionLocalProcess();
-      printf("Finished partition %d\n", i);
-      exit(0);
+        if (numThreads > 1)
+          partCfg = args.dataDir + "/part"+std::to_string(i)+".sumocfg";
+        else // Only one thread, so use normal config, for the purpose of benchmarking comparisions
+          partCfg = cfgFile;
+
+        PartitionManager part(
+          SUMO_BINARY, i, partCfg, endTime, 
+          partNeighbors[i], zctx, numThreads,
+          sumoArgs, args
+        );
+        part.setMyBorderEdges(borderEdges[i]);
+        part.startPartitionLocalProcess();
+        printf("Finished partition %d\n", i);
+        exit(0);
     } else {
+    #endif
+
       printf("Created partition %d on pid %d\n", i, pid);
       // if needed, add pid to a partition pids list later
+    
+    #ifdef PSUMO_SINGLE_EXECUTABLE
     }
+    #endif
   }
 
   // From here, coordination process

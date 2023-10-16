@@ -14,6 +14,8 @@ class PartitionEdgesStub;
 
 #include "PartitionManager.hpp"
 
+using namespace psumo;
+
 class PartitionEdgesStub {
 private:
     Args& args;

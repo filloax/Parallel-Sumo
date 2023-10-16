@@ -1,50 +1,74 @@
 [
 {
   "directory": "/home/fillo/Documents/tesim/Parallel-Sumo/build",
-  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -g -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/NeighborPartitionHandler.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/src/NeighborPartitionHandler.cpp",
-  "file": "/home/fillo/Documents/tesim/Parallel-Sumo/src/NeighborPartitionHandler.cpp",
-  "output": "CMakeFiles/ParallelSumo.dir/src/NeighborPartitionHandler.cpp.o"
-},
-{
-  "directory": "/home/fillo/Documents/tesim/Parallel-Sumo/build",
-  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -g -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/ParallelSim.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/src/ParallelSim.cpp",
+  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -I/home/fillo/Documents/tesim/Parallel-Sumo/build/_deps/argparse-src/include -g -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/ParallelSim.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/src/ParallelSim.cpp",
   "file": "/home/fillo/Documents/tesim/Parallel-Sumo/src/ParallelSim.cpp",
   "output": "CMakeFiles/ParallelSumo.dir/src/ParallelSim.cpp.o"
 },
 {
   "directory": "/home/fillo/Documents/tesim/Parallel-Sumo/build",
-  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -g -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/PartitionEdgesStub.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/src/PartitionEdgesStub.cpp",
-  "file": "/home/fillo/Documents/tesim/Parallel-Sumo/src/PartitionEdgesStub.cpp",
-  "output": "CMakeFiles/ParallelSumo.dir/src/PartitionEdgesStub.cpp.o"
-},
-{
-  "directory": "/home/fillo/Documents/tesim/Parallel-Sumo/build",
-  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -g -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/PartitionManager.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/src/PartitionManager.cpp",
-  "file": "/home/fillo/Documents/tesim/Parallel-Sumo/src/PartitionManager.cpp",
-  "output": "CMakeFiles/ParallelSumo.dir/src/PartitionManager.cpp.o"
-},
-{
-  "directory": "/home/fillo/Documents/tesim/Parallel-Sumo/build",
-  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -g -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/main.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/src/main.cpp",
-  "file": "/home/fillo/Documents/tesim/Parallel-Sumo/src/main.cpp",
-  "output": "CMakeFiles/ParallelSumo.dir/src/main.cpp.o"
-},
-{
-  "directory": "/home/fillo/Documents/tesim/Parallel-Sumo/build",
-  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -g -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/utils.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/src/utils.cpp",
+  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -I/home/fillo/Documents/tesim/Parallel-Sumo/build/_deps/argparse-src/include -g -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/utils.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/src/utils.cpp",
   "file": "/home/fillo/Documents/tesim/Parallel-Sumo/src/utils.cpp",
   "output": "CMakeFiles/ParallelSumo.dir/src/utils.cpp.o"
 },
 {
   "directory": "/home/fillo/Documents/tesim/Parallel-Sumo/build",
-  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -g -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/messagingShared.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/src/messagingShared.cpp",
+  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -I/home/fillo/Documents/tesim/Parallel-Sumo/build/_deps/argparse-src/include -g -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/messagingShared.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/src/messagingShared.cpp",
   "file": "/home/fillo/Documents/tesim/Parallel-Sumo/src/messagingShared.cpp",
   "output": "CMakeFiles/ParallelSumo.dir/src/messagingShared.cpp.o"
 },
 {
   "directory": "/home/fillo/Documents/tesim/Parallel-Sumo/build",
-  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -g -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/libs/tinyxml2.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/libs/tinyxml2.cpp",
+  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -I/home/fillo/Documents/tesim/Parallel-Sumo/build/_deps/argparse-src/include -g -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/src/main.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/src/main.cpp",
+  "file": "/home/fillo/Documents/tesim/Parallel-Sumo/src/main.cpp",
+  "output": "CMakeFiles/ParallelSumo.dir/src/main.cpp.o"
+},
+{
+  "directory": "/home/fillo/Documents/tesim/Parallel-Sumo/build",
+  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -I/home/fillo/Documents/tesim/Parallel-Sumo/build/_deps/argparse-src/include -g -std=gnu++17 -o CMakeFiles/ParallelSumo.dir/libs/tinyxml2.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/libs/tinyxml2.cpp",
   "file": "/home/fillo/Documents/tesim/Parallel-Sumo/libs/tinyxml2.cpp",
   "output": "CMakeFiles/ParallelSumo.dir/libs/tinyxml2.cpp.o"
+},
+{
+  "directory": "/home/fillo/Documents/tesim/Parallel-Sumo/build",
+  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -I/home/fillo/Documents/tesim/Parallel-Sumo/build/_deps/argparse-src/include -g -std=gnu++17 -o CMakeFiles/ParallelSumo-Partition.dir/src/NeighborPartitionHandler.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/src/NeighborPartitionHandler.cpp",
+  "file": "/home/fillo/Documents/tesim/Parallel-Sumo/src/NeighborPartitionHandler.cpp",
+  "output": "CMakeFiles/ParallelSumo-Partition.dir/src/NeighborPartitionHandler.cpp.o"
+},
+{
+  "directory": "/home/fillo/Documents/tesim/Parallel-Sumo/build",
+  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -I/home/fillo/Documents/tesim/Parallel-Sumo/build/_deps/argparse-src/include -g -std=gnu++17 -o CMakeFiles/ParallelSumo-Partition.dir/src/PartitionEdgesStub.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/src/PartitionEdgesStub.cpp",
+  "file": "/home/fillo/Documents/tesim/Parallel-Sumo/src/PartitionEdgesStub.cpp",
+  "output": "CMakeFiles/ParallelSumo-Partition.dir/src/PartitionEdgesStub.cpp.o"
+},
+{
+  "directory": "/home/fillo/Documents/tesim/Parallel-Sumo/build",
+  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -I/home/fillo/Documents/tesim/Parallel-Sumo/build/_deps/argparse-src/include -g -std=gnu++17 -o CMakeFiles/ParallelSumo-Partition.dir/src/PartitionManager.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/src/PartitionManager.cpp",
+  "file": "/home/fillo/Documents/tesim/Parallel-Sumo/src/PartitionManager.cpp",
+  "output": "CMakeFiles/ParallelSumo-Partition.dir/src/PartitionManager.cpp.o"
+},
+{
+  "directory": "/home/fillo/Documents/tesim/Parallel-Sumo/build",
+  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -I/home/fillo/Documents/tesim/Parallel-Sumo/build/_deps/argparse-src/include -g -std=gnu++17 -o CMakeFiles/ParallelSumo-Partition.dir/src/utils.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/src/utils.cpp",
+  "file": "/home/fillo/Documents/tesim/Parallel-Sumo/src/utils.cpp",
+  "output": "CMakeFiles/ParallelSumo-Partition.dir/src/utils.cpp.o"
+},
+{
+  "directory": "/home/fillo/Documents/tesim/Parallel-Sumo/build",
+  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -I/home/fillo/Documents/tesim/Parallel-Sumo/build/_deps/argparse-src/include -g -std=gnu++17 -o CMakeFiles/ParallelSumo-Partition.dir/src/messagingShared.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/src/messagingShared.cpp",
+  "file": "/home/fillo/Documents/tesim/Parallel-Sumo/src/messagingShared.cpp",
+  "output": "CMakeFiles/ParallelSumo-Partition.dir/src/messagingShared.cpp.o"
+},
+{
+  "directory": "/home/fillo/Documents/tesim/Parallel-Sumo/build",
+  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -I/home/fillo/Documents/tesim/Parallel-Sumo/build/_deps/argparse-src/include -g -std=gnu++17 -o CMakeFiles/ParallelSumo-Partition.dir/src/partitionMain.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/src/partitionMain.cpp",
+  "file": "/home/fillo/Documents/tesim/Parallel-Sumo/src/partitionMain.cpp",
+  "output": "CMakeFiles/ParallelSumo-Partition.dir/src/partitionMain.cpp.o"
+},
+{
+  "directory": "/home/fillo/Documents/tesim/Parallel-Sumo/build",
+  "command": "/usr/bin/clang++ -I/usr/share/sumo/include -I/usr/share/sumo/src -I/home/fillo/Documents/tesim/Parallel-Sumo/. -I/home/fillo/Documents/tesim/Parallel-Sumo/build/_deps/argparse-src/include -g -std=gnu++17 -o CMakeFiles/ParallelSumo-Partition.dir/libs/tinyxml2.cpp.o -c /home/fillo/Documents/tesim/Parallel-Sumo/libs/tinyxml2.cpp",
+  "file": "/home/fillo/Documents/tesim/Parallel-Sumo/libs/tinyxml2.cpp",
+  "output": "CMakeFiles/ParallelSumo-Partition.dir/libs/tinyxml2.cpp.o"
 }
 ]

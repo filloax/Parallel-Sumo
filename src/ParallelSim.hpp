@@ -13,11 +13,13 @@ Contributions: Filippo Lenzi
 #include <cstdlib>
 #include <zmq.hpp>
 #include "args.hpp"
-#include "PartitionManager.hpp"
+#include "psumoTypes.hpp"
 
 class ParallelSim {
   private:
+    #ifdef PSUMO_SINGLE_EXECUTABLE
     std::string SUMO_BINARY;
+    #endif
     std::string path;
     std::string cfgFile;
     std::string netFile;
@@ -27,7 +29,7 @@ class ParallelSim {
     int endTime;
     Args args;
     // sets the border edges for all partitions
-    void calcBorderEdges(std::vector<std::vector<border_edge_t>>& borderEdges, std::vector<std::vector<partId_t>>& partNeighbors);
+    void calcBorderEdges(std::vector<std::vector<psumo::border_edge_t>>& borderEdges, std::vector<std::vector<psumo::partId_t>>& partNeighbors);
     void loadRealNumThreads();
 
     void coordinatePartitionsSync(zmq::context_t&);
