@@ -18,3 +18,4 @@ build-windows/**
 build-msys/**
 !build-msys/.dir
 .cache/**
+compile_commands.json
