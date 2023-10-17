@@ -2,6 +2,7 @@
 
 #include <boost/stacktrace/stacktrace_fwd.hpp>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <iostream>
 #include <sstream>
@@ -225,18 +226,36 @@ void printStackTrace() {
     cerr << getStackTrace();
 }
 
-void printVector(
-    const vector<string>& v, const string prefix, 
+template<typename T>
+void _printVector(
+    const vector<T>& v, const string prefix, 
     const string sep, const bool newline, ostream& stream
 ) {
     stringstream ss;
     ss << prefix;
-    for (int i = 0; i < v.size(); i++) {
-        ss << v[i];
-        if (i < v.size() - 1) ss << sep;
+    for (const auto& element : v) {
+        stream << element;
+        if (&element != &v.back()) {
+        stream << sep;
+        }
     }
     if (newline) ss << endl;
     stream << ss.str();
+}
+
+template<typename T>
+void printVector(
+    const vector<T, std::allocator<T>>& v, const string prefix, 
+    const string sep, const bool newline, ostream& stream
+) {
+    _printVector(v, prefix, sep, newline, stream);
+}
+
+void printVector(
+    const vector<string>& v, const string prefix, 
+    const string sep, const bool newline, ostream& stream
+) {
+    _printVector<string>(v, prefix, sep, newline, stream);
 }
 
 }

@@ -10,6 +10,7 @@ Contributions: Filippo Lenzi
 */
 #include "PartitionManager.hpp"
 
+#include <cstddef>
 #include <cstdlib>
 #include <exception>
 #include <iostream>
@@ -129,13 +130,31 @@ void PartitionManager::startPartitionLocalProcess() {
 vector<string> PartitionManager::getEdgeVehicles(const string& edgeId) {
   // For some reason, despite the signature, passing the C++ string
   // didn't work (as in, it didn't find the data)
+  #ifndef NDEBUG
+  try {
+  #endif
   return Edge::getLastStepVehicleIDs(edgeId.c_str());
+  #ifndef NDEBUG
+  } catch(exception& e) {
+    logerr("Error in getEdgeVehicles({}): {}", edgeId, e.what());
+    exit(EXIT_FAILURE);
+  }
+  #endif
 }
 
 void PartitionManager::setVehicleSpeed(const string& vehId, double speed) {
   // Using slowDown instead of setspeed as original program did it
   // Also use .c_str() for same reason as [getEdgeVehicles]
+  #ifndef NDEBUG
+  try {
+  #endif
   Vehicle::slowDown(vehId.c_str(), speed, Simulation::getDeltaT());
+  #ifndef NDEBUG
+  } catch(exception& e) {
+    logerr("Error in setVehicleSpeed({}, {}): {}", vehId, speed, e.what());
+    exit(EXIT_FAILURE);
+  }
+  #endif
 }
 void PartitionManager::addVehicle(
   const string& vehId, const string& routeId, const string& vehType,
@@ -144,10 +163,21 @@ void PartitionManager::addVehicle(
   string lanePosStr = std::to_string(lanePos);
   string speedStr = std::to_string(speed);
   // Use .c_str() for same reason as [getEdgeVehicles]
+  #ifndef NDEBUG
+  try {
+  #endif
   Vehicle::add(
     vehId.c_str(), routeId.c_str(), vehType.c_str(), "now", 
     laneId.c_str(), lanePosStr, speedStr
   );
+  #ifndef NDEBUG
+  } catch(exception& e) {
+    logerr("Error in addVehicle({}, {}, {}, {}, {}, {}, {}): {}", 
+      vehId, routeId, vehType, laneId, laneIndex, lanePos, speed, e.what());
+    exit(EXIT_FAILURE);
+  }
+  #endif
+
 }
 
 
@@ -402,4 +432,40 @@ void PartitionManager::runSimulation() {
   
   Simulation::close("ParallelSim terminated.");
   numInstancesRunning--;
+}
+
+template<typename... _Args > 
+inline void PartitionManager::log(std::format_string<_Args...> format, _Args&&... args) {
+    std::stringstream msg;
+    msg << "Manager " << id << " | ";
+    std::format_to(
+        std::ostreambuf_iterator<char>(msg), 
+        std::forward<std::format_string<_Args...>>(format),
+        std::forward<_Args>(args)...
+    );
+    std::cout << msg.str();
+}
+
+template<typename... _Args > 
+inline void PartitionManager::logminor(std::format_string<_Args...> format, _Args&&... args) {
+    std::stringstream msg;
+    msg << "\tManager " << id << " | ";
+    std::format_to(
+        std::ostreambuf_iterator<char>(msg), 
+        std::forward<std::format_string<_Args...>>(format),
+        std::forward<_Args>(args)...
+    );
+    std::cout << msg.str();
+}
+
+template<typename... _Args>
+inline void PartitionManager::logerr(std::format_string<_Args...> format, _Args&&... args) {
+    std::stringstream msg;
+    msg << "Manager " << id << " | ";
+    std::format_to(
+        std::ostreambuf_iterator<char>(msg), 
+        std::forward<std::format_string<_Args...>>(format),
+        std::forward<_Args>(args)...
+    );
+    std::cerr << msg.str();
 }

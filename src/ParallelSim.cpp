@@ -21,6 +21,7 @@ Contributions: Filippo Lenzi
 #include <stdlib.h>
 #include <fcntl.h>
 #include <iterator>
+#include <sys/types.h>
 #include <unordered_map>
 #include <vector>
 #include <set>
@@ -32,7 +33,7 @@ Contributions: Filippo Lenzi
 
 #include "messagingShared.hpp"
 #include "libs/tinyxml2.h"
-#include "src/globals.hpp"
+#include "globals.hpp"
 #include "utils.hpp"
 #include "args.hpp"
 #include "psumoTypes.hpp"
@@ -282,6 +283,24 @@ void ParallelSim::calcBorderEdges(vector<vector<border_edge_t>>& borderEdges, ve
   }
 }
 
+// Not reference so thread starts correctly
+void waitForPartitions(vector<pid_t> pids) {
+  __printVector(pids, "Coordinator[t] | Started partition wait thread, pids are: ", ", ", false, std::cout);
+  while (pids.size() > 0) {
+    int status;
+    pid_t pid = waitProcess(&status);
+    if (pid == -1) {
+      perror("waitProcess\n");
+    } else if (pid == 0) {
+      continue;
+    } else {
+      // A child process has exited
+      printf("Coordinator[t] | Child process %d exited with status %d\n", pid, status);
+      pids.erase(std::remove(pids.begin(), pids.end(), pid), pids.end());
+    }
+  }
+}
+
 void ParallelSim::startSim(){
   if (numThreads > 1)
     loadRealNumThreads();
@@ -300,6 +319,8 @@ void ParallelSim::startSim(){
   vector<vector<border_edge_t>> borderEdges(numThreads);
   vector<vector<int>> partNeighbors(numThreads);
   calcBorderEdges(borderEdges, partNeighbors);
+
+  vector<pid_t> pids(numThreads);
 
   // create partitions
   for(partId_t i=0; i<numThreads; i++) {
@@ -363,6 +384,7 @@ void ParallelSim::startSim(){
     #endif
 
       printf("Created partition %d on pid %d\n", i, pid);
+      pids[i] = pid;
       // if needed, add pid to a partition pids list later
     
     #ifdef PSUMO_SINGLE_EXECUTABLE
@@ -370,9 +392,14 @@ void ParallelSim::startSim(){
     #endif
   }
 
+  // Check for partition pids in case of unexpected exit in a subthread
+  thread waitThread(&waitForPartitions, pids);
+
   // From here, coordination process
 
   coordinatePartitionsSync(zctx);
+
+  waitThread.join();
 }
 
 void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {

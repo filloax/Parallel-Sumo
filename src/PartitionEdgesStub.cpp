@@ -100,7 +100,7 @@ std::vector<std::string> PartitionEdgesStub::getEdgeVehicles(const std::string& 
 void PartitionEdgesStub::setVehicleSpeed(const string& vehId, double speed) {
     int opcode = Operations::SET_VEHICLE_SPEED;
 
-    log("Preparing setVehicleSpeed\n");
+    log("Preparing setVehicleSpeed({}, {})\n", vehId, speed);
 
     // As usual, add +1 to string size to include NULL endpoint
     size_t msgLength = sizeof(int) + sizeof(double) + vehId.size() + 1;
@@ -111,7 +111,7 @@ void PartitionEdgesStub::setVehicleSpeed(const string& vehId, double speed) {
         &opcode, sizeof(int));
     std::memcpy( data + sizeof(int), 
         &speed,  sizeof(double));
-    std::memcpy(data + sizeof(double) + sizeof(int),
+    std::memcpy(data + sizeof(int) + sizeof(double),
         vehId.data(), vehId.size() + 1);
 
     log("Sending setSpeed\n");

@@ -59,6 +59,12 @@ private:
     // signal to main process that we finished
     void signalFinish();
 
+    template<typename... _Args > 
+        void log(std::format_string<_Args...>  format, _Args&&... args);
+    template<typename... _Args > 
+        void logminor(std::format_string<_Args...>  format, _Args&&... args);
+    template<typename... _Args > 
+        void logerr(std::format_string<_Args...>  format, _Args&&... args);
 protected:
     // start sumo simulation, already inside secondary process
     virtual void runSimulation();

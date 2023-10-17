@@ -13,6 +13,19 @@
     c_args.push_back(nullptr); \
     execvp(c_args[0], c_args.data());
 
+// Template doesn't work, for some reason
+#define __printVector(v, prefix, sep, newline, stream) {\
+    std::stringstream ss; ss << prefix; \
+    for (const auto& element : v) { \
+        stream << element; \
+        if (&element != &v.back()) { \
+            stream << sep; \
+        } \
+    } \
+    if (newline) ss << endl; \
+    stream << ss.str(); }
+
+
 namespace psumo {
     pid_t runProcess(std::string exePath, std::vector<std::string>& args);
     pid_t waitProcess(int* status);
@@ -20,6 +33,7 @@ namespace psumo {
 
     void printStackTrace();
     std::string getStackTrace();
+
     void printVector(
         const std::vector<std::string>&, const std::string prefix = "vector: ", 
         const std::string sep = ", ", const bool newline = true, std::ostream& stream = std::cout

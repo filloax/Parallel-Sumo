@@ -172,8 +172,9 @@ bool NeighborPartitionHandler::handleGetEdgeVehicles(zmq::message_t& request) {
     vector<string> edgeVehicles = owner.getEdgeVehicles(edgeId);
     auto reply = createMessageWithStrings(edgeVehicles);
     log("Sending reply to getEdgeVehicles({})\n", edgeId.c_str());
+
     stringstream ss;
-    ss << "\tPart handler " << clientId << "->" << owner.getId() << " | Replying with [";
+    ss << "\tPart. handler " << clientId << "->" << owner.getId() << " | Replying with [";
     printVector(edgeVehicles, "", ", ", false, ss);
     ss << "]" << endl;
     cout << ss.str();
@@ -184,10 +185,11 @@ bool NeighborPartitionHandler::handleGetEdgeVehicles(zmq::message_t& request) {
 
 bool NeighborPartitionHandler::handleSetVehicleSpeed(zmq::message_t& request) {
     double speed;
-    std::memcpy(&speed, static_cast<double*>(request.data()) + sizeof(int), sizeof(double));
+    const char* data = static_cast<char*>(request.data());
+    std::memcpy(&speed, data + sizeof(int), sizeof(double));
     string veh(
-        static_cast<char*>(request.data()) + sizeof(double) + sizeof(int), 
-        static_cast<char*>(request.data()) + request.size()
+        data + sizeof(double) + sizeof(int), 
+        data + request.size()
     );
     
     log("Queueing setVehicleSpeed ({}, {})\n", veh.c_str(), speed);
@@ -203,9 +205,10 @@ bool NeighborPartitionHandler::handleSetVehicleSpeed(zmq::message_t& request) {
 bool NeighborPartitionHandler::handleAddVehicle(zmq::message_t& request) {
     int laneIndex;
     double lanePos, speed;
-    std::memcpy(&laneIndex, static_cast<int*>(request.data()) + sizeof(int), sizeof(int));
-    std::memcpy(&lanePos, static_cast<double*>(request.data()) + sizeof(int) * 2, sizeof(double));
-    std::memcpy(&speed, static_cast<double*>(request.data()) + sizeof(int) * 2 + sizeof(double), sizeof(double));
+    const char* data = static_cast<char*>(request.data());
+    std::memcpy(&laneIndex, data + sizeof(int), sizeof(int));
+    std::memcpy(&lanePos, data + sizeof(int) * 2, sizeof(double));
+    std::memcpy(&speed, data + sizeof(int) * 2 + sizeof(double), sizeof(double));
 
     int stringsOffset = sizeof(int) * 2 + sizeof(double) * 2;
     auto strings = readStringsFromMessage(request, stringsOffset);
@@ -246,6 +249,8 @@ void NeighborPartitionHandler::applyMutableOperations() {
         // if it was inbetween one of them when we set this to stop
         operationsBufferLock.lock();
 
+        log("Mutable ops passed lock\n");
+
         for (auto addVeh : addVehicleQueue) {
             owner.addVehicle(
                 addVeh.vehId, addVeh.routeId, addVeh.vehType, 
@@ -271,7 +276,9 @@ void NeighborPartitionHandler::applyMutableOperations() {
 template<typename... _Args > 
 inline void NeighborPartitionHandler::log(std::format_string<_Args...> format, _Args&&... args) {
     std::stringstream msg;
-    msg << "\tPart. handler " << clientId << "->" << owner.getId() << " | ";
+    msg << "\tPart. handler " << clientId << "->" << owner.getId() 
+        << " [" << this_thread::get_id() << "]"
+        << " | ";
     std::format_to(
         std::ostreambuf_iterator<char>(msg), 
         std::forward<std::format_string<_Args...>>(format),
@@ -283,7 +290,9 @@ inline void NeighborPartitionHandler::log(std::format_string<_Args...> format, _
 template<typename... _Args>
 inline void NeighborPartitionHandler::logerr(std::format_string<_Args...> format, _Args&&... args) {
     std::stringstream msg;
-    msg << "\tPart. handler " << clientId << "->" << owner.getId() << " | ";
+    msg << "\tPart. handler " << clientId << "->" << owner.getId()
+        << " [" << this_thread::get_id() << "]"
+        << " | ";
     std::format_to(
         std::ostreambuf_iterator<char>(msg), 
         std::forward<std::format_string<_Args...>>(format),
