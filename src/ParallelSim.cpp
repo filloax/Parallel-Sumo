@@ -10,6 +10,7 @@ Contributions: Filippo Lenzi
 */
 #include "ParallelSim.hpp"
 
+#include <cstdio>
 #include <cstring>
 #include <exception>
 #include <iostream>
@@ -285,6 +286,11 @@ void ParallelSim::calcBorderEdges(vector<vector<border_edge_t>>& borderEdges, ve
 
 // Not reference so thread starts correctly
 void waitForPartitions(vector<pid_t> pids) {
+  map<pid_t, partId_t> pidParts;
+  for (int i = 0; i < pids.size(); i++) {
+    pidParts[pids[i]] = i;
+  }
+
   __printVector(pids, "Coordinator[t] | Started partition wait thread, pids are: ", ", ", false, std::cout);
   while (pids.size() > 0) {
     int status;
@@ -295,8 +301,14 @@ void waitForPartitions(vector<pid_t> pids) {
       continue;
     } else {
       // A child process has exited
-      printf("Coordinator[t] | Child process %d exited with status %d\n", pid, status);
+      printf("Coordinator[t] | Partition %d [pid %d] exited with status %d\n", pidParts[pid], pid, status);
       pids.erase(std::remove(pids.begin(), pids.end(), pid), pids.end());
+
+      if (status != 0) {
+        perror("Partition ended with an error! Closing in 3\n");
+        std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+        exit(-1);
+      }
     }
   }
 }

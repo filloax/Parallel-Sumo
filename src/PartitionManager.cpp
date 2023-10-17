@@ -132,6 +132,7 @@ vector<string> PartitionManager::getEdgeVehicles(const string& edgeId) {
   // didn't work (as in, it didn't find the data)
   #ifndef NDEBUG
   try {
+    logminor("Running getLastStepVehicleIDs({}[{}])\n", edgeId.c_str(), edgeId);
   #endif
   return Edge::getLastStepVehicleIDs(edgeId.c_str());
   #ifndef NDEBUG
@@ -147,6 +148,7 @@ void PartitionManager::setVehicleSpeed(const string& vehId, double speed) {
   // Also use .c_str() for same reason as [getEdgeVehicles]
   #ifndef NDEBUG
   try {
+    logminor("Running setVehicleSpeed({}[{}], {})\n", vehId.c_str(), vehId, speed);
   #endif
   Vehicle::slowDown(vehId.c_str(), speed, Simulation::getDeltaT());
   #ifndef NDEBUG
