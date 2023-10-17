@@ -74,7 +74,8 @@ int main(int argc, char* argv[]) {
             << e.what() << endl;
     }
 
-    ContextPool::destroyAll();
+    // Deleting context blocks forever
+    // ContextPool::destroyAll();
 }
 
 void loadPartData(int id, string dataFolder, vector<border_edge_t>& borderEdges, vector<partId_t>& partNeighbors) {

@@ -50,10 +50,6 @@ NeighborPartitionHandler::NeighborPartitionHandler(PartitionManager& owner, int 
 const int DISCONNECT_CONTEXT_TERMINATED_ERR = 156384765;
     
 NeighborPartitionHandler::~NeighborPartitionHandler() {
-    #ifndef NDEBUG
-        logerr("Destroying...\n");
-        printStackTrace();
-    #endif
     stop();
     try {
         socket.close();

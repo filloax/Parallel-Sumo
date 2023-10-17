@@ -84,10 +84,6 @@ PartitionManager::PartitionManager(
   }
 
 PartitionManager::~PartitionManager() {
-  #ifndef NDEBUG
-    printf("=== Destroying partition manager %d... ===\n", id);
-    printStackTrace();
-  #endif
   for (partId_t partId : neighborPartitions) {
     delete neighborPartitionStubs[partId];
     delete neighborClientHandlers[partId];
@@ -310,7 +306,10 @@ void PartitionManager::runSimulation() {
     binary, 
     "-c", cfg, 
     // "--start",
-    "--netstate-dump", args.dataDir+"/output"+std::to_string(id)+".xml"
+    // Output vehicle paths
+    "--netstate-dump", args.dataDir+"/output"+to_string(id)+".xml",
+    // Log stdout/stderr
+    "--log", args.dataDir+"/log"+to_string(id)+".txt"
   };
   simArgs.reserve(simArgs.size() + distance(sumoArgs.begin(), sumoArgs.end()));
   simArgs.insert(simArgs.end(),sumoArgs.begin(),sumoArgs.end());
