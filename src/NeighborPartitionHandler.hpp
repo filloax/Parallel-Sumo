@@ -71,6 +71,8 @@ class NeighborPartitionHandler {
 private:
   zmq::context_t& zcontext; // Separate context to handle stuff while partition manager waits for barrier
   zmq::socket_t socket;
+  zmq::socket_t controlSocketMain;
+  zmq::socket_t controlSocketThread;
   const int clientId;
   PartitionManager& owner;
   const std::string socketUri;

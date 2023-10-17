@@ -418,6 +418,9 @@ void PartitionManager::runSimulation() {
     }
   }
 
+  logminor("Simulation done, barrier then closing connections...\n");
+  arriveWaitBarrier();
+
   for (partId_t partId : neighborPartitions) {
     neighborClientHandlers[partId]->stop();
     neighborPartitionStubs[partId]->disconnect();
@@ -426,9 +429,7 @@ void PartitionManager::runSimulation() {
     neighborClientHandlers[partId]->join();
   }
 
-  stringstream msg2;
-  msg2 << "partition " << id << " ended in thread " << pthread_self() << std::endl;
-  cout << msg2.str();
+  log("FINISHED!\n");
 
   signalFinish();
   

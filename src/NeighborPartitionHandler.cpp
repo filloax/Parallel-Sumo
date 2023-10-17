@@ -9,6 +9,7 @@ Author: Filippo Lenzi
 
 #include "NeighborPartitionHandler.hpp"
 
+#include <chrono>
 #include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
@@ -39,6 +40,11 @@ NeighborPartitionHandler::NeighborPartitionHandler(PartitionManager& owner, int 
 {
     socket = zmq::socket_t{zcontext, zmq::socket_type::rep};
     socket.set(zmq::sockopt::linger, 0 );
+
+    controlSocketMain = zmq::socket_t{zcontext, zmq::socket_type::pair};
+    controlSocketMain.set(zmq::sockopt::linger, 0 );
+    controlSocketThread = zmq::socket_t{zcontext, zmq::socket_type::pair};
+    controlSocketThread.set(zmq::sockopt::linger, 0 );
 }
 
 const int DISCONNECT_CONTEXT_TERMINATED_ERR = 156384765;
@@ -64,11 +70,18 @@ void NeighborPartitionHandler::start() {
     try {
         socket.bind(socketUri);
     } catch (zmq::error_t& e) {
-      stringstream msg;
-      msg << "Part. Handler "<< owner.getId() <<" | ZMQ error in binding socket " << clientId << " to '" << socketUri
-        << "': " << e.what() << "/" << e.num() << endl;
-      cerr << msg.str();
-      exit(-10);
+        logerr("ZMQ error in binding socket {} to {}: {}/{}\n", clientId, socketUri, e.what(), e.num());
+        exit(EXIT_FAILURE);
+    }
+    try {
+        stringstream uris;
+        uris << "inproc://nb" << clientId << "-" << owner.getId();
+        auto uri = uris.str();
+        controlSocketThread.bind(uri);
+        controlSocketMain.connect(uri);
+    } catch (zmq::error_t& e) {
+        logerr("ZMQ error in binding inproc sockets: {}/{}\n", e.what(), e.num());
+        exit(EXIT_FAILURE);
     }
 
     listenThread = thread(&NeighborPartitionHandler::listenThreadLogic, this);
@@ -78,6 +91,7 @@ void NeighborPartitionHandler::stop() {
     log("Terminating when possible\n");
     term = true;
     stop_ = true;
+    controlSocketMain.send(zmq::str_buffer("stop"), zmq::send_flags::none);
 }
 
 void NeighborPartitionHandler::join() {
@@ -99,9 +113,31 @@ void NeighborPartitionHandler::listenOff() {
 
 
 void NeighborPartitionHandler::listenCheck() {
-    zmq::message_t request;
+    // Wait for the first message between the partition socket and the thread socket,
+    // thread socket meaning work should be interrupted (partition stopped)
+    zmq::pollitem_t pollitems[] = { 
+        { socket, 0, ZMQ_POLLIN, 0 }, 
+        { controlSocketThread, 0, ZMQ_POLLIN, 0 } 
+    };
+
     log("Waiting for requests...\n");
-    auto result = socket.recv(request, zmq::recv_flags::none);
+    int rc = zmq::poll(pollitems, 2);
+
+    if (rc == -1) {
+        logerr("[WARN] zmq::poll interrupted\n");
+        return;
+    }
+    if (pollitems[1].revents & ZMQ_POLLIN) {
+        // Received a message on the control socket; quit
+        log("Control socket message received, stopping listen\n");
+        return;
+    }
+    
+    zmq::message_t request;
+    if (pollitems[0].revents & ZMQ_POLLIN) {
+        zmq::message_t message;
+        auto _ = socket.recv(request, zmq::recv_flags::none);
+    }
 
     // Read int representing operations to call from the message
     int opcode;
