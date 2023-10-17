@@ -1,5 +1,6 @@
 #include <cstring>
 #include <sstream>
+#include <string>
 #include <zmq.hpp>
 #include <iostream>
 
@@ -17,25 +18,27 @@ string getIpcSocketName(std::string directory, partId_t from, partId_t to) {
 }
 
 
-#define copy_num(type, var, message, offset) std::memcpy(\
-    static_cast<type*>(message.data()) + offset,\
-    &var + offset,\
-    sizeof(type)\
-)
+zmq::message_t createMessageWithStrings(vector<string> &strings, int offset, int spaceAfter) {
+    int totalSize = 0;
+    for (auto str: strings) totalSize += str.size();
 
-void setVehicleSpeed(zmq::socket_t& socket, const string& vehId, double speed) {
-    int idSize = vehId.size();
-    int msgLength = sizeof(double) + idSize + 1;
-    zmq::message_t message(msgLength);
+    // + vector.size(): account for null characters at end of each string
+    zmq::message_t message(offset + spaceAfter + sizeof(int) + totalSize + strings.size());
 
-    copy_num(double, speed, message, 0);
-    std::memcpy(
-        static_cast<char*>(message.data()) + sizeof(double),
-        vehId.data(), 
-        idSize + 1
-    );
+    // Also write an int with the vector size
+    int vectorSize = strings.size();
+    std::memcpy(static_cast<int*>(message.data()) + offset, &vectorSize, sizeof(int));
 
-    socket.send(message, zmq::send_flags::none);
+    int writtenBytes = sizeof(int);
+    for (int i = 0; i < strings.size(); i++) {
+        std::memcpy(
+            static_cast<char*>(message.data()) + offset + writtenBytes, 
+            (strings[i] + '\0').data(), strings[i].size() + 1
+        );
+        writtenBytes += strings[i].size() + 1;
+    }
+
+    return message;
 }
 
 int main(int argc, char* argv[]) {
@@ -44,19 +47,16 @@ int main(int argc, char* argv[]) {
     auto addr = getIpcSocketName("../data", MY_ID, TARG_ID);
     socket.connect(addr);
 
-    vector<int> v{
-        0,
-        10,
-        -1
-    };
+    vector<string> strings;
 
     for (auto request_num = 0; request_num < 10; ++request_num) 
     {
         // send the request message
         std::cout << "Sending message no. " << request_num << "..." << std::endl;
-        // setVehicleSpeed(socket, "veh" + to_string(request_num), request_num * 2);
-        v[2] = request_num;
-        socket.send(zmq::buffer(v));
+
+        strings.push_back(string("TestMsg") + to_string(request_num));
+        auto msg = createMessageWithStrings(strings, 0, 0);
+        socket.send(msg, zmq::send_flags::none);
 
         // wait for reply from server
         zmq::message_t reply{};

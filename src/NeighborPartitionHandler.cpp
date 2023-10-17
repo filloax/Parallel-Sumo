@@ -24,7 +24,7 @@ Author: Filippo Lenzi
 
 using namespace std;
 
-NeighborPartitionHandler::NeighborPartitionHandler(PartitionManager& owner, int clientId, zmq::context_t& zcontext) :
+NeighborPartitionHandler::NeighborPartitionHandler(PartitionManager& owner, int clientId) :
     owner(owner),
     clientId(clientId),
     socketUri(psumo::getSocketName(owner.getArgs().dataDir, clientId, owner.getId(), owner.getNumThreads())),
@@ -32,8 +32,8 @@ NeighborPartitionHandler::NeighborPartitionHandler(PartitionManager& owner, int 
     stop_(false),
     term(false)
 {
-    // zcontext = new zmq::context_t{1};
-    socket = zmq::socket_t{zcontext, zmq::socket_type::rep};
+    zcontext = new zmq::context_t{1};
+    socket = zmq::socket_t{*zcontext, zmq::socket_type::rep};
     socket.set(zmq::sockopt::linger, 0 );
 }
 
@@ -53,20 +53,20 @@ NeighborPartitionHandler::~NeighborPartitionHandler() {
             cerr << msg.str();
         }
     }
-    // try {
-    //     zcontext->shutdown();
-    //     zcontext->close();
-    // } catch (zmq::error_t& e) {
-    //     stringstream msg;
-    //     msg << "Part. handler " << owner.getId() << ":" << clientId << " | "
-    //         << "Error in closing context during destructor:" << e.what() << "/" << e.num()
-    //         << endl;
-    //     cerr << msg.str();
-    // }
-    // #ifndef NDEBUG
-    //     printf("Part. handler %d->%d | Deleting context\n", clientId, owner.getId());
-    // #endif
-    // delete zcontext;
+    try {
+        zcontext->shutdown();
+        zcontext->close();
+    } catch (zmq::error_t& e) {
+        stringstream msg;
+        msg << "Part. handler " << owner.getId() << ":" << clientId << " | "
+            << "Error in closing context during destructor:" << e.what() << "/" << e.num()
+            << endl;
+        cerr << msg.str();
+    }
+    #ifndef NDEBUG
+        printf("Part. handler %d->%d | Deleting context\n", clientId, owner.getId());
+    #endif
+    delete zcontext;
 }
 
 void NeighborPartitionHandler::start() {
@@ -105,13 +105,15 @@ void NeighborPartitionHandler::listenOff() {
 
 void NeighborPartitionHandler::listenCheck() {
     zmq::message_t request;
-    printf("Part. handler %d->%d | Waiting for requests...\n", clientId, owner.getId());
+    printf("\tPart. handler %d->%d | Waiting for requests...\n", clientId, owner.getId());
     auto result = socket.recv(request, zmq::recv_flags::none);
 
     // Read int representing operations to call from the message
     int opcode;
     std::memcpy(&opcode, request.data(), sizeof(int));
     auto operation = static_cast<PartitionEdgesStub::Operations>(opcode);
+
+    printf("\tPart. handler %d->%d | Received request for opcode %d\n", clientId, owner.getId(), opcode);
 
     bool alreadyReplied = false;
 
@@ -128,6 +130,7 @@ void NeighborPartitionHandler::listenCheck() {
     }
 
     if (!alreadyReplied) {
+        printf("\tPart. handler %d->%d | Sending generic reply for opcode %d\n", clientId, owner.getId(), opcode);
         socket.send(zmq::str_buffer("ok"));
     }
 }
@@ -139,12 +142,12 @@ void NeighborPartitionHandler::listenThreadLogic() {
 
     while(!term) {
         if (listening) {
-            printf("Part. handler %d->%d | Starting listen loop...\n", clientId, owner.getId());
+            printf("\tPart. handler %d->%d | Starting listen loop...\n", clientId, owner.getId());
             while(!stop_) {
                 listenCheck();
             }
             listening = false;
-            printf("Part. handler %d->%d | Stopped listen loop\n", clientId, owner.getId());
+            printf("\tPart. handler %d->%d | Stopped listen loop\n", clientId, owner.getId());
         } else {
             unique_lock<mutex> lock(secondThreadSignalLock);
             secondThreadCondition.wait(lock, [this] { return listening; });
@@ -175,11 +178,16 @@ bool NeighborPartitionHandler::handleGetEdgeVehicles(zmq::message_t& request) {
         static_cast<char*>(request.data()) + request.size()
     );
 
-    printf("Part. handler %d->%d | Received getEdgeVehicles(%s)\n", clientId, owner.getId(), edgeId.c_str());
+    printf("\tPart. handler %d->%d | Received getEdgeVehicles(%s)\n", clientId, owner.getId(), edgeId.c_str());
 
-    std::vector<std::string> edgeVehicles = owner.getEdgeVehicles(edgeId);
+    vector<string> edgeVehicles = owner.getEdgeVehicles(edgeId);
     auto reply = createMessageWithStrings(edgeVehicles);
-    printf("Part. handler %d->%d | Sending reply to getEdgeVehicles(%s)\n", clientId, owner.getId(), edgeId.c_str());
+    printf("\tPart. handler %d->%d | Sending reply to getEdgeVehicles(%s)\n", clientId, owner.getId(), edgeId.c_str());
+    stringstream ss;
+    ss << "\tPart handler " << clientId << "->" << owner.getId() << " | Replying with [";
+    printVector(edgeVehicles, "", ", ", false, ss);
+    ss << "]" << endl;
+    cout << ss.str();
 
     socket.send(reply, zmq::send_flags::none);
     return true;
@@ -193,7 +201,7 @@ bool NeighborPartitionHandler::handleSetVehicleSpeed(zmq::message_t& request) {
         static_cast<char*>(request.data()) + request.size()
     );
     
-    printf("Part. handler %d->%d | Queueing setVehicleSpeed (%s, %f)\n", clientId, owner.getId(), veh.c_str(), speed);
+    printf("\tPart. handler %d->%d | Queueing setVehicleSpeed (%s, %f)\n", clientId, owner.getId(), veh.c_str(), speed);
 
     // lock to be 100% sure with the applying of operations later
     operationsBufferLock.lock();
@@ -213,7 +221,7 @@ bool NeighborPartitionHandler::handleAddVehicle(zmq::message_t& request) {
     int stringsOffset = sizeof(int) * 2 + sizeof(double) * 2;
     auto strings = readStringsFromMessage(request, stringsOffset);
 
-    printf("Part. handler %d->%d | Queueing addVehicle (%s, ...)\n", clientId, owner.getId(), strings[0].c_str());
+    printf("\tPart. handler %d->%d | Queueing addVehicle (%s, ...)\n", clientId, owner.getId(), strings[0].c_str());
 
     // lock to be 100% sure with the applying of operations later
     operationsBufferLock.lock();

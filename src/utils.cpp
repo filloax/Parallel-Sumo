@@ -66,7 +66,7 @@ pid_t getPid() {
 
 zmq::message_t createMessageWithStrings(vector<string> &strings, int offset, int spaceAfter) {
     int totalSize = 0;
-    for (auto str: strings) totalSize += strings.size();
+    for (auto str: strings) totalSize += str.size();
 
     // + vector.size(): account for null characters at end of each string
     zmq::message_t message(offset + spaceAfter + sizeof(int) + totalSize + strings.size());
@@ -100,7 +100,7 @@ std::vector<std::string> readStringsFromMessage(zmq::message_t &message, int off
     size_t start = offset + sizeof(int);
     for (size_t i = start; i < size && currentString < vectorSize; ++i) {
         if (data[i] == '\0') {
-            result[i] = string(data + start, i - start);
+            result[currentString] = string(&data[start], &data[i]);
             start = i + 1;
             currentString++;
         }
@@ -223,7 +223,10 @@ void printVector(
 ) {
     stringstream ss;
     ss << prefix;
-    for (auto s : v) ss << s << sep;
+    for (int i = 0; i < v.size(); i++) {
+        ss << v[i];
+        if (i < v.size() - 1) ss << sep;
+    }
     if (newline) ss << endl;
     stream << ss.str();
 }

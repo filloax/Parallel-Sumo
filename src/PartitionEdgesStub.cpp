@@ -95,12 +95,12 @@ std::vector<std::string> PartitionEdgesStub::getEdgeVehicles(const std::string& 
     zmq::message_t reply;
     auto response = socket.recv(reply);
 
-    auto out =     readStringsFromMessage(reply);
+    auto out = readStringsFromMessage(reply);
 
     stringstream msg;
-    msg << "\tStub " << ownerId << "->"<< id << " | Received: ";
-    for (auto s : out) msg << s << ", ";
-    msg << endl;
+    msg << "\tStub " << ownerId << "->"<< id << " | Received: [";
+    printVector(out, "", ", ", false, msg);
+    msg << "]" << endl;
     cout << msg.str();
 
     return out;

@@ -17,6 +17,28 @@ string getIpcSocketName(std::string directory, partId_t from, partId_t to) {
     return out.str();
 }
 
+std::vector<std::string> readStringsFromMessage(zmq::message_t &message, int offset) {
+    const char* data = static_cast<const char*>(message.data());
+    size_t size = message.size();
+
+    int vectorSize;
+    std::memcpy(&vectorSize, data, sizeof(int));
+
+    std::vector<std::string> result(vectorSize);
+    int currentString = 0;
+
+    size_t start = offset + sizeof(int);
+    for (size_t i = start; i < size && currentString < vectorSize; ++i) {
+        if (data[i] == '\0') {
+            result[currentString] = string(&data[start], &data[i]);
+            start = i + 1;
+            currentString++;
+        }
+    }
+
+    return result;
+}
+
 int main(int argc, char* argv[]) {
     auto zcontext = zmq::context_t{1};
     auto socket = zmq::socket_t{zcontext, zmq::socket_type::rep};
@@ -33,12 +55,12 @@ int main(int argc, char* argv[]) {
         // receive a request from client
         auto result = socket.recv(request, zmq::recv_flags::none);
 
-        // double speed;
-        // std::memcpy(&speed, request.data(), sizeof(double));
-        // string veh(static_cast<char*>(request.data()) + sizeof(double), static_cast<char*>(request.data()) + request.size());
-        // std::cout << "Received " << speed <<  " " << veh << " (size " << request.size() << ")" << std::endl;
+        auto out = readStringsFromMessage(request, 0);
 
-        
+        cout << "Received:" << endl;
+        for (auto str : out) {
+            cout << "\t" << str << endl;
+        }
 
         // simulate work
         sleep(1);

@@ -101,8 +101,12 @@ set_target_properties(sumocpp PROPERTIES
 
 link_directories($ENV{SUMO_HOME}/bin)
 
-target_link_libraries(ParallelSumo           cppzmq zmq sumocpp nlohmann_json::nlohmann_json argparse)
-target_link_libraries(ParallelSumo-Partition cppzmq zmq sumocpp nlohmann_json::nlohmann_json argparse)
+target_link_libraries(ParallelSumo
+    cppzmq zmq sumocpp nlohmann_json::nlohmann_json argparse
+)
+target_link_libraries(ParallelSumo-Partition
+    cppzmq zmq sumocpp nlohmann_json::nlohmann_json argparse
+)
 
 if (PSUMO_SINGLE_EXECUTABLE)
     message(STATUS "PSUMO_SINGLE_EXECUTABLE on")
