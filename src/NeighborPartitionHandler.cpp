@@ -25,6 +25,7 @@ Author: Filippo Lenzi
 #include "PartitionManager.hpp"
 
 using namespace std;
+using namespace psumo;
 
 NeighborPartitionHandler::NeighborPartitionHandler(PartitionManager& owner, int clientId) :
     owner(owner),
@@ -196,7 +197,8 @@ bool NeighborPartitionHandler::handleSetVehicleSpeed(zmq::message_t& request) {
 
     // lock to be 100% sure with the applying of operations later
     operationsBufferLock.lock();
-    setSpeedQueue.push_back({veh, speed});
+    // TODO: add retry later on fail
+    bool success = setSpeedQueue.append({veh, speed});
     operationsBufferLock.unlock();
 
     return false;
@@ -217,7 +219,8 @@ bool NeighborPartitionHandler::handleAddVehicle(zmq::message_t& request) {
 
     // lock to be 100% sure with the applying of operations later
     operationsBufferLock.lock();
-    addVehicleQueue.push_back({
+    // TODO: add retry later on fail
+    bool success = addVehicleQueue.append({
         strings[0],
         strings[1],
         strings[2],
@@ -237,7 +240,7 @@ bool NeighborPartitionHandler::handleStepEnd(zmq::message_t& request) {
 
 // Execute the queued operations that other partitions ran
 void NeighborPartitionHandler::applyMutableOperations() {
-    int num = addVehicleQueue.size() + setSpeedQueue.size();
+    int num = addVehicleQueue.currentSize + setSpeedQueue.currentSize;
     if (num > 0) {
         log("Applying mutable operations (has {})\n", num);
         bool wasListening = listening;
@@ -251,14 +254,16 @@ void NeighborPartitionHandler::applyMutableOperations() {
 
         log("Mutable ops passed lock\n");
 
-        for (auto addVeh : addVehicleQueue) {
+        for (int i = 0; i < addVehicleQueue.currentSize; i++) {
+            auto addVeh = addVehicleQueue.queue[i];
             owner.addVehicle(
                 addVeh.vehId, addVeh.routeId, addVeh.vehType, 
                 addVeh.laneId, addVeh.laneIndex, addVeh.lanePos, addVeh.speed
             );
         }
 
-        for (auto setSpeed : setSpeedQueue) {
+        for (int i = 0; i < setSpeedQueue.currentSize; i++) {
+            auto setSpeed = setSpeedQueue.queue[i];
             owner.setVehicleSpeed(setSpeed.vehId, setSpeed.speed);
         }
         

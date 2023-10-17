@@ -18,24 +18,48 @@ Author: Filippo Lenzi
 #include <mutex>
 #include <condition_variable>
 
-class NeighborPartitionHandler;
-
+namespace psumo {
+  class NeighborPartitionHandler;
+}
 #include "PartitionManager.hpp"
 
+namespace psumo {
+
+static const size_t OPERATION_QUEUE_SIZE = 512;
+
 typedef struct {
-  std::string& vehId;
+  std::string vehId;
   double speed;
 } set_veh_speed_t;
 
 typedef struct {
-  std::string& vehId;
-  std::string& routeId; 
-  std::string& vehType;
-  std::string& laneId;
+  std::string vehId;
+  std::string routeId; 
+  std::string vehType;
+  std::string laneId;
   int laneIndex;
   double lanePos;
   double speed;
 } add_veh_t;
+
+template <typename T, int N> class OperationQueue {
+  public:
+  std::array<T, N> queue;
+  int currentSize;
+
+  bool append(T el) {
+    if (currentSize < N) {
+      queue[currentSize] = el;
+      currentSize++;
+      return true;
+    }
+    return false;
+  }
+
+  void clear() {
+    currentSize = 0;
+  }
+};
 
 /**
 Handle the requests from other partitions; immediately reply 
@@ -59,8 +83,8 @@ private:
   std::mutex secondThreadSignalLock;
   std::condition_variable secondThreadCondition;
 
-  std::vector<set_veh_speed_t> setSpeedQueue;
-  std::vector<add_veh_t> addVehicleQueue;
+  OperationQueue<set_veh_speed_t, OPERATION_QUEUE_SIZE> setSpeedQueue;
+  OperationQueue<add_veh_t, OPERATION_QUEUE_SIZE> addVehicleQueue;
 
   void listenCheck();
   void listenThreadLogic();
@@ -89,3 +113,5 @@ public:
   // Ideally call these when the listen thread is idle, on the main thread
   void applyMutableOperations();
 };
+
+}
