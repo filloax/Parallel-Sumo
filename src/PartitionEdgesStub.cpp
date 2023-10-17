@@ -49,11 +49,7 @@ PartitionEdgesStub::~PartitionEdgesStub() {
         } catch (zmq::error_t& e) {
             // If the context is already terminated, then not a problem if it didn't disconnect
             if (e.num() != DISCONNECT_CONTEXT_TERMINATED_ERR) {
-                stringstream msg;
-                msg << "Part. stub " << ownerId << "->" << id << " | "
-                    << "Error in disconnecting socket during destructor:" << e.what() << "/" << e.num()
-                    << endl;
-                cerr << msg.str();
+                logerr("Error in disconnecting socket during destructor: {}/{}\n", e.what(), e.num());
             }
         }
     }
@@ -72,7 +68,7 @@ void PartitionEdgesStub::disconnect() {
 std::vector<std::string> PartitionEdgesStub::getEdgeVehicles(const std::string& edgeId) {
     int opcode = Operations::GET_EDGE_VEHICLES;
 
-    printf("\tStub %d->%d | Preparing getEdge\n", ownerId, id);
+    log("Preparing getEdge\n");
 
     // As usual, add +1 to string size to include NULL endpoint
     int msgLength = sizeof(int) + edgeId.size() + 1;
@@ -83,10 +79,10 @@ std::vector<std::string> PartitionEdgesStub::getEdgeVehicles(const std::string& 
     std::memcpy(data,                &opcode, sizeof(int));
     std::memcpy( data + sizeof(int), edgeId.data(),  edgeId.size() + 1);
 
-    printf("\tStub %d->%d | Sending getEdge\n", ownerId, id);
+    log("Sending getEdge\n");
     socket.send(message, zmq::send_flags::none);
 
-    printf("\tStub %d->%d | Receiving getEdge reply\n", ownerId, id);
+    log("Receiving getEdge reply\n");
     zmq::message_t reply;
     auto response = socket.recv(reply);
 
@@ -104,7 +100,7 @@ std::vector<std::string> PartitionEdgesStub::getEdgeVehicles(const std::string& 
 void PartitionEdgesStub::setVehicleSpeed(const string& vehId, double speed) {
     int opcode = Operations::SET_VEHICLE_SPEED;
 
-    printf("\tStub %d->%d | Preparing setVehicleSpeed\n", ownerId, id);
+    log("Preparing setVehicleSpeed\n");
 
     // As usual, add +1 to string size to include NULL endpoint
     size_t msgLength = sizeof(int) + sizeof(double) + vehId.size() + 1;
@@ -118,10 +114,10 @@ void PartitionEdgesStub::setVehicleSpeed(const string& vehId, double speed) {
     std::memcpy(data + sizeof(double) + sizeof(int),
         vehId.data(), vehId.size() + 1);
 
-    printf("\tStub %d->%d | Sending setSpeed\n", ownerId, id);
+    log("Sending setSpeed\n");
     socket.send(message, zmq::send_flags::none);
 
-    printf("\tStub %d->%d | Receiving setSpeed reply\n", ownerId, id);
+    log("Receiving setSpeed reply\n");
     // unused reply, required by zeroMQ
     zmq::message_t reply;
     auto response = socket.recv(reply);
@@ -133,7 +129,7 @@ void PartitionEdgesStub::addVehicle(
 ) {
     int opcode = Operations::ADD_VEHICLE;
 
-    printf("\tStub %d->%d | Preparing addVehicle\n", ownerId, id);
+    log("Preparing addVehicle\n");
 
     // opcode, laneIndex, lanePos, speed
     int stringsOffset = sizeof(int) * 2 + sizeof(double) * 2;
@@ -154,11 +150,35 @@ void PartitionEdgesStub::addVehicle(
     std::memcpy( data + sizeof(int) * 2 + sizeof(double), 
         &speed,  sizeof(double));
 
-    printf("\tStub %d->%d | Sending addVehicle\n", ownerId, id);
+    log("Sending addVehicle\n");
     socket.send(message, zmq::send_flags::none);
 
-    printf("\tStub %d->%d | Receiving addVehicle reply\n", ownerId, id);
+    log("Receiving addVehicle reply\n");
     // unused reply, required by zeroMQ
     zmq::message_t reply;
     auto response = socket.recv(reply);
+}
+
+template<typename... _Args > 
+inline void PartitionEdgesStub::log(std::format_string<_Args...> format, _Args&&... args) {
+    std::stringstream msg;
+    msg << "\tStub " << ownerId << "->" << id << " | ";
+    std::format_to(
+        std::ostreambuf_iterator<char>(msg), 
+        std::forward<std::format_string<_Args...>>(format),
+        std::forward<_Args>(args)...
+    );
+    std::cout << msg.str();
+}
+
+template<typename... _Args>
+inline void PartitionEdgesStub::logerr(std::format_string<_Args...> format, _Args&&... args) {
+    std::stringstream msg;
+    msg << "\tStub " << ownerId << "->" << id << " | ";
+    std::format_to(
+        std::ostreambuf_iterator<char>(msg), 
+        std::forward<std::format_string<_Args...>>(format),
+        std::forward<_Args>(args)...
+    );
+    std::cerr << msg.str();
 }

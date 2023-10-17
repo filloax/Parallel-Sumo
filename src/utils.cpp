@@ -1,5 +1,6 @@
 #include "utils.hpp"
 
+#include <boost/stacktrace/stacktrace_fwd.hpp>
 #include <cstring>
 #include <string>
 #include <iostream>
@@ -14,6 +15,11 @@
     #include <execinfo.h>
     #include <unistd.h>
     #include <sys/wait.h>
+#endif
+
+#ifndef NDEBUG
+    #include <boost/stacktrace.hpp>
+    #define USE_BOOST
 #endif
 
 using namespace std;
@@ -158,7 +164,9 @@ filesystem::path getCurrentExeDirectory()  {
 string getStackTrace() {
     stringstream outStream;
 
-#if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
+#ifdef USE_BOOST
+    outStream << boost::stacktrace::stacktrace();
+#elif defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
 
     const int maxFrames = 128;
     HANDLE process = GetCurrentProcess();

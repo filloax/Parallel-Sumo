@@ -24,6 +24,11 @@ private:
     bool connected;
     std::string socketUri;
     zmq::socket_t socket;
+
+    template<typename... _Args > 
+        void log(std::format_string<_Args...>  format, _Args&&... args);
+    template<typename... _Args > 
+        void logerr(std::format_string<_Args...>  format, _Args&&... args);
 public:
     enum Operations {
         GET_EDGE_VEHICLES,

@@ -22,6 +22,7 @@ Contributions: Filippo Lenzi
 #include <argparse/argparse.hpp>
 #include "partArgs.hpp"
 #include "globals.hpp"
+#include "src/ContextPool.hpp"
 #include "utils.hpp"
 #include "psumoTypes.hpp"
 #include "PartitionManager.hpp"
@@ -56,7 +57,7 @@ int main(int argc, char* argv[]) {
 
     loadPartData(args.partId, args.dataDir, borderEdges, partNeighbors);
 
-    zmq::context_t zctx{1};
+    zmq::context_t& zctx = ContextPool::newContext(1);
 
     PartitionManager partManager(
         getSumoPath(args.gui), args.partId, cfg, args.endTime,
@@ -72,6 +73,8 @@ int main(int argc, char* argv[]) {
         msg << endl << "[ERR] Partition " << args.partId << " terminating because of an error: "
             << e.what() << endl;
     }
+
+    ContextPool::destroyAll();
 }
 
 void loadPartData(int id, string dataFolder, vector<border_edge_t>& borderEdges, vector<partId_t>& partNeighbors) {

@@ -83,6 +83,10 @@ PartitionManager::PartitionManager(
   }
 
 PartitionManager::~PartitionManager() {
+  #ifndef NDEBUG
+    printf("=== Destroying partition manager %d... ===\n", id);
+    printStackTrace();
+  #endif
   for (partId_t partId : neighborPartitions) {
     delete neighborPartitionStubs[partId];
     delete neighborClientHandlers[partId];

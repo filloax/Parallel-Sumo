@@ -27,6 +27,7 @@ set(LIBS_DIR libs)
 
 set(SOURCE_FILES_COORDINATOR
     ${SRC_DIR}/ParallelSim.cpp
+    ${SRC_DIR}/ContextPool.cpp
     ${SRC_DIR}/args.hpp
     ${SRC_DIR}/utils.cpp
     ${SRC_DIR}/messagingShared.cpp
@@ -39,6 +40,7 @@ set(SOURCE_FILES_PARTITION
     ${SRC_DIR}/NeighborPartitionHandler.cpp
     ${SRC_DIR}/PartitionEdgesStub.cpp
     ${SRC_DIR}/PartitionManager.cpp
+    ${SRC_DIR}/ContextPool.cpp
     ${SRC_DIR}/args.hpp
     ${SRC_DIR}/partArgs.hpp
     ${SRC_DIR}/utils.cpp
@@ -73,9 +75,8 @@ endif()
 # pkg_check_modules(PC_ZeroMQ QUIET zmq)
 
 #find cppzmq wrapper, installed by make of cppzmq
-find_package(cppzmq)
+find_package(cppzmq REQUIRED)
 message(STATUS "ZMQ CPP dir: " ${cppzmq_INCLUDE_DIR})
-message(STATUS "(If the above is missing, you should properly install zeromq AND cppzmq and configure it for your platform)")
 
 find_package(nlohmann_json 3.2.0 REQUIRED)
 
@@ -86,6 +87,14 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/p-ranav/argparse.git
 )
 FetchContent_MakeAvailable(argparse)
+
+ # used only in debug
+find_package(Boost 1.83)
+if (Boost_FOUND)
+    message(STATUS "Boost dir: ${Boost_INCLUDE_DIRS}")
+else()
+    message(STATUS "Boost not found! Not required other than for debug")
+endif()
 
 # Sumo
 add_library(sumocpp SHARED IMPORTED)
@@ -107,6 +116,15 @@ target_link_libraries(ParallelSumo
 target_link_libraries(ParallelSumo-Partition
     cppzmq zmq sumocpp nlohmann_json::nlohmann_json argparse
 )
+
+# boost only used in debug
+if (Boost_FOUND)
+    target_include_directories(ParallelSumo PUBLIC ${Boost_INCLUDE_DIRS})
+    target_include_directories(ParallelSumo-Partition PUBLIC ${Boost_INCLUDE_DIRS})
+    target_link_libraries(ParallelSumo dl)
+    target_link_libraries(ParallelSumo-Partition dl)
+    add_definitions(-DBOOST_STACKTRACE_USE_ADDR2LINE)
+endif()
 
 if (PSUMO_SINGLE_EXECUTABLE)
     message(STATUS "PSUMO_SINGLE_EXECUTABLE on")

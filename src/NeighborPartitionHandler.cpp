@@ -20,6 +20,7 @@ Author: Filippo Lenzi
 #include <mutex>
 
 #include "messagingShared.hpp"
+#include "src/ContextPool.hpp"
 #include "utils.hpp"
 #include "PartitionManager.hpp"
 
@@ -32,16 +33,20 @@ NeighborPartitionHandler::NeighborPartitionHandler(PartitionManager& owner, int 
     listening(false),
     stop_(false),
     term(false),
-    threadWaiting(false)
+    threadWaiting(false),
+    zcontext(ContextPool::newContext(1))
 {
-    zcontext = new zmq::context_t{1};
-    socket = zmq::socket_t{*zcontext, zmq::socket_type::rep};
+    socket = zmq::socket_t{zcontext, zmq::socket_type::rep};
     socket.set(zmq::sockopt::linger, 0 );
 }
 
 const int DISCONNECT_CONTEXT_TERMINATED_ERR = 156384765;
-
+    
 NeighborPartitionHandler::~NeighborPartitionHandler() {
+    #ifndef NDEBUG
+        logerr("Destroying...\n");
+        printStackTrace();
+    #endif
     stop();
     try {
         socket.close();
@@ -52,16 +57,6 @@ NeighborPartitionHandler::~NeighborPartitionHandler() {
             logerr("Error in disconnecting socket during destructor: {}/{}\n", e.what(), e.num());
         }
     }
-    try {
-        zcontext->shutdown();
-        zcontext->close();
-    } catch (zmq::error_t& e) {
-        logerr("Error in closing context during destructor: {}/{}\n", e.what(), e.num());
-    }
-    #ifndef NDEBUG
-        log("Deleting context\n");
-    #endif
-    delete zcontext;
 }
 
 void NeighborPartitionHandler::start() {
@@ -79,7 +74,7 @@ void NeighborPartitionHandler::start() {
 }
 
 void NeighborPartitionHandler::stop() {
-    log("Stopping when possible\n");
+    log("Terminating when possible\n");
     term = true;
     stop_ = true;
 }
@@ -112,7 +107,7 @@ void NeighborPartitionHandler::listenCheck() {
     std::memcpy(&opcode, request.data(), sizeof(int));
     auto operation = static_cast<PartitionEdgesStub::Operations>(opcode);
 
-    log("Received request for opcode %d\n", opcode);
+    log("Received request for opcode {}\n", opcode);
 
     bool alreadyReplied = false;
 
@@ -129,7 +124,7 @@ void NeighborPartitionHandler::listenCheck() {
     }
 
     if (!alreadyReplied) {
-        log("Sending generic reply for opcode %d\n", opcode);
+        log("Sending generic reply for opcode {}\n", opcode);
         socket.send(zmq::str_buffer("ok"));
     }
 }
@@ -172,11 +167,11 @@ bool NeighborPartitionHandler::handleGetEdgeVehicles(zmq::message_t& request) {
         static_cast<char*>(request.data()) + request.size()
     );
 
-    log("Received getEdgeVehicles(%s)\n", edgeId.c_str());
+    log("Received getEdgeVehicles({})\n", edgeId.c_str());
 
     vector<string> edgeVehicles = owner.getEdgeVehicles(edgeId);
     auto reply = createMessageWithStrings(edgeVehicles);
-    log("Sending reply to getEdgeVehicles(%s)\n", edgeId.c_str());
+    log("Sending reply to getEdgeVehicles({})\n", edgeId.c_str());
     stringstream ss;
     ss << "\tPart handler " << clientId << "->" << owner.getId() << " | Replying with [";
     printVector(edgeVehicles, "", ", ", false, ss);
@@ -195,7 +190,7 @@ bool NeighborPartitionHandler::handleSetVehicleSpeed(zmq::message_t& request) {
         static_cast<char*>(request.data()) + request.size()
     );
     
-    log("Queueing setVehicleSpeed (%s, %f)\n", veh.c_str(), speed);
+    log("Queueing setVehicleSpeed ({}, {})\n", veh.c_str(), speed);
 
     // lock to be 100% sure with the applying of operations later
     operationsBufferLock.lock();
@@ -215,7 +210,7 @@ bool NeighborPartitionHandler::handleAddVehicle(zmq::message_t& request) {
     int stringsOffset = sizeof(int) * 2 + sizeof(double) * 2;
     auto strings = readStringsFromMessage(request, stringsOffset);
 
-    log("Queueing addVehicle (%s, ...)\n", strings[0].c_str());
+    log("Queueing addVehicle ({}, ...)\n", strings[0].c_str());
 
     // lock to be 100% sure with the applying of operations later
     operationsBufferLock.lock();
@@ -240,38 +235,37 @@ bool NeighborPartitionHandler::handleStepEnd(zmq::message_t& request) {
 // Execute the queued operations that other partitions ran
 void NeighborPartitionHandler::applyMutableOperations() {
     int num = addVehicleQueue.size() + setSpeedQueue.size();
-    // if (num > 0) {
+    if (num > 0) {
+        log("Applying mutable operations (has {})\n", num);
+        bool wasListening = listening;
+        if (listening) {
+            log("Listen off to apply mutable operations\n");
+            listenOff();
+        }
+        // Lock to avoid other threads adding more operations in the meantime
+        // if it was inbetween one of them when we set this to stop
+        operationsBufferLock.lock();
 
-    // }
-    log("Applying mutable operations (has {})\n", num);
-    bool wasListening = listening;
-    if (listening) {
-        log("Listen off to apply mutable operations\n");
-        listenOff();
+        for (auto addVeh : addVehicleQueue) {
+            owner.addVehicle(
+                addVeh.vehId, addVeh.routeId, addVeh.vehType, 
+                addVeh.laneId, addVeh.laneIndex, addVeh.lanePos, addVeh.speed
+            );
+        }
+
+        for (auto setSpeed : setSpeedQueue) {
+            owner.setVehicleSpeed(setSpeed.vehId, setSpeed.speed);
+        }
+        
+        addVehicleQueue.clear();
+        setSpeedQueue.clear();
+
+        operationsBufferLock.unlock();
+
+        if (wasListening) listenOn();
+
+        log("Done applying mutable operations (was listening: {})\n", wasListening);
     }
-    // Lock to avoid other threads adding more operations in the meantime
-    // if it was inbetween one of them when we set this to stop
-    operationsBufferLock.lock();
-
-    for (auto addVeh : addVehicleQueue) {
-        owner.addVehicle(
-            addVeh.vehId, addVeh.routeId, addVeh.vehType, 
-            addVeh.laneId, addVeh.laneIndex, addVeh.lanePos, addVeh.speed
-        );
-    }
-
-    for (auto setSpeed : setSpeedQueue) {
-        owner.setVehicleSpeed(setSpeed.vehId, setSpeed.speed);
-    }
-    
-    addVehicleQueue.clear();
-    setSpeedQueue.clear();
-
-    operationsBufferLock.unlock();
-
-    if (wasListening) listenOn();
-
-    log("Done applying mutable operations (was listening: %d)\n", wasListening);
 }
 
 template<typename... _Args > 
