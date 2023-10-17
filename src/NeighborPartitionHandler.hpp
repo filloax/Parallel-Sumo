@@ -50,6 +50,7 @@ private:
   const int clientId;
   PartitionManager& owner;
   const std::string socketUri;
+  bool threadWaiting;
   bool listening; // Start listening logic, check if still going
   bool stop_; // Stop listening logic, but not thread
   bool term; // Stop listening thread
@@ -68,6 +69,11 @@ private:
   bool handleSetVehicleSpeed(zmq::message_t& request);
   bool handleAddVehicle(zmq::message_t& request);
   bool handleStepEnd(zmq::message_t& request);
+
+  template<typename... _Args > 
+    void log(std::format_string<_Args...>  format, _Args&&... args);
+  template<typename... _Args > 
+    void logerr(std::format_string<_Args...>  format, _Args&&... args);
 public:
   NeighborPartitionHandler(PartitionManager& owner, int clientId);
   ~NeighborPartitionHandler();

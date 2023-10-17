@@ -11,6 +11,7 @@ Author: Filippo Lenzi
 #include "utils.hpp"
 #include "messagingShared.hpp"
 
+#include <cstddef>
 #include <cstring>
 #include <sstream>
 #include <string>
@@ -68,25 +69,19 @@ void PartitionEdgesStub::disconnect() {
     socket.close();
 }
 
-#define copy_num(type, var, message, offset) std::memcpy(\
-    static_cast<type*>(message.data()) + offset,\
-    &var + offset,\
-    sizeof(type)\
-)
-
 std::vector<std::string> PartitionEdgesStub::getEdgeVehicles(const std::string& edgeId) {
     int opcode = Operations::GET_EDGE_VEHICLES;
+
+    printf("\tStub %d->%d | Preparing getEdge\n", ownerId, id);
 
     // As usual, add +1 to string size to include NULL endpoint
     int msgLength = sizeof(int) + edgeId.size() + 1;
     zmq::message_t message(msgLength);
+
+    auto data = static_cast<char*>(message.data());
     
-    copy_num(int, opcode, message, 0);
-    std::memcpy(
-        static_cast<char*>(message.data()) + sizeof(int),
-        edgeId.data(), 
-        edgeId.size() + 1
-    );
+    std::memcpy(data,                &opcode, sizeof(int));
+    std::memcpy( data + sizeof(int), edgeId.data(),  edgeId.size() + 1);
 
     printf("\tStub %d->%d | Sending getEdge\n", ownerId, id);
     socket.send(message, zmq::send_flags::none);
@@ -109,17 +104,19 @@ std::vector<std::string> PartitionEdgesStub::getEdgeVehicles(const std::string& 
 void PartitionEdgesStub::setVehicleSpeed(const string& vehId, double speed) {
     int opcode = Operations::SET_VEHICLE_SPEED;
 
+    printf("\tStub %d->%d | Preparing setVehicleSpeed\n", ownerId, id);
+
     // As usual, add +1 to string size to include NULL endpoint
-    int msgLength = sizeof(int) + sizeof(double) + vehId.size() + 1;
+    size_t msgLength = sizeof(int) + sizeof(double) + vehId.size() + 1;
     zmq::message_t message(msgLength);
 
-    copy_num(int, opcode, message, 0);
-    copy_num(double, speed, message, sizeof(int));
-    std::memcpy(
-        static_cast<char*>(message.data()) + sizeof(double) + sizeof(int),
-        vehId.data(), 
-        vehId.size() + 1
-    );
+    char* data = static_cast<char*>(message.data());
+    std::memcpy(data,
+        &opcode, sizeof(int));
+    std::memcpy( data + sizeof(int), 
+        &speed,  sizeof(double));
+    std::memcpy(data + sizeof(double) + sizeof(int),
+        vehId.data(), vehId.size() + 1);
 
     printf("\tStub %d->%d | Sending setSpeed\n", ownerId, id);
     socket.send(message, zmq::send_flags::none);
@@ -136,6 +133,8 @@ void PartitionEdgesStub::addVehicle(
 ) {
     int opcode = Operations::ADD_VEHICLE;
 
+    printf("\tStub %d->%d | Preparing addVehicle\n", ownerId, id);
+
     // opcode, laneIndex, lanePos, speed
     int stringsOffset = sizeof(int) * 2 + sizeof(double) * 2;
     vector<string> strings({
@@ -144,11 +143,16 @@ void PartitionEdgesStub::addVehicle(
     // First create calculating size from the strings, then insert the numbers
     // on the created buffer
     auto message = createMessageWithStrings(strings, stringsOffset);
+    char* data = static_cast<char*>(message.data());
 
-    copy_num(int, opcode, message, 0);
-    copy_num(int, laneIndex, message, sizeof(int));
-    copy_num(double, lanePos, message, sizeof(int) * 2);
-    copy_num(double, speed, message, sizeof(int) * 2 + sizeof(double));
+    std::memcpy(data,
+        &opcode, sizeof(int));
+    std::memcpy( data + sizeof(int), 
+        &laneIndex,  sizeof(int));
+    std::memcpy( data + sizeof(int) * 2, 
+        &lanePos,  sizeof(double));
+    std::memcpy( data + sizeof(int) * 2 + sizeof(double), 
+        &speed,  sizeof(double));
 
     printf("\tStub %d->%d | Sending addVehicle\n", ownerId, id);
     socket.send(message, zmq::send_flags::none);

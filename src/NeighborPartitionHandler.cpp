@@ -10,6 +10,7 @@ Author: Filippo Lenzi
 #include "NeighborPartitionHandler.hpp"
 
 #include <condition_variable>
+#include <cstdio>
 #include <cstdlib>
 #include <libsumo/TraCIDefs.h>
 #include <sstream>
@@ -30,7 +31,8 @@ NeighborPartitionHandler::NeighborPartitionHandler(PartitionManager& owner, int 
     socketUri(psumo::getSocketName(owner.getArgs().dataDir, clientId, owner.getId(), owner.getNumThreads())),
     listening(false),
     stop_(false),
-    term(false)
+    term(false),
+    threadWaiting(false)
 {
     zcontext = new zmq::context_t{1};
     socket = zmq::socket_t{*zcontext, zmq::socket_type::rep};
@@ -47,24 +49,17 @@ NeighborPartitionHandler::~NeighborPartitionHandler() {
         // If the context is already terminated, then not a problem if it didn't disconnect
         if (e.num() != DISCONNECT_CONTEXT_TERMINATED_ERR) {
             stringstream msg;
-            msg << "Part. handler " << owner.getId() << ":" << clientId << " | "
-                << "Error in disconnecting socket during destructor:" << e.what() << "/" << e.num()
-                << endl;
-            cerr << msg.str();
+            logerr("Error in disconnecting socket during destructor: {}/{}\n", e.what(), e.num());
         }
     }
     try {
         zcontext->shutdown();
         zcontext->close();
     } catch (zmq::error_t& e) {
-        stringstream msg;
-        msg << "Part. handler " << owner.getId() << ":" << clientId << " | "
-            << "Error in closing context during destructor:" << e.what() << "/" << e.num()
-            << endl;
-        cerr << msg.str();
+        logerr("Error in closing context during destructor: {}/{}\n", e.what(), e.num());
     }
     #ifndef NDEBUG
-        printf("Part. handler %d->%d | Deleting context\n", clientId, owner.getId());
+        log("Deleting context\n");
     #endif
     delete zcontext;
 }
@@ -84,6 +79,7 @@ void NeighborPartitionHandler::start() {
 }
 
 void NeighborPartitionHandler::stop() {
+    log("Stopping when possible\n");
     term = true;
     stop_ = true;
 }
@@ -93,19 +89,22 @@ void NeighborPartitionHandler::join() {
 }
 
 void NeighborPartitionHandler::listenOn() {
+    log("Turning listen on\n");
     lock_guard<mutex> lock(secondThreadSignalLock);
     listening = true;
-    secondThreadCondition.notify_one();
+    stop_ = false;
+    if (threadWaiting) secondThreadCondition.notify_one();
 }
 
 void NeighborPartitionHandler::listenOff() {
+    log("Listen off when possible\n");
     stop_ = true;
 }
 
 
 void NeighborPartitionHandler::listenCheck() {
     zmq::message_t request;
-    printf("\tPart. handler %d->%d | Waiting for requests...\n", clientId, owner.getId());
+    log("Waiting for requests...\n");
     auto result = socket.recv(request, zmq::recv_flags::none);
 
     // Read int representing operations to call from the message
@@ -113,7 +112,7 @@ void NeighborPartitionHandler::listenCheck() {
     std::memcpy(&opcode, request.data(), sizeof(int));
     auto operation = static_cast<PartitionEdgesStub::Operations>(opcode);
 
-    printf("\tPart. handler %d->%d | Received request for opcode %d\n", clientId, owner.getId(), opcode);
+    log("Received request for opcode %d\n", opcode);
 
     bool alreadyReplied = false;
 
@@ -130,7 +129,7 @@ void NeighborPartitionHandler::listenCheck() {
     }
 
     if (!alreadyReplied) {
-        printf("\tPart. handler %d->%d | Sending generic reply for opcode %d\n", clientId, owner.getId(), opcode);
+        log("Sending generic reply for opcode %d\n", opcode);
         socket.send(zmq::str_buffer("ok"));
     }
 }
@@ -142,31 +141,26 @@ void NeighborPartitionHandler::listenThreadLogic() {
 
     while(!term) {
         if (listening) {
-            printf("\tPart. handler %d->%d | Starting listen loop...\n", clientId, owner.getId());
+            log("Starting listen loop...\n");
             while(!stop_) {
                 listenCheck();
             }
             listening = false;
-            printf("\tPart. handler %d->%d | Stopped listen loop\n", clientId, owner.getId());
+            log("Stopped listen loop\n");
         } else {
+            threadWaiting = true;
             unique_lock<mutex> lock(secondThreadSignalLock);
             secondThreadCondition.wait(lock, [this] { return listening; });
+            threadWaiting = false;
         }
     }
 
     #ifndef NDEBUG
     } catch(libsumo::TraCIException& e) {
-        stringstream msg;
-        msg << "Part. handler " << clientId << "->" << owner.getId() 
-            << " | SUMO error: " << e.what() << endl << "=== " << getPid() << " QUITTING ===" << endl;
-        cerr << msg.str();
+        logerr("SUMO error: {}\n=== {} QUITTING ===\n", e.what(), getPid());
         exit(EXIT_FAILURE);
     } catch(zmq::error_t& e) {
-        stringstream msg;
-        msg << "Part. handler " << clientId << "->" << owner.getId() 
-            << " | ZMQ error: " << e.what() << "/" << e.num()
-            << endl << "=== " << getPid() << " QUITTING ===" << endl;
-        cerr << msg.str();
+        logerr("SUMO error: {}/{}\n=== {} QUITTING ===\n", e.what(), e.num(), getPid());
         exit(EXIT_FAILURE);
     }
     #endif
@@ -178,11 +172,11 @@ bool NeighborPartitionHandler::handleGetEdgeVehicles(zmq::message_t& request) {
         static_cast<char*>(request.data()) + request.size()
     );
 
-    printf("\tPart. handler %d->%d | Received getEdgeVehicles(%s)\n", clientId, owner.getId(), edgeId.c_str());
+    log("Received getEdgeVehicles(%s)\n", edgeId.c_str());
 
     vector<string> edgeVehicles = owner.getEdgeVehicles(edgeId);
     auto reply = createMessageWithStrings(edgeVehicles);
-    printf("\tPart. handler %d->%d | Sending reply to getEdgeVehicles(%s)\n", clientId, owner.getId(), edgeId.c_str());
+    log("Sending reply to getEdgeVehicles(%s)\n", edgeId.c_str());
     stringstream ss;
     ss << "\tPart handler " << clientId << "->" << owner.getId() << " | Replying with [";
     printVector(edgeVehicles, "", ", ", false, ss);
@@ -201,7 +195,7 @@ bool NeighborPartitionHandler::handleSetVehicleSpeed(zmq::message_t& request) {
         static_cast<char*>(request.data()) + request.size()
     );
     
-    printf("\tPart. handler %d->%d | Queueing setVehicleSpeed (%s, %f)\n", clientId, owner.getId(), veh.c_str(), speed);
+    log("Queueing setVehicleSpeed (%s, %f)\n", veh.c_str(), speed);
 
     // lock to be 100% sure with the applying of operations later
     operationsBufferLock.lock();
@@ -221,7 +215,7 @@ bool NeighborPartitionHandler::handleAddVehicle(zmq::message_t& request) {
     int stringsOffset = sizeof(int) * 2 + sizeof(double) * 2;
     auto strings = readStringsFromMessage(request, stringsOffset);
 
-    printf("\tPart. handler %d->%d | Queueing addVehicle (%s, ...)\n", clientId, owner.getId(), strings[0].c_str());
+    log("Queueing addVehicle (%s, ...)\n", strings[0].c_str());
 
     // lock to be 100% sure with the applying of operations later
     operationsBufferLock.lock();
@@ -245,8 +239,14 @@ bool NeighborPartitionHandler::handleStepEnd(zmq::message_t& request) {
 
 // Execute the queued operations that other partitions ran
 void NeighborPartitionHandler::applyMutableOperations() {
+    int num = addVehicleQueue.size() + setSpeedQueue.size();
+    // if (num > 0) {
+
+    // }
+    log("Applying mutable operations (has {})\n", num);
     bool wasListening = listening;
     if (listening) {
+        log("Listen off to apply mutable operations\n");
         listenOff();
     }
     // Lock to avoid other threads adding more operations in the meantime
@@ -270,4 +270,30 @@ void NeighborPartitionHandler::applyMutableOperations() {
     operationsBufferLock.unlock();
 
     if (wasListening) listenOn();
+
+    log("Done applying mutable operations (was listening: %d)\n", wasListening);
+}
+
+template<typename... _Args > 
+inline void NeighborPartitionHandler::log(std::format_string<_Args...> format, _Args&&... args) {
+    std::stringstream msg;
+    msg << "\tPart. handler " << clientId << "->" << owner.getId() << " | ";
+    std::format_to(
+        std::ostreambuf_iterator<char>(msg), 
+        std::forward<std::format_string<_Args...>>(format),
+        std::forward<_Args>(args)...
+    );
+    std::cout << msg.str();
+}
+
+template<typename... _Args>
+inline void NeighborPartitionHandler::logerr(std::format_string<_Args...> format, _Args&&... args) {
+    std::stringstream msg;
+    msg << "\tPart. handler " << clientId << "->" << owner.getId() << " | ";
+    std::format_to(
+        std::ostreambuf_iterator<char>(msg), 
+        std::forward<std::format_string<_Args...>>(format),
+        std::forward<_Args>(args)...
+    );
+    std::cerr << msg.str();
 }
