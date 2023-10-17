@@ -129,7 +129,8 @@ void PartitionEdgesStub::addVehicle(
 ) {
     int opcode = Operations::ADD_VEHICLE;
 
-    log("Preparing addVehicle\n");
+    log("Preparing addVehicle({}, {}, {}, {}, {}, {})\n",
+        vehId, routeId, vehType, laneId, laneIndex, lanePos, speed);
 
     // opcode, laneIndex, lanePos, speed
     int stringsOffset = sizeof(int) * 2 + sizeof(double) * 2;

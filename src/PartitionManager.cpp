@@ -133,7 +133,7 @@ vector<string> PartitionManager::getEdgeVehicles(const string& edgeId) {
   return Edge::getLastStepVehicleIDs(edgeId.c_str());
   #ifndef NDEBUG
   } catch(exception& e) {
-    logerr("Error in getEdgeVehicles({}): {}", edgeId, e.what());
+    logerr("Error in getEdgeVehicles({}): {}\n", edgeId, e.what());
     exit(EXIT_FAILURE);
   }
   #endif
@@ -149,7 +149,7 @@ void PartitionManager::setVehicleSpeed(const string& vehId, double speed) {
   Vehicle::slowDown(vehId.c_str(), speed, Simulation::getDeltaT());
   #ifndef NDEBUG
   } catch(exception& e) {
-    logerr("Error in setVehicleSpeed({}, {}): {}", vehId, speed, e.what());
+    logerr("Error in setVehicleSpeed({}, {}): {}\n", vehId, speed, e.what());
     exit(EXIT_FAILURE);
   }
   #endif
@@ -170,7 +170,7 @@ void PartitionManager::addVehicle(
   );
   #ifndef NDEBUG
   } catch(exception& e) {
-    logerr("Error in addVehicle({}, {}, {}, {}, {}, {}, {}): {}", 
+    logerr("Error in addVehicle({}, {}, {}, {}, {}, {}, {}): {}\n", 
       vehId, routeId, vehType, laneId, laneIndex, lanePos, speed, e.what());
     exit(EXIT_FAILURE);
   }
@@ -199,9 +199,7 @@ void PartitionManager::handleIncomingEdges(int num, vector<vector<string>>& prev
               partStub->setVehicleSpeed(veh, Vehicle::getSpeed(veh.c_str()));
             }
             catch(libsumo::TraCIException& e){
-              stringstream err;
-              err << "Part " << id << " | Exception in vehicle slowdown: " << e.what() << std::endl;
-              cerr << err.str();
+              logerr("Part {} | Exception in setting speed of vehicle: {}\n", id, e.what());
             }
           }
         }

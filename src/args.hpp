@@ -29,8 +29,8 @@ public:
             .scan<'i', int>();
             ;
         program.add_argument("--part-threads")
-            .help("Threads used while partitioning")
-            .default_value(2)
+            .help("Threads used while partitioning (will be capped to partition amount)")
+            .default_value(8)
             .scan<'i', int>();
             ;
         program.add_argument("--gui")

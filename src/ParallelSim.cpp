@@ -27,6 +27,7 @@ Contributions: Filippo Lenzi
 #include <vector>
 #include <set>
 #include <filesystem> // C++17
+#include <chrono>
 
 #include <zmq.h>
 #include <zmq.hpp>
@@ -43,6 +44,8 @@ Contributions: Filippo Lenzi
   #include <unistd.h>
   #include "PartitionManager.hpp"
 #endif
+
+#define TIMEUNIT microseconds
 
 namespace fs = std::filesystem;
 
@@ -291,7 +294,7 @@ void waitForPartitions(vector<pid_t> pids) {
     pidParts[pids[i]] = i;
   }
 
-  __printVector(pids, "Coordinator[t] | Started partition wait thread, pids are: ", ", ", false, std::cout);
+  __printVector(pids, "Coordinator[t] | Started partition wait thread, pids are: ", ", ", true, std::cout);
   while (pids.size() > 0) {
     int status;
     pid_t pid = waitProcess(&status);
@@ -328,9 +331,10 @@ void ParallelSim::startSim(){
   // Context for ZeroMQ message-passing, ideally one per program
   zmq::context_t zctx{1};
 
-  vector<vector<border_edge_t>> borderEdges(numThreads);
-  vector<vector<int>> partNeighbors(numThreads);
-  calcBorderEdges(borderEdges, partNeighbors);
+  // Now Python does this
+  // vector<vector<border_edge_t>> borderEdges(numThreads);
+  // vector<vector<int>> partNeighbors(numThreads);
+  // calcBorderEdges(borderEdges, partNeighbors);
 
   vector<pid_t> pids(numThreads);
 
@@ -341,15 +345,15 @@ void ParallelSim::startSim(){
       // create a new process with the partition
       // by launching its exe
 
-      // Pass data needed for the partition constructor as json
-      nlohmann::json partData;
-      partData["id"] = i;
-      partData["neighbors"] = partNeighbors[i];
-      // nlohmann::json handles the conversion, see psumoTypes.cpp
-      partData["borderEdges"] = borderEdges[i];
-      std::ofstream out(getPartitionDataFile(args.dataDir, i));
-      out << partData.dump(2);
-      out.close();
+      // // Pass data needed for the partition constructor as json
+      // nlohmann::json partData;
+      // partData["id"] = i;
+      // partData["neighbors"] = partNeighbors[i];
+      // // nlohmann::json handles the conversion, see psumoTypes.cpp
+      // partData["borderEdges"] = borderEdges[i];
+      // std::ofstream out(getPartitionDataFile(args.dataDir, i));
+      // out << partData.dump(2);
+      // out.close();
 
       pid_t pid;
 
@@ -371,6 +375,8 @@ void ParallelSim::startSim(){
       pid = runProcess(exeDir / PROGRAM_NAME_PART, partArgs);
     #else
 
+    printf("SINGLE EXE VER NOT SUPPORTED AS OF NOW; IS OLD VER\n");
+    exit(EXIT_FAILURE);
     // If in single executable mode, fork and create the partition here
     // (still in a new process)
 
@@ -408,7 +414,6 @@ void ParallelSim::startSim(){
   thread waitThread(&waitForPartitions, pids);
 
   // From here, coordination process
-
   coordinatePartitionsSync(zctx);
 
   waitThread.join();
@@ -456,6 +461,10 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
 
   int barrierPartitions = 0;
   int stoppedPartitions = 0;
+
+  // Start counting time at first barrier
+  bool setTime = false;
+  chrono::TIMEUNIT time0;
 
   while (true) {
     zmq::poll(pollitems);
@@ -514,10 +523,22 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
       for (int i = 0; i < numThreads; i++) {
         sockets[i]->send(zmq::str_buffer("ok"), zmq::send_flags::none);
       }
+
+      if (!setTime) {
+        time0 = duration_cast<chrono::TIMEUNIT>(
+        chrono::system_clock::now().time_since_epoch()
+        );
+      }
     }
   }
 
   for (int i = 0; i < numThreads; i++) {
     delete sockets[i];
   }
+
+  chrono::TIMEUNIT time1 = duration_cast<chrono::TIMEUNIT>(
+    chrono::system_clock::now().time_since_epoch()
+  );
+
+  cout << "Took " << (time1 - time0) << "!" << endl;
 }

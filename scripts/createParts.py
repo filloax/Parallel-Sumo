@@ -29,6 +29,7 @@ from datetime import timedelta
 from convertToMetis import main as convert_to_metis, weight_funs, WEIGHT_ROUTE_NUM
 from sumobin import run_duarouter, run_netconvert
 from sumo2png import generate_network_image
+from processNeighbors import NeighborsPostProcess
 
 if 'SUMO_HOME' in os.environ:
     SUMO_HOME = os.environ['SUMO_HOME']
@@ -60,7 +61,7 @@ parser.add_argument('--keep-poly', action='store_true', help="Keep poly files fr
 parser.add_argument('--no-metis', action='store_true', help="Partition network using grid (unsupported)")
 parser.add_argument('-w', '--weight-fun', choices=weight_funs, nargs="*", default=[WEIGHT_ROUTE_NUM], help="One or more weighting methods to use")
 parser.add_argument('-nw', '--no-weight', action='store_true', help="Do not use edge weights in partitioning")
-parser.add_argument('-T', '--threads', type=int, default=1, help="Threads to use for processing the partitioning of the network")
+parser.add_argument('-T', '--threads', type=int, default=8, help="Threads to use for processing the partitioning of the network, will be capped to partition num")
 # remove default True later
 parser.add_argument('-t', '--timing', action='store_true', help="Measure the timing for the whole process")
 parser.add_argument('--dev-mode', action='store_false', help="Remove some currently unhandled edge cases from the routes (not ideal in release, currently works inversely for easier development)")
@@ -73,7 +74,7 @@ devmode = False
 def _is_poly_file(path: str):
     return path.endswith(".poly.xml")
 
-class NetworkPartitioning:
+class NetworkPartitioning:   
     def __init__(self, 
         cfg_file: str,
         use_metis: bool = True,
@@ -107,7 +108,7 @@ class NetworkPartitioning:
         self._temp_files = set()
         self._temp_files_lock = Lock()
         self._vehicle_depart_times = None
-
+        
     def partition_network(self, num_parts: int):
         if devmode:
             print("-------------------------------")
@@ -117,6 +118,12 @@ class NetworkPartitioning:
             print("-- * Routes/vehicles split   --")
             print("--   by cutRoutes.py         --")
             print("-------------------------------")
+
+        postprocessor = NeighborsPostProcess(num_parts, self.data_folder)
+        
+        thread_num = min(num_parts, self.threads)
+        if thread_num < self.threads:
+            print(f"Reduced thread num to part num ({thread_num} instead of {self.threads})")
 
         if self.timing:
             start_t = time()
@@ -192,8 +199,8 @@ class NetworkPartitioning:
         part_bounds = tuple(part_bounds_list)
 
         # Run the partitioning proces
-        if self.threads > 1:
-            print(f"Running partition processing with {self.threads} threads...")
+        if thread_num > 1:
+            print(f"Running partition processing with {thread_num} threads...")
         else:
             print("Running partition processing single-threaded...")
         
@@ -202,13 +209,13 @@ class NetworkPartitioning:
             return self._process_partition(part_idx, processed_routes_path, netconvert_options, part_bounds)
 
         # ThreadPool (instead of Pool) to make sharing objects etc. possible
-        with ThreadPool(self.threads) as pool:
-            chunksize = num_parts // self.threads
+        with ThreadPool(thread_num) as pool:
+            chunksize = num_parts // thread_num
             partition_vehicle_start_times = pool.map(process_part_work, range(num_parts), chunksize)
 
             # First reduce into a smaller list in multiple threads,
             # then do final merging in main thread
-            interm_dicts = pool.map(_merge_float_dicts_min, _split_list(partition_vehicle_start_times, self.threads), chunksize=1)
+            interm_dicts = pool.map(_merge_float_dicts_min, _split_list(partition_vehicle_start_times, thread_num), chunksize=1)
             self._vehicle_depart_times = _merge_float_dicts_min(interm_dicts)
            
             print("Processing done, postprocessing...")
@@ -230,6 +237,9 @@ class NetworkPartitioning:
                 self._temp_files,
                 edge_weights_file,
             )
+            
+        print("Generating edge data json...")
+        postprocessor.calc_border_edges()
         
         print("Cleaning up temp files...")
 

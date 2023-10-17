@@ -224,7 +224,6 @@ def main(
                     print('', file=f)
             print('}', file=f)
 
-
 def _is_connected(neighbors):
     visited = defaultdict(bool)
 
