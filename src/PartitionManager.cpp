@@ -337,7 +337,7 @@ void PartitionManager::runSimulation() {
   } catch (exception& e) {}
 
   if (success) {
-    log("Simulation loaded with {} starting vehicles, ver. {} - {}\n", id, 
+    log("Simulation loaded with {} starting vehicles, ver. {} - {}\n", 
       Simulation::getLoadedNumber(), version.first, version.second.c_str());
   } else {
     stringstream msg;

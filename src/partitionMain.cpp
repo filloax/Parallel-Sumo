@@ -57,7 +57,12 @@ int main(int argc, char* argv[]) {
     vector<border_edge_t> borderEdges;
     vector<partId_t> partNeighbors;
 
-    loadPartData(args.partId, args.dataDir, borderEdges, partNeighbors);
+    if (args.numThreads > 1) {
+        loadPartData(args.partId, args.dataDir, borderEdges, partNeighbors);
+    } else {
+        cout << "Starting partition in 1 thread mode (almost no special treatment, more or less base sumo run)" << endl;
+        cfg = args.cfg; 
+    }
 
     zmq::context_t& zctx = ContextPool::newContext(1);
 
