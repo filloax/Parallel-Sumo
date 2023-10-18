@@ -27,6 +27,7 @@ private:
     static std::vector<zmq::context_t*> contexts;
 
 public:
+    static bool verbose;
     static zmq::context_t& newContext(int io_threads = 1, int max_sockets = ZMQ_MAX_SOCKETS_DFLT);
     static void destroyAll();
 };

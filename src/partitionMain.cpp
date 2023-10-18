@@ -45,6 +45,8 @@ int main(int argc, char* argv[]) {
         std::exit(1);
     }
 
+    ContextPool::verbose = args.verbose;
+
     filesystem::path dataDir(args.dataDir);
     filesystem::create_directories(dataDir / "sockets");
 

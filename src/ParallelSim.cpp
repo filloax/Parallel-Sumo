@@ -17,6 +17,7 @@ Contributions: Filippo Lenzi
 #include <fstream>
 #include <ctime>
 #include <nlohmann/json_fwd.hpp>
+#include <ratio>
 #include <sstream>
 #include <string>
 #include <stdlib.h>
@@ -45,12 +46,11 @@ Contributions: Filippo Lenzi
   #include "PartitionManager.hpp"
 #endif
 
-#define TIMEUNIT microseconds
-
 namespace fs = std::filesystem;
 
 using namespace std;
 using namespace psumo;
+using namespace chrono;
 
 typedef std::unordered_multimap<string, int>::iterator umit;
 
@@ -140,6 +140,7 @@ void ParallelSim::getFilePaths(){
 
 }
 
+
 void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
   // Filippo Lenzi: Originally was implemented in C++
   // in the original program, but because of it not needing to be
@@ -174,6 +175,8 @@ void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
 
   std::cout << "Running createParts.py to split graph and create partition files..." << std::endl;
 
+  auto time0 = high_resolution_clock::now();
+
   runProcess(pythonCommand, partArgs);
 
   int status;
@@ -183,6 +186,10 @@ void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
     exit(EXIT_FAILURE);
   }
   printf("partitioning successful with status: %d\n", WEXITSTATUS(status));
+
+  auto time1 = high_resolution_clock::now();
+  auto duration = duration_cast<microseconds>(time1 - time0).count() / 1000.0;
+  cout << "Partitioning took " << duration<< "ms!" << endl;
 }
 
 void ParallelSim::loadRealNumThreads() {
@@ -288,13 +295,14 @@ void ParallelSim::calcBorderEdges(vector<vector<border_edge_t>>& borderEdges, ve
 }
 
 // Not reference so thread starts correctly
-void waitForPartitions(vector<pid_t> pids) {
+void waitForPartitions(vector<pid_t> pids, bool verbose) {
   map<pid_t, partId_t> pidParts;
   for (int i = 0; i < pids.size(); i++) {
     pidParts[pids[i]] = i;
   }
 
-  __printVector(pids, "Coordinator[t] | Started partition wait thread, pids are: ", ", ", true, std::cout);
+  if (verbose)
+    __printVector(pids, "Coordinator[t] | Started partition wait thread, pids are: ", ", ", true, std::cout);
   while (pids.size() > 0) {
     int status;
     pid_t pid = waitProcess(&status);
@@ -308,8 +316,8 @@ void waitForPartitions(vector<pid_t> pids) {
       pids.erase(std::remove(pids.begin(), pids.end(), pid), pids.end());
 
       if (status != 0) {
-        perror("Partition ended with an error! Closing in 3\n");
-        std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+        perror("Partition ended with an error! Closing in 3s\n");
+        std::this_thread::sleep_for(seconds(3));
         exit(-1);
       }
     }
@@ -371,7 +379,8 @@ void ParallelSim::startSim(){
       if (args.gui) partArgs.push_back("--gui");
       if (args.skipPart) partArgs.push_back("--skip-part");
       if (args.keepPoly) partArgs.push_back("--keep-poly");
-      printf("Coordinator | Starting process for part %i\n", i);
+      if (args.verbose)
+        printf("Coordinator | Starting process for part %i\n", i);
       pid = runProcess(exeDir / PROGRAM_NAME_PART, partArgs);
     #else
 
@@ -411,7 +420,7 @@ void ParallelSim::startSim(){
   }
 
   // Check for partition pids in case of unexpected exit in a subthread
-  thread waitThread(&waitForPartitions, pids);
+  thread waitThread(&waitForPartitions, pids, args.verbose);
 
   // From here, coordination process
   coordinatePartitionsSync(zctx);
@@ -420,7 +429,8 @@ void ParallelSim::startSim(){
 }
 
 void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
-  printf("Coordinator | Starting coordinator routine...\n");
+  if (args.verbose)
+    printf("Coordinator | Starting coordinator routine...\n");
 
   // Initialize sockets used to sync partitions in a barrier-like fashion
   vector<zmq::socket_t*> sockets(numThreads);
@@ -439,7 +449,8 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
     }
   }
 
-  printf("Coordinator | Bound sockets\n");
+  if (args.verbose)
+    printf("Coordinator | Bound sockets\n");
 
   vector<zmq::pollitem_t> pollitems(numThreads);
   for (int i = 0; i < numThreads; i++) {
@@ -462,9 +473,8 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
   int barrierPartitions = 0;
   int stoppedPartitions = 0;
 
-  // Start counting time at first barrier
+  high_resolution_clock::time_point time0;
   bool setTime = false;
-  chrono::TIMEUNIT time0;
 
   while (true) {
     zmq::poll(pollitems);
@@ -483,7 +493,8 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
           if (!partitionReachedBarrier[i]) {
             partitionReachedBarrier[i] = true;
             barrierPartitions++;
-            printf("Coordinator | Partition %d reached barrier (%d/%d)\n", i, barrierPartitions, numThreads); // TEMP
+            if (args.verbose)
+              printf("Coordinator | Partition %d reached barrier (%d/%d)\n", i, barrierPartitions, numThreads); // TEMP
           } else {
             stringstream msg;
             msg << "Partition sent reached barrier message twice! Is " << i << endl;
@@ -515,7 +526,8 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
       break;
     }
     if (barrierPartitions >= numThreads) {
-      printf("Coordinator | All partitions reached barrier\n");
+      if (args.verbose)
+        printf("Coordinator | All partitions reached barrier\n");
       barrierPartitions = 0;
       for (int i = 0; i < numThreads; i++) partitionReachedBarrier[i] = false;
 
@@ -525,9 +537,9 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
       }
 
       if (!setTime) {
-        time0 = duration_cast<chrono::TIMEUNIT>(
-        chrono::system_clock::now().time_since_epoch()
-        );
+        setTime = true;
+        // start time at first barrier
+        time0 = high_resolution_clock::now();
       }
     }
   }
@@ -536,9 +548,7 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
     delete sockets[i];
   }
 
-  chrono::TIMEUNIT time1 = duration_cast<chrono::TIMEUNIT>(
-    chrono::system_clock::now().time_since_epoch()
-  );
-
-  cout << "Took " << (time1 - time0) << "!" << endl;
+  high_resolution_clock::time_point time1 = high_resolution_clock::now();
+  auto duration = duration_cast<microseconds>(time1 - time0).count() / 1000.0;
+  cout << "Parallel simulation took " << duration << "ms!" << endl;
 }

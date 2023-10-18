@@ -275,13 +275,13 @@ void PartitionManager::arriveWaitBarrier() {
   std::memcpy(message.data(), &opcode, sizeof(int));
   coordinatorSocket.send(message, zmq::send_flags::none);
 
-  printf("Manager %d | Waiting for barrier...\n", id); //TEMP
+  logminor("Waiting for barrier...\n", id); //TEMP
 
   // Receive response, essentially blocking
   // output not needed so just pass the previous message
   auto _ = coordinatorSocket.recv(message);
 
-  printf("Manager %d | Reached barrier...\n", id); //TEMP
+  logminor("Reached barrier...\n", id); //TEMP
 }
 
 void PartitionManager::signalFinish() {
@@ -297,7 +297,7 @@ void PartitionManager::signalFinish() {
 
 // Only run in new process
 void PartitionManager::runSimulation() {
-  printf("Manager %d | Starting simulation logic\n", id);
+  logminor("Starting simulation logic\n", id);
 
   pid_t pid;
   vector<string> simArgs {
@@ -337,7 +337,7 @@ void PartitionManager::runSimulation() {
   } catch (exception& e) {}
 
   if (success) {
-    printf("Manager %d | Simulation loaded with %d starting vehicles, ver. %d-%s\n", id, 
+    log("Simulation loaded with {} starting vehicles, ver. {} - {}\n", id, 
       Simulation::getLoadedNumber(), version.first, version.second.c_str());
   } else {
     stringstream msg;
@@ -351,10 +351,8 @@ void PartitionManager::runSimulation() {
       neighborClientHandlers[partId]->start();
     }
   } catch(zmq::error_t& e) {
-    stringstream ss;
-    ss << "Manager " << id << " | ZMQ Error in starting neighbor client handlers: " << e.what() << endl;
-    cerr << ss.str();
-    exit(-2);
+    logerr("ZMQ Error in starting neighbor client handlers: {}\n", e.what());
+    exit(EXIT_FAILURE);
   }
 
   // Wait for coordinator process to bind socket
@@ -363,10 +361,8 @@ void PartitionManager::runSimulation() {
   try {
     coordinatorSocket.connect(psumo::getSyncSocketId(args.dataDir, id));
   } catch(zmq::error_t& e) {
-    stringstream ss;
-    ss << "Manager " << id << " | ZMQ Error in connecting to coordinator process: " << e.what() << endl;
-    cerr << ss.str();
-    exit(-3);
+    logerr("ZMQ Error in connecting to coordinator process: {}\n", e.what());
+    exit(EXIT_FAILURE);
   }
 
   // ensure all servers have started before simulation begins
@@ -377,10 +373,8 @@ void PartitionManager::runSimulation() {
       stub.second->connect();
     }
   } catch(zmq::error_t& e) {
-    stringstream ss;
-    ss << "Manager " << id << " | ZMQ Error in connecting partition stub: " << e.what() << endl;
-    cerr << ss.str();
-    exit(-4);
+    logerr("ZMQ Error in connecting partition stub: {}\n", e.what());
+    exit(EXIT_FAILURE);
   }
 
   stringstream msg;
@@ -399,11 +393,11 @@ void PartitionManager::runSimulation() {
   while(running && Simulation::getTime() < endTime) {
     Simulation::step();
 
-    printf("Manager %d | Step done (%d/%d)\n", id, (int) Simulation::getTime(), endTime);
+    logminor("Manager %d | Step done (%d/%d)\n", id, (int) Simulation::getTime(), endTime);
     handleIncomingEdges(numToEdges, prevToVehicles);
-    printf("Manager %d | Handled incoming edges\n", id);
+    logminor("Manager %d | Handled incoming edges\n", id);
     handleOutgoigEdges(numFromEdges, prevFromVehicles);
-    printf("Manager %d | Handled outgoing edges\n", id);
+    logminor("Manager %d | Handled outgoing edges\n", id);
     // make sure every time step across partitions is synchronized
     arriveWaitBarrier();
 
@@ -435,37 +429,39 @@ void PartitionManager::runSimulation() {
 }
 
 template<typename... _Args > 
-inline void PartitionManager::log(std::format_string<_Args...> format, _Args&&... args) {
+inline void PartitionManager::log(std::format_string<_Args...> format, _Args&&... args_) {
     std::stringstream msg;
     msg << "Manager " << id << " | ";
     std::format_to(
         std::ostreambuf_iterator<char>(msg), 
         std::forward<std::format_string<_Args...>>(format),
-        std::forward<_Args>(args)...
+        std::forward<_Args>(args_)...
     );
     std::cout << msg.str();
 }
 
 template<typename... _Args > 
-inline void PartitionManager::logminor(std::format_string<_Args...> format, _Args&&... args) {
+inline void PartitionManager::logminor(std::format_string<_Args...> format, _Args&&... args_) {
+    if (!args.verbose) return;
+
     std::stringstream msg;
     msg << "\tManager " << id << " | ";
     std::format_to(
         std::ostreambuf_iterator<char>(msg), 
         std::forward<std::format_string<_Args...>>(format),
-        std::forward<_Args>(args)...
+        std::forward<_Args>(args_)...
     );
     std::cout << msg.str();
 }
 
 template<typename... _Args>
-inline void PartitionManager::logerr(std::format_string<_Args...> format, _Args&&... args) {
+inline void PartitionManager::logerr(std::format_string<_Args...> format, _Args&&... args_) {
     std::stringstream msg;
     msg << "Manager " << id << " | ";
     std::format_to(
         std::ostreambuf_iterator<char>(msg), 
         std::forward<std::format_string<_Args...>>(format),
-        std::forward<_Args>(args)...
+        std::forward<_Args>(args_)...
     );
     std::cerr << msg.str();
 }

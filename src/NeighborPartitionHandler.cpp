@@ -36,7 +36,9 @@ NeighborPartitionHandler::NeighborPartitionHandler(PartitionManager& owner, int 
     stop_(false),
     term(false),
     threadWaiting(false),
-    zcontext(ContextPool::newContext(1))
+    zcontext(ContextPool::newContext(1)),
+    addVehicleQueue(array<add_veh_t, OPERATION_QUEUE_SIZE>()),
+    setSpeedQueue(array<set_veh_speed_t, OPERATION_QUEUE_SIZE>())
 {
     socket = zmq::socket_t{zcontext, zmq::socket_type::rep};
     socket.set(zmq::sockopt::linger, 0 );
@@ -206,11 +208,13 @@ bool NeighborPartitionHandler::handleGetEdgeVehicles(zmq::message_t& request) {
     auto reply = createMessageWithStrings(edgeVehicles);
     log("Sending reply to getEdgeVehicles({})\n", edgeId.c_str());
 
-    stringstream ss;
-    ss << "\tPart. handler " << clientId << "->" << owner.getId() << " | Replying with [";
-    printVector(edgeVehicles, "", ", ", false, ss);
-    ss << "]" << endl;
-    cout << ss.str();
+    if (owner.getArgs().verbose) {
+        stringstream ss;
+        ss << "\tPart. handler " << clientId << "->" << owner.getId() << " | Replying with [";
+        printVector(edgeVehicles, "", ", ", false, ss);
+        ss << "]" << endl;
+        cout << ss.str();
+    }
 
     socket.send(reply, zmq::send_flags::none);
     return true;
@@ -311,7 +315,9 @@ void NeighborPartitionHandler::applyMutableOperations() {
 }
 
 template<typename... _Args > 
-inline void NeighborPartitionHandler::log(std::format_string<_Args...> format, _Args&&... args) {
+void NeighborPartitionHandler::log(std::format_string<_Args...> format, _Args&&... args_) {
+    if (!owner.getArgs().verbose) return;
+
     std::stringstream msg;
     msg << "\tPart. handler " << clientId << "->" << owner.getId() 
         << " [" << this_thread::get_id() << "]"
@@ -319,13 +325,13 @@ inline void NeighborPartitionHandler::log(std::format_string<_Args...> format, _
     std::format_to(
         std::ostreambuf_iterator<char>(msg), 
         std::forward<std::format_string<_Args...>>(format),
-        std::forward<_Args>(args)...
+        std::forward<_Args>(args_)...
     );
     std::cout << msg.str();
 }
 
 template<typename... _Args>
-inline void NeighborPartitionHandler::logerr(std::format_string<_Args...> format, _Args&&... args) {
+void NeighborPartitionHandler::logerr(std::format_string<_Args...> format, _Args&&... args_) {
     std::stringstream msg;
     msg << "\tPart. handler " << clientId << "->" << owner.getId()
         << " [" << this_thread::get_id() << "]"
@@ -333,7 +339,7 @@ inline void NeighborPartitionHandler::logerr(std::format_string<_Args...> format
     std::format_to(
         std::ostreambuf_iterator<char>(msg), 
         std::forward<std::format_string<_Args...>>(format),
-        std::forward<_Args>(args)...
+        std::forward<_Args>(args_)...
     );
     std::cerr << msg.str();
 }

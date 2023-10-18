@@ -48,6 +48,10 @@ public:
         program.add_argument("--data-dir")
             .help("Data directory to store working files in")
             .default_value("data");
+        program.add_argument("-v", "--verbose")
+            .help("Extra output")
+            .default_value(false)
+            .implicit_value(true);
     }
 
     void parse_known_args(int argc, char* argv[]) {
@@ -60,6 +64,7 @@ public:
         skipPart = program.get<bool>("--skip-part");
         keepPoly = program.get<bool>("--keep-poly");
         dataDir = program.get<std::string>("--data-dir");
+        verbose = program.get<bool>("--verbose");
 
         std::stringstream msg;
         if (numThreads <= 0) {
@@ -89,6 +94,7 @@ public:
     bool skipPart;
     bool keepPoly;
     std::string dataDir;
+    bool verbose;
     std::vector<std::string> sumoArgs;
     argparse::ArgumentParser& program;
 };

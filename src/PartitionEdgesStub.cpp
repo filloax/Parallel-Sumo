@@ -88,11 +88,13 @@ std::vector<std::string> PartitionEdgesStub::getEdgeVehicles(const std::string& 
 
     auto out = readStringsFromMessage(reply);
 
-    stringstream msg;
-    msg << "\tStub " << ownerId << "->"<< id << " | Received: [";
-    printVector(out, "", ", ", false, msg);
-    msg << "]" << endl;
-    cout << msg.str();
+    if (args.verbose) {
+        stringstream msg;
+        msg << "\tStub " << ownerId << "->"<< id << " | Received: [";
+        printVector(out, "", ", ", false, msg);
+        msg << "]" << endl;
+        cout << msg.str();
+    }
 
     return out;
 }
@@ -161,25 +163,27 @@ void PartitionEdgesStub::addVehicle(
 }
 
 template<typename... _Args > 
-inline void PartitionEdgesStub::log(std::format_string<_Args...> format, _Args&&... args) {
+inline void PartitionEdgesStub::log(std::format_string<_Args...> format, _Args&&... args_) {
+    if (!args.verbose) return;
+
     std::stringstream msg;
     msg << "\tStub " << ownerId << "->" << id << " | ";
     std::format_to(
         std::ostreambuf_iterator<char>(msg), 
         std::forward<std::format_string<_Args...>>(format),
-        std::forward<_Args>(args)...
+        std::forward<_Args>(args_)...
     );
     std::cout << msg.str();
 }
 
 template<typename... _Args>
-inline void PartitionEdgesStub::logerr(std::format_string<_Args...> format, _Args&&... args) {
+inline void PartitionEdgesStub::logerr(std::format_string<_Args...> format, _Args&&... args_) {
     std::stringstream msg;
     msg << "\tStub " << ownerId << "->" << id << " | ";
     std::format_to(
         std::ostreambuf_iterator<char>(msg), 
         std::forward<std::format_string<_Args...>>(format),
-        std::forward<_Args>(args)...
+        std::forward<_Args>(args_)...
     );
     std::cerr << msg.str();
 }

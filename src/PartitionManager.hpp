@@ -98,5 +98,5 @@ public:
 
     const int getId() { return id; }
     const int getNumThreads() { return numThreads; }
-    const Args getArgs() { return args; }
+    const Args& getArgs() { return args; }
 };
