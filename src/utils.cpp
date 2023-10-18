@@ -77,15 +77,16 @@ zmq::message_t createMessageWithStrings(vector<string> &strings, int offset, int
 
     // + vector.size(): account for null characters at end of each string
     zmq::message_t message(offset + spaceAfter + sizeof(int) + totalSize + strings.size());
+    char* data = static_cast<char*>(message.data());
 
     // Also write an int with the vector size
     int vectorSize = strings.size();
-    std::memcpy(static_cast<int*>(message.data()) + offset, &vectorSize, sizeof(int));
+    std::memcpy(data + offset, &vectorSize, sizeof(int));
 
     int writtenBytes = sizeof(int);
     for (int i = 0; i < strings.size(); i++) {
         std::memcpy(
-            static_cast<char*>(message.data()) + offset + writtenBytes, 
+            data + offset + writtenBytes, 
             (strings[i] + '\0').data(), strings[i].size() + 1
         );
         writtenBytes += strings[i].size() + 1;
@@ -99,7 +100,7 @@ std::vector<std::string> readStringsFromMessage(zmq::message_t &message, int off
     size_t size = message.size();
 
     int vectorSize;
-    std::memcpy(&vectorSize, data, sizeof(int));
+    std::memcpy(&vectorSize, data + offset, sizeof(int));
 
     std::vector<std::string> result(vectorSize);
     int currentString = 0;

@@ -379,6 +379,8 @@ void ParallelSim::startSim(){
       if (args.gui) partArgs.push_back("--gui");
       if (args.skipPart) partArgs.push_back("--skip-part");
       if (args.keepPoly) partArgs.push_back("--keep-poly");
+      if (args.verbose)  partArgs.push_back("--verbose");
+      
       if (args.verbose)
         printf("Coordinator | Starting process for part %i\n", i);
       pid = runProcess(exeDir / PROGRAM_NAME_PART, partArgs);

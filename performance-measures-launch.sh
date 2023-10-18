@@ -12,16 +12,18 @@ files=(
 threadNumbers=(
     1
     4
-    6 # num cores in testing machine
-    12 # num logical cores in testing machine
+    $(( $(nproc) / 2 ))# num cores in testing machine
+    $(nproc) # num logical cores in testing machine
 )
 
-echo "cfg,thread no.,duration,traci duration,realtime factor,UPS" > "testResults/test3.csv"
+echo "cfg,thread no.,time,part.time" > "testResults/test3.csv"
 
 for cfg in "${files[@]}"; do
     for N in "${threadNumbers[@]}"; do
-        echo "Running with: -N $N -c $cfg"
-        echo "python ./measure-performance.py -N $N -c $cfg"
-        echo "$cfg,$N,$(python ./measure-performance.py -N $N -c $cfg)" >> "testResults/test3.csv"
+        for i in 1 .. 5; do
+            echo "Running with: -N $N -c $cfg"
+            echo "python ./measure-performance.py -N $N -c $cfg"
+            echo "$cfg,$N,$(python ./measure-performance.py -N $N -c $cfg)" >> "testResults/test3.csv"
+        done
     done
 done

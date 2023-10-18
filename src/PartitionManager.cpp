@@ -160,14 +160,15 @@ void PartitionManager::addVehicle(
 ) {
   string lanePosStr = std::to_string(lanePos);
   string speedStr = std::to_string(speed);
-  // Use .c_str() for same reason as [getEdgeVehicles]
   #ifndef NDEBUG
   try {
   #endif
   Vehicle::add(
+  // Use .c_str() for same reason as [getEdgeVehicles]
     vehId.c_str(), routeId.c_str(), vehType.c_str(), "now", 
-    laneId.c_str(), lanePosStr, speedStr
+    "first", "base", speedStr
   );
+  Vehicle::moveTo(vehId.c_str(), laneId.c_str(), lanePos);
   #ifndef NDEBUG
   } catch(exception& e) {
     logerr("Error in addVehicle({}, {}, {}, {}, {}, {}, {}): {}\n", 

@@ -25,6 +25,7 @@ from typing import Callable
 from collections import defaultdict
 from time import time
 from datetime import timedelta
+import json
 
 from convertToMetis import main as convert_to_metis, weight_funs, WEIGHT_ROUTE_NUM
 from sumobin import run_duarouter, run_netconvert
@@ -67,6 +68,7 @@ parser.add_argument('-t', '--timing', action='store_true', help="Measure the tim
 parser.add_argument('--dev-mode', action='store_false', help="Remove some currently unhandled edge cases from the routes (not ideal in release, currently works inversely for easier development)")
 parser.add_argument('--png', action='store_true', help="Output network images for each partition")
 parser.add_argument('-v', '--verbose', action='store_true', help="Additional output")
+parser.add_argument('--force', action='store_true', help="Regenerate even if data folder already contains partition data matching these settings")
 
 verbose = False
 devmode = False
@@ -464,8 +466,28 @@ def _split_list(list: list, n: int) -> list[list]:
 
     return parts
 
+def _save_args(args: object):
+    args_path = os.path.join(args.data_folder, "partArgs.json")
+    with open(args_path, 'w', encoding='utf-8') as f:
+        json.dump(args.__dict__, f)
+        
+def _check_args(args: object):
+    args_path = os.path.join(args.data_folder, "partArgs.json")
+    try:
+        if os.path.exists(args_path):
+            with open(args_path, 'r', encoding='utf-8') as f:
+                old_args = json.load(f)
+            return old_args == args.__dict__
+    except Exception:
+        print("Coudldn't check for previous calls' args", file=sys.stderr)
+    return False
+
 def worker(args):
     global verbose, devmode
+    
+    if not args.force and _check_args(args):
+        print("Partitioning same as previous gen in this folder, skipping (use --force to ignore this and run anyways)")
+        return
 
     if args.verbose:
         verbose = True
@@ -500,6 +522,8 @@ def worker(args):
     )
     
     partitioning.partition_network(args.num_parts)
+    
+    _save_args(args)
 
 def main(args):
     worker_process = Process(target=worker, args=[args])

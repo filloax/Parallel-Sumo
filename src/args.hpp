@@ -83,6 +83,7 @@ public:
                 << ", partitioningThreads=" << partitioningThreads
                 << ", gui=" << gui << ", skipPart=" << skipPart
                 << ", keepPoly=" << keepPoly << ", dataDir=" << dataDir
+                << ", verbose=" << verbose
                 << std::endl;
         }
     }

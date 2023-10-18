@@ -109,7 +109,6 @@ void NeighborPartitionHandler::listenOff() {
     stop_ = true;
 }
 
-
 void NeighborPartitionHandler::listenCheck() {
     // Wait for the first message between the partition socket and the thread socket,
     // thread socket meaning work should be interrupted (partition stopped)
@@ -245,13 +244,14 @@ bool NeighborPartitionHandler::handleAddVehicle(zmq::message_t& request) {
     double lanePos, speed;
     const char* data = static_cast<char*>(request.data());
     std::memcpy(&laneIndex, data + sizeof(int), sizeof(int));
-    std::memcpy(&lanePos, data + sizeof(int) * 2, sizeof(double));
-    std::memcpy(&speed, data + sizeof(int) * 2 + sizeof(double), sizeof(double));
+    std::memcpy(&lanePos,   data + sizeof(int) * 2, sizeof(double));
+    std::memcpy(&speed,     data + sizeof(int) * 2 + sizeof(double), sizeof(double));
 
     int stringsOffset = sizeof(int) * 2 + sizeof(double) * 2;
     auto strings = readStringsFromMessage(request, stringsOffset);
 
-    log("Queueing addVehicle ({}, ...)\n", strings[0].c_str());
+    log("Queueing addVehicle (addVehicle({}, {}, {}, {}, {}, {})\n",
+        strings[0], strings[1], strings[2], strings[3], laneIndex, lanePos, speed);
 
     // lock to be 100% sure with the applying of operations later
     operationsBufferLock.lock();
