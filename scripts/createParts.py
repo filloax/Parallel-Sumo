@@ -122,12 +122,6 @@ class NetworkPartitioning:
             print("--   by cutRoutes.py         --")
             print("-------------------------------")
 
-        postprocessor = NeighborsPostProcess(num_parts, self.data_folder)
-        
-        thread_num = min(num_parts, self.threads)
-        if thread_num < self.threads:
-            print(f"Reduced thread num to part num ({thread_num} instead of {self.threads})")
-
         if self.timing:
             start_t = time()
 
@@ -200,6 +194,10 @@ class NetworkPartitioning:
 
         # Make immutable for multithreading
         part_bounds = tuple(part_bounds_list)
+        
+        thread_num = min(num_parts, self.threads)
+        if thread_num < num_parts:
+            print(f"Reduced thread num to part num ({thread_num} instead of {self.threads})")
 
         # Run the partitioning proces
         if thread_num > 1:
@@ -221,13 +219,10 @@ class NetworkPartitioning:
             interm_dicts = pool.map(_merge_float_dicts_min, _split_list(partition_vehicle_start_times, thread_num), chunksize=1)
             self._vehicle_depart_times = _merge_float_dicts_min(interm_dicts)
 
-            print("Processing done, postprocessing...")
-
             pool.map(self._postprocess_partition, range(num_parts), chunksize)
 
-            print("Postprocessing done")
-
             self._final_duplicates_check(num_parts)
+            self._final_route_connection_check(num_parts)
             
             belonging = pool.map(self._read_partition_vehicles, range(num_parts), chunksize)
 
@@ -262,12 +257,13 @@ class NetworkPartitioning:
             )
             
         print("Generating edge data json...")
+        postprocessor = NeighborsPostProcess(num_parts, self.data_folder)
         postprocessor.calc_border_edges()
         
         print("Cleaning up temp files...")
 
-        # for file in self._temp_files:
-            # os.remove(file)
+        for file in self._temp_files:
+            os.remove(file)
 
         print("Finished partitioning network!")
 
@@ -342,7 +338,7 @@ class NetworkPartitioning:
             net_part, processed_routes_path,
             "--routes-output", interm_rou_part,
             "--orig-net", self.net_file,
-            "--disconnected-action", "keep"
+            # "--disconnected-action", "keep" # TEMP, TODO: re enable when split routes handled
         ]))
 
         vehicle_depart_times: dict[str, float] = {}
@@ -509,6 +505,29 @@ class NetworkPartitioning:
             tree.write(rou_part, encoding='utf-8')
                 
             print(f"Partition {i}: removed {len(delete)} additional duplicate vehicles")
+
+    def __each_shares_element_with_prec(self, lst: list[list]):
+        return all(set(lst[i]) & set(lst[i - 1]) for i in range(1, len(lst)))
+
+    def _final_route_connection_check(self, num_parts: int):
+        route_parts = [os.path.abspath(os.path.join(self.data_folder, f"part{part_idx}.rou.xml")) for part_idx in range(num_parts)]
+        route_segs_by_id = defaultdict(list)
+        
+        for file in route_parts:
+            tree = ET.parse(file)
+            root = tree.getroot()
+            for route in root.findall(".//route"):
+                route_segs_by_id[route.attrib["id"]].append(route.attrib["edges"].split(" "))
+
+        matching = []
+
+        for id in route_segs_by_id:
+            lists = route_segs_by_id[id]
+            if not self.__each_shares_element_with_prec(lists):
+                matching.append(id)
+                
+        if len(matching) > 0:
+            print(f"[WARN] Routes with non continuous edges: {matching}", file=sys.stderr)
 
     def _read_partition_vehicles(self, part_idx):
         rou_part = os.path.abspath(os.path.join(self.data_folder, f"part{part_idx}.rou.xml"))
