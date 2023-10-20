@@ -154,7 +154,6 @@ bool PartitionManager::hasVehicle(const string vehId) {
   
   string vehIdToCheck(vehId);
 
-  log("got hasVehicle({})\n", vehIdToCheck);
   if (args.verbose) {
     stringstream msg;
     format_to(ostream_iterator<char>(msg), "Manager {} | Has vehicle: current vehicles are [", id);
