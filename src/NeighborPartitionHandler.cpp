@@ -22,6 +22,7 @@ Author: Filippo Lenzi
 
 #include "messagingShared.hpp"
 #include "src/ContextPool.hpp"
+#include "src/PartitionEdgesStub.hpp"
 #include "utils.hpp"
 #include "PartitionManager.hpp"
 
@@ -147,14 +148,20 @@ void NeighborPartitionHandler::listenCheck() {
 
     switch(operation) {
         case PartitionEdgesStub::GET_EDGE_VEHICLES:
-        alreadyReplied = handleGetEdgeVehicles(request);
-        break;
+            alreadyReplied = handleGetEdgeVehicles(request);
+            break;
+        case PartitionEdgesStub::HAS_VEHICLE:
+            alreadyReplied = handleHasVehicle(request);
+            break;
+        case PartitionEdgesStub::HAS_VEHICLE_IN_EDGE:
+            alreadyReplied = handleHasVehicleInEdge(request);
+            break;
         case PartitionEdgesStub::SET_VEHICLE_SPEED:
-        alreadyReplied = handleSetVehicleSpeed(request);
-        break;
+            alreadyReplied = handleSetVehicleSpeed(request);
+            break;
         case PartitionEdgesStub::ADD_VEHICLE:
-        alreadyReplied = handleAddVehicle(request);
-        break;
+            alreadyReplied = handleAddVehicle(request);
+            break;
     }
 
     if (!alreadyReplied) {
@@ -196,16 +203,17 @@ void NeighborPartitionHandler::listenThreadLogic() {
 }
 
 bool NeighborPartitionHandler::handleGetEdgeVehicles(zmq::message_t& request) {
+    auto data = static_cast<char*>(request.data());
     string edgeId(
-        static_cast<char*>(request.data()) + sizeof(int), 
-        static_cast<char*>(request.data()) + request.size()
+        data + sizeof(int), 
+        data + request.size() - 1
     );
 
-    log("Received getEdgeVehicles({})\n", edgeId.c_str());
+    log("Received getEdgeVehicles({})\n", edgeId);
 
     vector<string> edgeVehicles = owner.getEdgeVehicles(edgeId);
     auto reply = createMessageWithStrings(edgeVehicles);
-    log("Sending reply to getEdgeVehicles({})\n", edgeId.c_str());
+    log("Sending reply to getEdgeVehicles({})\n", edgeId);
 
     if (owner.getArgs().verbose) {
         stringstream ss;
@@ -219,16 +227,52 @@ bool NeighborPartitionHandler::handleGetEdgeVehicles(zmq::message_t& request) {
     return true;
 }
 
+bool NeighborPartitionHandler::handleHasVehicle(zmq::message_t& request) {
+    auto data = static_cast<char*>(request.data());
+    string vehId(
+        data + sizeof(int), 
+        data + request.size() - 1
+    );
+
+    log("Received hasVehicle({}) [{}]\n", vehId, request.size());
+
+    bool has = owner.hasVehicle(vehId);
+
+    zmq::message_t reply(sizeof(bool));
+    std::memcpy(static_cast<char*>(reply.data()), &has, sizeof(bool));
+    log("Sending reply to hasVehicle({}): {}\n", vehId, has);
+
+    socket.send(reply, zmq::send_flags::none);
+    return true;
+}
+
+bool NeighborPartitionHandler::handleHasVehicleInEdge(zmq::message_t& request) {
+    auto strings = readStringsFromMessage(request, sizeof(int));
+    string& vehId = strings[0];
+    string& edgeId = strings[1];
+
+    log("Received hasVehicleInEdge({}, {})\n", vehId, edgeId);
+
+    bool has = owner.hasVehicleInEdge(vehId, edgeId);
+
+    zmq::message_t reply(sizeof(bool));
+    std::memcpy(static_cast<char*>(reply.data()), &has, sizeof(bool));
+    log("Sending reply to hasVehicleInEdge({}, {}): {}\n", vehId, edgeId, has);
+
+    socket.send(reply, zmq::send_flags::none);
+    return true;
+}
+
 bool NeighborPartitionHandler::handleSetVehicleSpeed(zmq::message_t& request) {
     double speed;
     const char* data = static_cast<char*>(request.data());
     std::memcpy(&speed, data + sizeof(int), sizeof(double));
     string veh(
         data + sizeof(double) + sizeof(int), 
-        data + request.size()
+        data + request.size() - 1
     );
     
-    log("Queueing setVehicleSpeed ({}, {})\n", veh.c_str(), speed);
+    log("Queueing setVehicleSpeed ({}, {})\n", veh, speed);
 
     // lock to be 100% sure with the applying of operations later
     operationsBufferLock.lock();
@@ -270,25 +314,21 @@ bool NeighborPartitionHandler::handleAddVehicle(zmq::message_t& request) {
     return false;
 }
 
-bool NeighborPartitionHandler::handleStepEnd(zmq::message_t& request) {
-    return false;
-}
-
 // Execute the queued operations that other partitions ran
 void NeighborPartitionHandler::applyMutableOperations() {
     int num = addVehicleQueue.currentSize + setSpeedQueue.currentSize;
     if (num > 0) {
-        log("Applying mutable operations (has {})\n", num);
+        log("Applying modifying operations (has {} addVehicle, {} setSpeed)\n", addVehicleQueue.currentSize, setSpeedQueue.currentSize);
         bool wasListening = listening;
         if (listening) {
-            log("Listen off to apply mutable operations\n");
+            log("Listen off to apply modifying operations\n");
             listenOff();
         }
         // Lock to avoid other threads adding more operations in the meantime
         // if it was inbetween one of them when we set this to stop
         operationsBufferLock.lock();
 
-        log("Mutable ops passed lock\n");
+        log("Modifying ops passed lock\n");
 
         for (int i = 0; i < addVehicleQueue.currentSize; i++) {
             auto addVeh = addVehicleQueue.queue[i];
@@ -310,7 +350,7 @@ void NeighborPartitionHandler::applyMutableOperations() {
 
         if (wasListening) listenOn();
 
-        log("Done applying mutable operations (was listening: {})\n", wasListening);
+        log("Done applying modifying operations (was listening: {})\n", wasListening);
     }
 }
 

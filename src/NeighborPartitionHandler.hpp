@@ -92,9 +92,10 @@ private:
   void listenThreadLogic();
 
   bool handleGetEdgeVehicles(zmq::message_t& request);
+  bool handleHasVehicle(zmq::message_t& request);
+  bool handleHasVehicleInEdge(zmq::message_t& request);
   bool handleSetVehicleSpeed(zmq::message_t& request);
   bool handleAddVehicle(zmq::message_t& request);
-  bool handleStepEnd(zmq::message_t& request);
 
   template<typename... _Args > 
     void log(std::format_string<_Args...>  format, _Args&&... args);

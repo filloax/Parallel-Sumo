@@ -10,6 +10,7 @@ Adapted by Filippo Lenzi
 if __name__ == '__main__':
     "Initializing partitioning script..."
 
+import itertools
 import os, sys
 import glob
 import xml.etree.ElementTree as ET
@@ -219,12 +220,32 @@ class NetworkPartitioning:
             # then do final merging in main thread
             interm_dicts = pool.map(_merge_float_dicts_min, _split_list(partition_vehicle_start_times, thread_num), chunksize=1)
             self._vehicle_depart_times = _merge_float_dicts_min(interm_dicts)
-           
+
             print("Processing done, postprocessing...")
 
             pool.map(self._postprocess_partition, range(num_parts), chunksize)
 
             print("Postprocessing done")
+
+            self._final_duplicates_check(num_parts)
+            
+            belonging = pool.map(self._read_partition_vehicles, range(num_parts), chunksize)
+
+            shared = set()
+            for ls1, ls2 in itertools.product(belonging, belonging):
+                if ls1 != ls2:
+                    for id in ls1:
+                        if id in ls2:
+                            shared.add(id)
+                            
+            if len(shared) > 0:
+                print(f'[WARN] Vehicles shared between partitions: {shared}', file=sys.stderr)
+
+            if verbose:
+                for part_idx, ls in enumerate(belonging):
+                    ls.sort(key=lambda x: int(re.sub(r'[^\d]', '', x)))
+                    print(f"Vehicles starting in partition {part_idx} ({len(ls)}): [ ", ', '.join(ls), "]")
+
 
         if self.png:
             generate_network_image([os.path.join(self.data_folder, f"part{i}.net.xml") for i in range(num_parts)], 
@@ -245,8 +266,8 @@ class NetworkPartitioning:
         
         print("Cleaning up temp files...")
 
-        for file in self._temp_files:
-            os.remove(file)
+        # for file in self._temp_files:
+            # os.remove(file)
 
         print("Finished partitioning network!")
 
@@ -397,8 +418,6 @@ class NetworkPartitioning:
 
         interm_rou_part = os.path.abspath(os.path.join(self.data_folder, f"part{part_idx}.interm.rou.xml"))
         rou_part = os.path.abspath(os.path.join(self.data_folder, f"part{part_idx}.rou.xml"))
-        
-        belonging = []
 
         with open(interm_rou_part, 'r', encoding='utf-8') as fr:
             route_part_tree = ET.parse(fr)
@@ -409,13 +428,11 @@ class NetworkPartitioning:
             for vehicle in vehicles:
                 id = vehicle.attrib["id"]
                 depart = float(vehicle.attrib["depart"])
-                if depart > self._vehicle_depart_times[id]:
+                if depart > self._vehicle_depart_times[id] + 0.001:
                     remove.append(vehicle)
                 elif devmode and self._devmode_remove_vehicle(vehicle):
                     remove.append(vehicle)
                     dev_removed += 1
-                else:
-                    belonging.append(vehicle)
 
             # Duplicate routes (likely unhandled edge cases in partitioning and cutting)
             routes = route_part_el.findall("route")
@@ -438,13 +455,72 @@ class NetworkPartitioning:
             if dup_route_removed > 0:
                 print(f"Removed {dup_route_removed} duplicate routes (likely unhandled edge cases)")
 
-        belonging.sort(key=lambda x: int(re.sub(r'[^\d]', '', x.attrib["id"])))
+    def _final_duplicates_check(self, num_parts):
+        """Check for duplicates not caught by starting time check, 
+        might be caused by vehicles starting in border edges.
+        """
+        route_parts = [os.path.abspath(os.path.join(self.data_folder, f"part{part_idx}.rou.xml")) for part_idx in range(num_parts)]
+        
+        # Keep the vehicle with the longest route
+        # (if a edge was split with a vehicle starting there, 
+        # it will likely get a minimal route included in the one
+        # in its copy in the neighbor partition)
+        vehicle_route_lengths = defaultdict(list)
+        for rou_part in route_parts:            
+            with open(rou_part, 'r', encoding='utf-8') as f:
+                route_part_el: Element = ET.parse(f).getroot()
+                
+            for veh in route_part_el.findall(f'.//vehicle'):
+                id = veh.attrib["id"]
+                route_id = veh.attrib["route"]
+                route_el = route_part_el.find(f".//route[@id='{route_id}']")
+                route_len = len(route_el.attrib["edges"].split(" "))
+                vehicle_route_lengths[id].append(route_len)
+        
+        # After checking, keep only the ones with longest route
+        for i, rou_part in enumerate(route_parts):
+            with open(rou_part, 'r', encoding='utf-8') as f:
+                tree = ET.parse(f)
+                route_part_el: Element = tree.getroot()
+            
+            delete = []
+            for veh in route_part_el.findall(f'.//vehicle'):
+                id = veh.attrib["id"]
+                route_id = veh.attrib["route"]
+                route_el = route_part_el.find(f".//route[@id='{route_id}']")
+                route_len = len(route_el.attrib["edges"].split(" "))
+                max_len = max(vehicle_route_lengths[id])
+                
+                rem = route_len < max_len
+                # edge case: if somehow (depends on SUMO cutRoutes) there
+                # are routes in different parts with the same edges, 
+                # remove all but one (arbitrarily)
+                rem = rem or len([x for x in vehicle_route_lengths[id] if x == max_len]) > 1
+                if rem:
+                    # directly remove route here as it doesn't affect iterator
+                    route_part_el.remove(route_el)
+                    delete.append(veh)
+                    vehicle_route_lengths[id].remove(route_len)
 
-        if verbose:
-            print(f"Vehicles starting in partition {part_idx}: [ ", ', '.join([v.attrib["id"] for v in belonging]), "]")
+            # Delete in separate loop to avoid messing with the iterator
+            for veh in delete:
+                route_part_el.remove(veh)
+                
+            tree.write(rou_part, encoding='utf-8')
+                
+            print(f"Partition {i}: removed {len(delete)} additional duplicate vehicles")
+
+    def _read_partition_vehicles(self, part_idx):
+        rou_part = os.path.abspath(os.path.join(self.data_folder, f"part{part_idx}.rou.xml"))
+        with open(rou_part, 'r', encoding='utf-8') as f:
+            route_part_el: Element = ET.parse(f).getroot()
+        return [el.attrib['id'] for el in route_part_el.findall(f'.//vehicle')]
+
+def _get_inf():
+    return float("inf")
 
 def _merge_float_dicts_min(dicts: list[dict[str, float]]) -> dict[str, float]:
-    result_dict = defaultdict(float)
+    result_dict = defaultdict(_get_inf)
     
     for input_dict in dicts:
         for key, value in input_dict.items():

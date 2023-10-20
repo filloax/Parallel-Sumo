@@ -30,6 +30,7 @@ namespace psumo {
     pid_t runProcess(std::string exePath, std::vector<std::string>& args);
     pid_t waitProcess(int* status);
     pid_t getPid();
+    void killProcess(pid_t pid);
 
     void printStackTrace();
     std::string getStackTrace();

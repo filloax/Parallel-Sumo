@@ -99,6 +99,63 @@ std::vector<std::string> PartitionEdgesStub::getEdgeVehicles(const std::string& 
     return out;
 }
 
+bool PartitionEdgesStub::hasVehicle(const std::string& vehId) {
+    int opcode = Operations::HAS_VEHICLE;
+
+    // As usual, add +1 to string size to include NULL endpoint
+    int msgLength = sizeof(int) + vehId.size() + 1;
+    log("Preparing hasVehicle({}) [{}]\n", vehId, msgLength);
+
+    zmq::message_t message(msgLength);
+
+    auto data = static_cast<char*>(message.data());
+    
+    std::memcpy(data,               &opcode, sizeof(int));
+    std::memcpy(data + sizeof(int), vehId.data(), vehId.size() + 1);
+
+    log("Sending hasVehicle\n");
+    socket.send(message, zmq::send_flags::none);
+
+    log("Receiving hasVehicle reply\n");
+    zmq::message_t reply;
+    auto response = socket.recv(reply);
+
+    bool result;
+    std::memcpy(&result, static_cast<char*>(reply.data()), sizeof(bool));
+
+    log("Received: {}\n", result);
+
+    return result;
+}
+
+bool PartitionEdgesStub::hasVehicleInEdge(const std::string& vehId, const std::string& edgeId) {
+    int opcode = Operations::HAS_VEHICLE_IN_EDGE;
+
+    log("Preparing hasVehicleInEdge({}, {})\n", vehId, edgeId);
+
+    vector<string> strings({
+        vehId,
+        edgeId
+    });
+    auto message = createMessageWithStrings(strings, sizeof(int));
+    auto data = static_cast<char*>(message.data());
+    std::memcpy(data, &opcode, sizeof(int));
+
+    log("Sending hasVehicleInEdge\n");
+    socket.send(message, zmq::send_flags::none);
+
+    log("Receiving hasVehicleInEdge reply\n");
+    zmq::message_t reply;
+    auto response = socket.recv(reply);
+
+    bool result;
+    std::memcpy(&result, static_cast<char*>(reply.data()), sizeof(bool));
+
+    log("Received: {}\n", result);
+
+    return result;
+}
+
 void PartitionEdgesStub::setVehicleSpeed(const string& vehId, double speed) {
     int opcode = Operations::SET_VEHICLE_SPEED;
 

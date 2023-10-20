@@ -13,6 +13,8 @@ Contributions: Filippo Lenzi
 #include <fstream>
 #include <cstdlib>
 #include <istream>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <filesystem>
 
@@ -30,7 +32,7 @@ Contributions: Filippo Lenzi
 using namespace std;
 using namespace psumo;
 
-void loadPartData(int id, string dataFolder, vector<border_edge_t>& borderEdges, vector<partId_t>& partNeighbors);
+void loadPartData(int id, string dataFolder, vector<border_edge_t>& borderEdges, vector<partId_t>& partNeighbors,     unordered_map<partId_t, unordered_set<string>>& partNeighborRoutes);
 
 int main(int argc, char* argv[]) {
     argparse::ArgumentParser program(PROGRAM_NAME_PART, PROGRAM_VER);
@@ -56,9 +58,10 @@ int main(int argc, char* argv[]) {
 
     vector<border_edge_t> borderEdges;
     vector<partId_t> partNeighbors;
+    unordered_map<partId_t, unordered_set<string>> partNeighborRoutes;
 
     if (args.numThreads > 1) {
-        loadPartData(args.partId, args.dataDir, borderEdges, partNeighbors);
+        loadPartData(args.partId, args.dataDir, borderEdges, partNeighbors, partNeighborRoutes);
     } else {
         cout << "Starting partition in 1 thread mode (almost no special treatment, more or less base sumo run)" << endl;
         cfg = args.cfg; 
@@ -68,10 +71,11 @@ int main(int argc, char* argv[]) {
 
     PartitionManager partManager(
         getSumoPath(args.gui), args.partId, cfg, args.endTime,
-        partNeighbors, zctx, args.numThreads,
+        partNeighbors, partNeighborRoutes, 
+        zctx, args.numThreads,
         args.sumoArgs, args 
     );
-    partManager.setMyBorderEdges(borderEdges);
+    partManager.setBorderEdges(borderEdges);
 
     try {
         partManager.startPartitionLocalProcess();
@@ -85,7 +89,12 @@ int main(int argc, char* argv[]) {
     // ContextPool::destroyAll();
 }
 
-void loadPartData(int id, string dataFolder, vector<border_edge_t>& borderEdges, vector<partId_t>& partNeighbors) {
+void loadPartData(
+    int id, string dataFolder, 
+    vector<border_edge_t>& borderEdges, 
+    vector<partId_t>& partNeighbors,
+    unordered_map<partId_t, unordered_set<string>>& partNeighborRoutes
+) {
     const auto dataFile = getPartitionDataFile(dataFolder, id);
     
     ifstream input(dataFile);
@@ -105,4 +114,14 @@ void loadPartData(int id, string dataFolder, vector<border_edge_t>& borderEdges,
 
     borderEdges = data["borderEdges"].template get<vector<border_edge_t>>();
     partNeighbors = data["neighbors"].template get<vector<partId_t>>();
+
+    map<string, vector<string>> partNeighborLists = data["neighborRoutes"].template get<map<string, vector<string>>>();
+    for (auto pair : partNeighborLists) {
+        auto neighIdString = pair.first;
+        auto routesVector = pair.second;
+        
+        partId_t neighId = stoi(neighIdString);
+        unordered_set<string> neighRoutes(routesVector.begin(), routesVector.end());
+        partNeighborRoutes[neighId] = neighRoutes;
+    }
 }

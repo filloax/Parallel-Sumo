@@ -62,6 +62,15 @@ pid_t waitProcess(int *status) {
     #endif
 }
 
+void killProcess(pid_t pid) {
+    #ifndef USING_WIN
+        kill(pid, SIGKILL);
+    #else
+        cerr << "Windows killProcess NYI!" << endl;
+        exit(EXIT_FAILURE);
+    #endif
+}
+
 pid_t getPid() {
     #ifndef USING_WIN
         return getpid();

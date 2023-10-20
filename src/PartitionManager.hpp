@@ -13,6 +13,8 @@ Contributions: Filippo Lenzi
 
 #include <cstdlib>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <map>
 #include <zmq.hpp>
@@ -35,10 +37,13 @@ private:
     std::vector<border_edge_t> incomingBorderEdges;
     std::vector<border_edge_t> outgoingBorderEdges;
     const std::vector<partId_t> neighborPartitions;
+    const std::unordered_map<partId_t, std::unordered_set<std::string>> neighborRoutes;
     std::map<int, PartitionEdgesStub*> neighborPartitionStubs;
     std::map<int, NeighborPartitionHandler*> neighborClientHandlers;
     zmq::context_t& zcontext;
     zmq::socket_t coordinatorSocket;
+    std::unordered_set<std::string> allVehicleIds;
+    bool allVehicleIdsUpdated = false;
     std::string cfg;
     int endTime;
     std::vector<std::string> sumoArgs;
@@ -53,11 +58,13 @@ private:
     // handle border edges where vehicles are incoming
     void handleIncomingEdges(int, std::vector<std::vector<std::string>>&);
     // handle border edges where vehicles are outgoing
-    void handleOutgoigEdges(int, std::vector<std::vector<std::string>>&);
+    void handleOutgoingEdges(int, std::vector<std::vector<std::string>>&);
     // barrier-like behavior via message passing
     void arriveWaitBarrier();
     // signal to main process that we finished
     void signalFinish();
+
+    void refreshVehicleIds();
 
     template<typename... _Args > 
         void log(std::format_string<_Args...>  format, _Args&&... args);
@@ -72,7 +79,9 @@ protected:
 public:
     // params: sumo binary, id, barrier, lock, cond, sumo config, host, port, end time
     PartitionManager(const std::string binary, partId_t id, std::string& cfg, int endTime,
-        std::vector<partId_t> neighborPartitions, zmq::context_t& zcontext, int numThreads,
+        std::vector<partId_t>& neighborPartitions, 
+        std::unordered_map<partId_t, std::unordered_set<std::string>>& neighborRoutes,
+        zmq::context_t& zcontext, int numThreads,
         std::vector<std::string> sumoArgs, 
         #ifdef PSUMO_SINGLE_EXECUTABLE
         Args& args
@@ -87,14 +96,23 @@ public:
     /* Starts this partition in this process */
     void startPartitionLocalProcess();
     // set this partition's border edges
-    void setMyBorderEdges(std::vector<border_edge_t>&);
+    void setBorderEdges(std::vector<border_edge_t>&);
 
-    void setVehicleSpeed(const std::string& vehId, double speed);
-    std::vector<std::string> getEdgeVehicles(const std::string& edgeId);
+    #ifndef NDEBUG
+        #define _str_arg_type const std::string
+    #else
+        #define _str_arg_type const std::string&
+    #endif
+
+    // No string ref in debug, to allow calling from lldb
+    void setVehicleSpeed(_str_arg_type vehId, double speed);
+    std::vector<std::string> getEdgeVehicles(_str_arg_type edgeId);
     void addVehicle(
-        const std::string& vehId, const std::string& routeId, const std::string& vehType,
-        const std::string& laneId, int laneIndex, double lanePos, double speed
+        _str_arg_type vehId, _str_arg_type routeId, _str_arg_type vehType,
+        _str_arg_type laneId, int laneIndex, double lanePos, double speed
     );
+    bool hasVehicle(_str_arg_type vehId);
+    bool hasVehicleInEdge(_str_arg_type vehId, _str_arg_type edgeId);
 
     const int getId() { return id; }
     const int getNumThreads() { return numThreads; }

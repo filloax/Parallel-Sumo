@@ -80,20 +80,38 @@ class NeighborsPostProcess:
             part_neighbor_sets[p0].add(p1)
             part_neighbor_sets[p1].add(p0)
         return [list(s) for s in part_neighbor_sets]
+    
+    def __get_routes(self, neighbor_lists):
+        part_routes = [[] for _ in range(self.num_parts)]
+        for part_idx in range(self.num_parts):
+            route_path = os.path.abspath(os.path.join(self.data_folder, f"part{part_idx}.rou.xml"))
+            route_file = ET.parse(route_path)
+            root = route_file.getroot()
+            for route in root.findall("route"):
+                part_routes[part_idx].append(route.attrib['id'])
+                
+        part_neighbor_routes = [
+            {neigh_id: part_routes[neigh_id] for neigh_id in neighbor_lists[part_idx]} 
+            for part_idx in range(self.num_parts)
+        ]
+                
+        return part_neighbor_routes
 
     def calc_border_edges(self):
         self.__load_edges()
         border_edges = self.__find_border_edges()
         neighbor_lists = self.__find_part_neighbors()
-        self.__save_to_json_(border_edges, neighbor_lists)
+        part_neighbor_routes = self.__get_routes(neighbor_lists)
+        self.__save_to_json_(border_edges, neighbor_lists, part_neighbor_routes)
         print(f"Saved edge data to json for {self.num_parts} partitions")
         
-    def __save_to_json_(self, border_edges, neighbor_lists):
+    def __save_to_json_(self, border_edges, neighbor_lists, part_neighbor_routes):
         for part_id in range(self.num_parts):
             path = os.path.join(self.data_folder, f"partData{part_id}.json")
             with open(path, 'w') as f:
                 json.dump({
                     'id': part_id,
                     'borderEdges': border_edges[part_id],
-                    'neighbors': neighbor_lists[part_id]
+                    'neighbors': neighbor_lists[part_id],
+                    'neighborRoutes': part_neighbor_routes[part_id],
                 }, f)

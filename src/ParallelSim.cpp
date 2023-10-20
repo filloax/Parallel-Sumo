@@ -10,6 +10,7 @@ Contributions: Filippo Lenzi
 */
 #include "ParallelSim.hpp"
 
+#include <csignal>
 #include <cstdio>
 #include <cstring>
 #include <exception>
@@ -316,9 +317,12 @@ void waitForPartitions(vector<pid_t> pids, bool verbose) {
       pids.erase(std::remove(pids.begin(), pids.end(), pid), pids.end());
 
       if (status != 0) {
-        perror("Partition ended with an error! Closing in 3s\n");
-        std::this_thread::sleep_for(seconds(3));
-        exit(-1);
+        perror("Partition ended with an error!\n");
+        for (auto pid : pids) {
+          // killProcess(pid);
+        }
+
+        exit(status);
       }
     }
   }

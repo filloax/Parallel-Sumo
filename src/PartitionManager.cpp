@@ -26,6 +26,7 @@ Contributions: Filippo Lenzi
 #include <thread>
 #include <time.h>
 #include <algorithm>
+#include <unordered_map>
 #include <vector>
 #include <shared_mutex>
 
@@ -37,6 +38,7 @@ Contributions: Filippo Lenzi
 #include "PartitionEdgesStub.hpp"
 #include "ParallelSim.hpp"
 #include "partArgs.hpp"
+#include "src/psumoTypes.hpp"
 #include "utils.hpp"
 #include "args.hpp"
 
@@ -53,7 +55,8 @@ Note that LibSumo is static, so each PartitionManager must be on its own process
 PartitionManager::PartitionManager(
   const string binary,
   partId_t id, string& cfg, int endTime,
-  vector<partId_t> neighborPartitions,
+  vector<partId_t>& neighborPartitions,
+  unordered_map<partId_t, unordered_set<string>>& neighborRoutes,
   zmq::context_t& zcontext, int numThreads,
   vector<string> sumoArgs,
   #ifdef PSUMO_SINGLE_EXECUTABLE
@@ -67,6 +70,7 @@ PartitionManager::PartitionManager(
   cfg(cfg),
   endTime(endTime),
   neighborPartitions(neighborPartitions),
+  neighborRoutes(neighborRoutes),
   zcontext(zcontext),
   sumoArgs(sumoArgs),
   args(args),
@@ -90,7 +94,7 @@ PartitionManager::~PartitionManager() {
   }
 }
 
-void PartitionManager::setMyBorderEdges(vector<border_edge_t>& borderEdges) {
+void PartitionManager::setBorderEdges(vector<border_edge_t>& borderEdges) {
   for(border_edge_t e : borderEdges) {
     if(e.to == id)
       incomingBorderEdges.push_back(e);
@@ -123,12 +127,18 @@ void PartitionManager::startPartitionLocalProcess() {
   runSimulation();
 }
 
-vector<string> PartitionManager::getEdgeVehicles(const string& edgeId) {
+#ifndef NDEBUG
+  #define strarg_ string
+#else
+  #define strarg_ string&
+#endif
+
+vector<string> PartitionManager::getEdgeVehicles(const strarg_ edgeId) {
   // For some reason, despite the signature, passing the C++ string
   // didn't work (as in, it didn't find the data)
   #ifndef NDEBUG
   try {
-    logminor("Running getLastStepVehicleIDs({}[{}])\n", edgeId.c_str(), edgeId);
+    logminor("Running getLastStepVehicleIDs({})\n", edgeId.c_str(), edgeId);
   #endif
   return Edge::getLastStepVehicleIDs(edgeId.c_str());
   #ifndef NDEBUG
@@ -139,12 +149,40 @@ vector<string> PartitionManager::getEdgeVehicles(const string& edgeId) {
   #endif
 }
 
-void PartitionManager::setVehicleSpeed(const string& vehId, double speed) {
+bool PartitionManager::hasVehicle(const string vehId) {
+  refreshVehicleIds();
+  
+  string vehIdToCheck(vehId);
+
+  log("got hasVehicle({})\n", vehIdToCheck);
+  if (args.verbose) {
+    stringstream msg;
+    format_to(ostream_iterator<char>(msg), "Manager {} | Has vehicle: current vehicles are [", id);
+    int i = 0;
+    for (auto id : allVehicleIds) {
+      msg << id;
+      if (i < allVehicleIds.size() - 1) msg << ", ";
+      i++;
+    }
+    msg << "]" << endl;
+    cout << msg.str();
+  }
+
+  return allVehicleIds.contains(vehIdToCheck);
+}
+
+bool PartitionManager::hasVehicleInEdge(const strarg_ vehId, const strarg_ edgeId) {
+  auto edgeVehicles = getEdgeVehicles(edgeId);
+  auto idx = std::find(edgeVehicles.begin(), edgeVehicles.end(), vehId);
+  return idx != edgeVehicles.end();
+}
+
+void PartitionManager::setVehicleSpeed(const strarg_ vehId, double speed) {
   // Using slowDown instead of setspeed as original program did it
   // Also use .c_str() for same reason as [getEdgeVehicles]
   #ifndef NDEBUG
   try {
-    logminor("Running setVehicleSpeed({}[{}], {})\n", vehId.c_str(), vehId, speed);
+    logminor("Running setVehicleSpeed({}, {})\n", vehId.c_str(), vehId, speed);
   #endif
   Vehicle::slowDown(vehId.c_str(), speed, Simulation::getDeltaT());
   #ifndef NDEBUG
@@ -154,9 +192,10 @@ void PartitionManager::setVehicleSpeed(const string& vehId, double speed) {
   }
   #endif
 }
+
 void PartitionManager::addVehicle(
-  const string& vehId, const string& routeId, const string& vehType,
-  const string& laneId, int laneIndex, double lanePos, double speed
+  const strarg_ vehId, const strarg_ routeId, const strarg_ vehType,
+  const strarg_ laneId, int laneIndex, double lanePos, double speed
 ) {
   string lanePosStr = std::to_string(lanePos);
   string speedStr = std::to_string(speed);
@@ -169,18 +208,21 @@ void PartitionManager::addVehicle(
     "first", "base", speedStr
   );
   Vehicle::moveTo(vehId.c_str(), laneId.c_str(), lanePos);
+  if (allVehicleIdsUpdated) {
+    allVehicleIds.insert(vehId);
+  }
   #ifndef NDEBUG
+  logminor("Added vehicle {} to lane {}\n", vehId, laneId);
   } catch(exception& e) {
     logerr("Error in addVehicle({}, {}, {}, {}, {}, {}, {}): {}\n", 
       vehId, routeId, vehType, laneId, laneIndex, lanePos, speed, e.what());
     exit(EXIT_FAILURE);
   }
   #endif
-
 }
 
 
-void PartitionManager::handleIncomingEdges(int num, vector<vector<string>>& prevVehicles) {
+void PartitionManager::handleIncomingEdges(int num, vector<vector<string>>& prevIncomingVehicles) {
   for(int toEdgeIdx = 0; toEdgeIdx < num; toEdgeIdx++) {
     vector<string> edgeVehicles = Edge::getLastStepVehicleIDs(incomingBorderEdges[toEdgeIdx].id.c_str());
     int fromId = incomingBorderEdges[toEdgeIdx].from;
@@ -188,47 +230,67 @@ void PartitionManager::handleIncomingEdges(int num, vector<vector<string>>& prev
     if(!edgeVehicles.empty()) {
       PartitionEdgesStub* partStub = neighborPartitionStubs[fromId];
       for(string veh : edgeVehicles) {
-        auto it = std::find(prevVehicles[toEdgeIdx].begin(), prevVehicles[toEdgeIdx].end(), veh);
+        auto it = std::find(prevIncomingVehicles[toEdgeIdx].begin(), prevIncomingVehicles[toEdgeIdx].end(), veh);
         // vehicle speed is to be updated in previous partition
-        if(it != prevVehicles[toEdgeIdx].end()) {
-
+        if(it != prevIncomingVehicles[toEdgeIdx].end()) {
           // check if vehicle has been transferred out of partition
-          vector<string> trans = partStub->getEdgeVehicles(incomingBorderEdges[toEdgeIdx].id);
-          if(std::find(trans.begin(), trans.end(), veh) != trans.end()) {
+          // check if vehicle is in that edge specifically, 
+          // unlike the add check after, to avoid messing with its speed if not needed
+          bool inEdge = partStub->hasVehicleInEdge(veh, incomingBorderEdges[toEdgeIdx].id);
+          if(inEdge) {
             // set from partition vehicle speed to next partition vehicle speed
+            #ifndef PSUMO_NO_EXC_CATCH
             try {
+            #endif
               partStub->setVehicleSpeed(veh, Vehicle::getSpeed(veh.c_str()));
+            #ifndef PSUMO_NO_EXC_CATCH
             }
-            catch(libsumo::TraCIException& e){
+            catch(exception& e){
               logerr("Part {} | Exception in setting speed of vehicle: {}\n", id, e.what());
             }
+            #endif
           }
         }
       }
     }
-    prevVehicles[toEdgeIdx] = edgeVehicles;
+    prevIncomingVehicles[toEdgeIdx] = edgeVehicles;
   }
 }
 
-void PartitionManager::handleOutgoigEdges(int num, vector<vector<string>>& prevVehicles) {
-  for(int fromEdgeIdx = 0; fromEdgeIdx < num; fromEdgeIdx++) {
-    vector<string> edgeVehicles = Edge::getLastStepVehicleIDs(outgoingBorderEdges[fromEdgeIdx].id.c_str());
-    int toId = outgoingBorderEdges[fromEdgeIdx].to;
+void PartitionManager::handleOutgoingEdges(int num, vector<vector<string>>& prevOutgoingVehicles) {
+  for(int outEdgeIdx = 0; outEdgeIdx < num; outEdgeIdx++) {
+    vector<string> edgeVehicles = Edge::getLastStepVehicleIDs(outgoingBorderEdges[outEdgeIdx].id.c_str());
+    partId_t toId = outgoingBorderEdges[outEdgeIdx].to;
+    auto toRoutesIt = neighborRoutes.find(toId);
+
+    if (toRoutesIt == neighborRoutes.end()) {
+      // No routes in neighbor somehow, continue
+      continue;
+    }
+
 
     if(!edgeVehicles.empty()) {
+      unordered_set<string> toRoutes = toRoutesIt->second;
       PartitionEdgesStub* partStub = neighborPartitionStubs[toId];
+      
       for(string veh : edgeVehicles) {
         auto c_veh = veh.c_str();
-        auto it = std::find(prevVehicles[fromEdgeIdx].begin(), prevVehicles[fromEdgeIdx].end(), veh);
+        string route = Vehicle::getRouteID(c_veh);
+
+        if (!toRoutes.contains(route)) {
+          // Vehicle doesn't need to pass to neighbor
+          continue;
+        }
+
+        auto it = std::find(prevOutgoingVehicles[outEdgeIdx].begin(), prevOutgoingVehicles[outEdgeIdx].end(), veh);
         // vehicle is to be inserted in next partition
-        if(it == prevVehicles[fromEdgeIdx].end()) {
-
+        if(it == prevOutgoingVehicles[outEdgeIdx].end()) {
           // check if vehicle not already on edge (if a vehicle starts on a border edge)
-          vector<string> toVehs = partStub->getEdgeVehicles(outgoingBorderEdges[fromEdgeIdx].id);
-          string route = Vehicle::getRouteID(c_veh);
-
-          if(std::find(toVehs.begin(), toVehs.end(), veh) == toVehs.end()) {
-
+          // Used to check vehicles in the edge, change to this to save
+          // message space, and to handle some edge cases a vehicle goes
+          // from one border edge to another
+          bool alreayInTarget = partStub->hasVehicle(veh);
+          if(!alreayInTarget) {
             // check if vehicle is on split route
             /*
             int pos = veh.find("_part");
@@ -247,7 +309,9 @@ void PartitionManager::handleOutgoigEdges(int num, vector<vector<string>>& prevV
               }
             }
             */
+            #ifndef PSUMO_NO_EXC_CATCH
             try {
+            #endif
               // add vehicle to next partition
               partStub->addVehicle(
                 veh, route, Vehicle::getTypeID(c_veh),
@@ -256,17 +320,19 @@ void PartitionManager::handleOutgoigEdges(int num, vector<vector<string>>& prevV
                 Vehicle::getLanePosition(c_veh),
                 Vehicle::getSpeed(c_veh)
               );
+            #ifndef PSUMO_NO_EXC_CATCH
             }
             catch(std::exception& e){
               stringstream err;
               err << "Part " << id << " | Exception in adding vehicle: " << e.what() << std::endl;
               cerr << err.str();
             }
+            #endif
           }
         }
       }
     }
-    prevVehicles[fromEdgeIdx] = edgeVehicles;
+    prevOutgoingVehicles[outEdgeIdx] = edgeVehicles;
   }
 }
 
@@ -384,8 +450,8 @@ void PartitionManager::runSimulation() {
 
   int numFromEdges = outgoingBorderEdges.size();
   int numToEdges = incomingBorderEdges.size();
-  vector<vector<string>> prevToVehicles(numToEdges);
-  vector<vector<string>> prevFromVehicles(numFromEdges);
+  vector<vector<string>> prevIncomingVehicles(numToEdges);
+  vector<vector<string>> prevOutgoingVehicles(numFromEdges);
 
   for (partId_t partId : neighborPartitions) {
     neighborClientHandlers[partId]->listenOn();
@@ -394,11 +460,13 @@ void PartitionManager::runSimulation() {
   while(running && Simulation::getTime() < endTime) {
     Simulation::step();
 
-    logminor("Manager %d | Step done (%d/%d)\n", id, (int) Simulation::getTime(), endTime);
-    handleIncomingEdges(numToEdges, prevToVehicles);
-    logminor("Manager %d | Handled incoming edges\n", id);
-    handleOutgoigEdges(numFromEdges, prevFromVehicles);
-    logminor("Manager %d | Handled outgoing edges\n", id);
+    allVehicleIdsUpdated = false;
+
+    logminor("Step done ({}/{})\n", (int) Simulation::getTime(), endTime);
+    handleIncomingEdges(numToEdges, prevIncomingVehicles);
+    logminor("Handled incoming edges\n");
+    handleOutgoingEdges(numFromEdges, prevOutgoingVehicles);
+    logminor("Handled outgoing edges\n");
     // make sure every time step across partitions is synchronized
     arriveWaitBarrier();
 
@@ -427,6 +495,15 @@ void PartitionManager::runSimulation() {
   
   Simulation::close("ParallelSim terminated.");
   numInstancesRunning--;
+}
+
+void PartitionManager::refreshVehicleIds() {
+  if (!allVehicleIdsUpdated) {
+    auto idVector = Vehicle::getIDList(); 
+    allVehicleIds.clear();
+    allVehicleIds.insert(idVector.begin(), idVector.end());
+    allVehicleIdsUpdated = true;
+  }
 }
 
 template<typename... _Args > 
