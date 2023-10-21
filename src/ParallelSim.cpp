@@ -387,7 +387,13 @@ void ParallelSim::startSim(){
       
       if (args.verbose)
         printf("Coordinator | Starting process for part %i\n", i);
-      pid = runProcess(exeDir / PROGRAM_NAME_PART, partArgs);
+      filesystem::path path;
+      if (args.gui) {
+        path = exeDir / PROGRAM_NAME_PART_GUI;
+      } else {
+        path = exeDir / PROGRAM_NAME_PART;
+      }
+      pid = runProcess(path, partArgs);
     #else
 
     printf("SINGLE EXE VER NOT SUPPORTED AS OF NOW; IS OLD VER\n");
