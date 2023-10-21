@@ -11,7 +11,7 @@ from collections import defaultdict
 import os, sys
 import json
 
-class NeighborsPostProcess:
+class PartitionDataGen:
     num_parts: int
     netfiles: dict[int, ET.ElementTree]
     edge_parts: dict[str, tuple[int, int]]
@@ -97,7 +97,7 @@ class NeighborsPostProcess:
                 
         return part_neighbor_routes
 
-    def calc_border_edges(self):
+    def generate_partition_data(self):
         self.__load_edges()
         border_edges = self.__find_border_edges()
         neighbor_lists = self.__find_part_neighbors()

@@ -31,7 +31,7 @@ import json
 from convertToMetis import main as convert_to_metis, weight_funs, WEIGHT_ROUTE_NUM
 from sumobin import run_duarouter, run_netconvert
 from sumo2png import generate_network_image
-from processNeighbors import NeighborsPostProcess
+from partitiondatagen import PartitionDataGen
 
 if 'SUMO_HOME' in os.environ:
     SUMO_HOME = os.environ['SUMO_HOME']
@@ -257,8 +257,8 @@ class NetworkPartitioning:
             )
             
         print("Generating edge data json...")
-        postprocessor = NeighborsPostProcess(num_parts, self.data_folder)
-        postprocessor.calc_border_edges()
+        postprocessor = PartitionDataGen(num_parts, self.data_folder)
+        postprocessor.generate_partition_data()
         
         print("Cleaning up temp files...")
 
@@ -526,8 +526,19 @@ class NetworkPartitioning:
             if not self.__each_shares_element_with_prec(lists):
                 matching.append(id)
                 
+        for file in route_parts:
+            tree = ET.parse(file)
+            root = tree.getroot()
+            for id in matching:
+                for route in root.findall(f".//route[@id='{id}']"):
+                    root.remove(route)
+                for veh in root.findall(f".//vehicle[@route='{id}']"):
+                    root.remove(veh)
+       
+            tree.write(file, encoding='utf-8')
+                
         if len(matching) > 0:
-            print(f"[WARN] Routes with non continuous edges: {matching}", file=sys.stderr)
+            print(f"[WARN] Routes with non continuous edges ({len(matching)}): {matching}", file=sys.stderr)
 
     def _read_partition_vehicles(self, part_idx):
         rou_part = os.path.abspath(os.path.join(self.data_folder, f"part{part_idx}.rou.xml"))
