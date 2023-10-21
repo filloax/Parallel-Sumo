@@ -519,7 +519,9 @@ void PartitionManager::runSimulation() {
 
 void PartitionManager::refreshVehicleIds() {
   if (!allVehicleIdsUpdated) {
-    auto idVector = Vehicle::getIDList(); 
+    lock_guard<mutex> lock(allVehicleIds_lock);
+
+    vector<string> idVector = Vehicle::getIDList(); 
     allVehicleIds.clear();
     allVehicleIds.insert(idVector.begin(), idVector.end());
     allVehicleIdsUpdated = true;

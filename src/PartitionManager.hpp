@@ -12,12 +12,14 @@ Contributions: Filippo Lenzi
 #pragma once
 
 #include <cstdlib>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 #include <map>
 #include <zmq.hpp>
+#include <thread>
 
 #include "args.hpp"
 #include "psumoTypes.hpp"
@@ -44,6 +46,7 @@ private:
     zmq::context_t& zcontext;
     zmq::socket_t coordinatorSocket;
     std::unordered_set<std::string> allVehicleIds;
+    std::mutex allVehicleIds_lock;
     bool allVehicleIdsUpdated = false;
     std::string cfg;
     int endTime;
