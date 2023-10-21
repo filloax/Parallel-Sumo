@@ -10,16 +10,20 @@ First, you need to install Eclipse [SUMO](https://eclipse.dev/sumo/), and the [B
 
 ### How to compile:
 
-CMake is required. Required dependencies are
-- cppzmq (might require more complicated installation depending on system)
-- nlohmann json
+First, you need to install ZeroMQ on your system, to have it available as a dependency, and also CMake. On Arch (both as a OS install or using [ArchWSL](https://github.com/yuk7/ArchWSL) in Windows with WSL), for example, install the following packages:
+
+```
+sudo pacman -S zeromq cppzeromq nlohmann-json clang ninja cmake 
+```
+
+SUMO can be installed via various means depending on your OS distribution, check its website linked above. I personally used `yay -S sumo` in Arch/WSL. If your SUMO installation doesn't include libsumo headers, you also will need to install its source in the $SUMO_HOME/src folder.
 
 The general process for building is:
-- `cd` to the build folder for your system (they are empty, build-windows is meant for Visual Studio generation, build-msys for msys makefiles, build-linux for linux)
-- Run `cmake ..`
-- Run `make`
+- `cd` to the `build` folder
+- Run `cmake .. -GNinja`
+- Run `ninja`
 
-It is recommended to use Linux, or WSL if you're on Windows. Currently uses POSIX functions (mainly fork) that are hard to get rid of without rewriting much more of the program, so Visual Studio compilation is not yet supported.
+It is recommended to use Linux, or WSL if you're on Windows. Currently uses POSIX functions (mainly fork) that are hard to get rid of without rewriting more of the program, so Visual Studio compilation is not yet supported.
 
 <details markdown="1">
 <summary>Old methods</summary>
@@ -30,10 +34,6 @@ It is recommended to use Linux, or WSL if you're on Windows. Currently uses POSI
 - Optional: add msys64/usr/bin folder to PATH
 - Run `make -f Makefile_win` command either in Powershell with msys folders in path, or from the msys2 terminal. Make sure you're running it in the project's folder!
 </details>
-
-### Other notes
-
-Uses [nlohmann json](https://github.com/nlohmann/json), which is not the most optimized but is robust, as it's used only in passing data when initializing a partition.
 
 ---
 
