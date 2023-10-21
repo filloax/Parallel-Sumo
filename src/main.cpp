@@ -4,17 +4,22 @@ Can comment out getFilePaths() and partitionNetwork() after these functions
 have already been executed to run startSim() with same partitions.
 
 Author: Phillip Taylor
+
+Contributions: Filippo Lenzi
 */
 
+#include <exception>
 #include <iostream>
 #include <cstdlib>
 #include <vector>
+#include <filesystem>
+#include <argparse/argparse.hpp>
 #include "ParallelSim.hpp"
-#include <libs/argparse.hpp>
 #include "args.hpp"
+#include "globals.hpp"
 
 int main(int argc, char* argv[]) {
-    argparse::ArgumentParser program("parallel-sumo", "0.4");
+    argparse::ArgumentParser program(PROGRAM_NAME, PROGRAM_VER);
     Args args(program);
 
     try {
@@ -26,8 +31,16 @@ int main(int argc, char* argv[]) {
         std::exit(1);
     }
 
+    std::filesystem::path dataDir(args.dataDir);
+    try {
+        std::filesystem::remove_all(dataDir / "sockets");
+    } catch (std::exception& e) {}
+    std::filesystem::create_directories(dataDir / "sockets");
+
+
+
     // params: host server, first port. sumo cfg file, gui option (true), number of threads
-    ParallelSim client("localhost", args.port, args.cfg.c_str(), args.gui, args.numThreads, args.sumoArgs, args);
+    ParallelSim client(args.cfg.c_str(), args.gui, args.numThreads, args.sumoArgs, args);
     client.getFilePaths();
     if (!args.skipPart && args.numThreads > 1) {
         // param: true for metis partitioning, false for grid partitioning (only works for 2 partitions currently)

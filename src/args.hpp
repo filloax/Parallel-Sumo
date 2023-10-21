@@ -1,17 +1,24 @@
+/**
+args.hpp
+
+Wrapper for args, to access them in a single object.
+
+Author: Filippo Lenzi
+*/
+
 #pragma once
 
-#include <libs/argparse.hpp>
+#include <argparse/argparse.hpp>
+#include <cstdlib>
+#include <sstream>
 
 class Args {
+protected:
+    bool printOnParse = true;
 public:
     Args(argparse::ArgumentParser& program):
     program(program)
     {
-        program.add_argument("-p", "--port")
-            .help("Port for the first thread's server")
-            .default_value(1337)
-            .scan<'i', int>();
-            ;
         program.add_argument("-c", "--cfg")
             .help("Sumo config path")
             // For demo purposes
@@ -22,8 +29,8 @@ public:
             .scan<'i', int>();
             ;
         program.add_argument("--part-threads")
-            .help("Threads used while partitioning")
-            .default_value(2)
+            .help("Threads used while partitioning (will be capped to partition amount)")
+            .default_value(8)
             .scan<'i', int>();
             ;
         program.add_argument("--gui")
@@ -38,42 +45,57 @@ public:
             .help("Keep poly data if present in the original sumocfg (False by default for performance)")
             .default_value(false)
             .implicit_value(true);
+        program.add_argument("--data-dir")
+            .help("Data directory to store working files in")
+            .default_value("data");
+        program.add_argument("-v", "--verbose")
+            .help("Extra output")
+            .default_value(false)
+            .implicit_value(true);
     }
 
     void parse_known_args(int argc, char* argv[]) {
         sumoArgs = program.parse_known_args(argc, argv);
         
-        port = program.get<int>("--port");
         cfg = program.get<std::string>("--cfg");
         numThreads = program.get<int>("--num-threads");
         partitioningThreads = program.get<int>("--part-threads");
         gui = program.get<bool>("--gui");
         skipPart = program.get<bool>("--skip-part");
         keepPoly = program.get<bool>("--keep-poly");
+        dataDir = program.get<std::string>("--data-dir");
+        verbose = program.get<bool>("--verbose");
 
+        std::stringstream msg;
         if (numThreads <= 0) {
-            std::cerr << "Error: wrong number of threads, must be positive number (can be 1 for testing), is " << numThreads << std::endl;
-            exit(-1);
+            msg << "Error: wrong number of threads, must be positive number (can be 1 for testing), is " << numThreads << std::endl;
+            std::cerr << msg.str();
+            exit(EXIT_FAILURE);
         }
         if (partitioningThreads <= 0) {
-            std::cerr << "Error: wrong number of partitioning threads, must be positive number (can be 1 for testing), is " << partitioningThreads << std::endl;
-            exit(-1);
+            msg << "Error: wrong number of partitioning threads, must be positive number (can be 1 for testing), is " << partitioningThreads << std::endl;
+            std::cerr << msg.str();
+            exit(EXIT_FAILURE);
         }
 
-        std::cout << "port=" << port << ", cfg=" << cfg
-            << ", numThreads=" << numThreads << ", partitioningThreads=" << partitioningThreads
-            << ", gui=" << gui << ", skipPart=" << skipPart
-            << ", keepPoly=" << keepPoly
-            << std::endl;
+        if (printOnParse) {
+            std::cout << "cfg=" << cfg << ", numThreads=" << numThreads 
+                << ", partitioningThreads=" << partitioningThreads
+                << ", gui=" << gui << ", skipPart=" << skipPart
+                << ", keepPoly=" << keepPoly << ", dataDir=" << dataDir
+                << ", verbose=" << verbose
+                << std::endl;
+        }
     }
 
-    int port;
     std::string cfg;
     int numThreads;
     int partitioningThreads;
     bool gui;
     bool skipPart;
     bool keepPoly;
+    std::string dataDir;
+    bool verbose;
     std::vector<std::string> sumoArgs;
     argparse::ArgumentParser& program;
 };

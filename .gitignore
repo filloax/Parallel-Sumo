@@ -1,7 +1,6 @@
 *.o
 *.d
-main
-main.exe
+bin/**
 .vscode/**
 **/__pycache__/**
 data/**
@@ -12,3 +11,11 @@ data/**
 *.stackdump
 assets/grid_large.*
 err.txt
+build/**
+!build/.dir
+build-windows/**
+!build-windows/.dir
+build-msys/**
+!build-msys/.dir
+.cache/**
+compile_commands.json

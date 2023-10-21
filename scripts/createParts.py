@@ -7,6 +7,10 @@ Original code by Phillip Taylor
 Adapted by Filippo Lenzi
 """
 
+if __name__ == '__main__':
+    "Initializing partitioning script..."
+
+import itertools
 import os, sys
 import glob
 import xml.etree.ElementTree as ET
@@ -22,10 +26,12 @@ from typing import Callable
 from collections import defaultdict
 from time import time
 from datetime import timedelta
+import json
 
 from convertToMetis import main as convert_to_metis, weight_funs, WEIGHT_ROUTE_NUM
 from sumobin import run_duarouter, run_netconvert
 from sumo2png import generate_network_image
+from partitiondatagen import PartitionDataGen
 
 if 'SUMO_HOME' in os.environ:
     SUMO_HOME = os.environ['SUMO_HOME']
@@ -33,7 +39,7 @@ if 'SUMO_HOME' in os.environ:
     net_tools = os.path.join(SUMO_HOME, 'tools', 'net')
     sys.path.append(os.path.join(route_tools))
 
-    import sumolib  # noqa
+    import sumolib
     from cutRoutes import main as cut_routes, get_options as cut_routes_options
 
     DUAROUTER = sumolib.checkBinary('duarouter')
@@ -50,19 +56,20 @@ def check_nparts(value):
     return ivalue
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-n', '--num-parts', required=True, type=check_nparts)
-parser.add_argument('-C', '--cfg-file', required=True, type=str, help="Path to the SUMO .sumocfg simulation config")
+parser.add_argument('-N', '--num-parts', required=True, type=check_nparts)
+parser.add_argument('-c', '--cfg-file', required=True, type=str, help="Path to the SUMO .sumocfg simulation config")
 parser.add_argument('--data-folder', default='data', help="Folder to store output in")
 parser.add_argument('--keep-poly', action='store_true', help="Keep poly files from the sumocfg (disabled by default for performance)")
 parser.add_argument('--no-metis', action='store_true', help="Partition network using grid (unsupported)")
 parser.add_argument('-w', '--weight-fun', choices=weight_funs, nargs="*", default=[WEIGHT_ROUTE_NUM], help="One or more weighting methods to use")
 parser.add_argument('-nw', '--no-weight', action='store_true', help="Do not use edge weights in partitioning")
-parser.add_argument('-T', '--threads', type=int, default=1, help="Threads to use for processing the partitioning of the network")
+parser.add_argument('-T', '--threads', type=int, default=8, help="Threads to use for processing the partitioning of the network, will be capped to partition num")
 # remove default True later
 parser.add_argument('-t', '--timing', action='store_true', help="Measure the timing for the whole process")
 parser.add_argument('--dev-mode', action='store_false', help="Remove some currently unhandled edge cases from the routes (not ideal in release, currently works inversely for easier development)")
 parser.add_argument('--png', action='store_true', help="Output network images for each partition")
 parser.add_argument('-v', '--verbose', action='store_true', help="Additional output")
+parser.add_argument('--force', action='store_true', help="Regenerate even if data folder already contains partition data matching these settings")
 
 verbose = False
 devmode = False
@@ -70,7 +77,7 @@ devmode = False
 def _is_poly_file(path: str):
     return path.endswith(".poly.xml")
 
-class NetworkPartitioning:
+class NetworkPartitioning:   
     def __init__(self, 
         cfg_file: str,
         use_metis: bool = True,
@@ -104,7 +111,7 @@ class NetworkPartitioning:
         self._temp_files = set()
         self._temp_files_lock = Lock()
         self._vehicle_depart_times = None
-
+        
     def partition_network(self, num_parts: int):
         if devmode:
             print("-------------------------------")
@@ -119,8 +126,8 @@ class NetworkPartitioning:
             start_t = time()
 
         os.makedirs(self.data_folder, exist_ok=True)
-        for f in glob.glob(f'{self.data_folder}/*'):
-            if os.path.basename(f) != "cache":
+        for f in glob.glob(f'{self.data_folder}/**'):
+            if os.path.basename(f) != "cache" and os.path.isfile(f):
                 os.remove(f)
 
         # Preprocess routes file for proper input to cutRoutes.py
@@ -187,10 +194,14 @@ class NetworkPartitioning:
 
         # Make immutable for multithreading
         part_bounds = tuple(part_bounds_list)
+        
+        thread_num = min(num_parts, self.threads)
+        if thread_num < num_parts:
+            print(f"Reduced thread num to part num ({thread_num} instead of {self.threads})")
 
         # Run the partitioning proces
-        if self.threads > 1:
-            print(f"Running partition processing with {self.threads} threads...")
+        if thread_num > 1:
+            print(f"Running partition processing with {thread_num} threads...")
         else:
             print("Running partition processing single-threaded...")
         
@@ -199,20 +210,37 @@ class NetworkPartitioning:
             return self._process_partition(part_idx, processed_routes_path, netconvert_options, part_bounds)
 
         # ThreadPool (instead of Pool) to make sharing objects etc. possible
-        with ThreadPool(self.threads) as pool:
-            chunksize = num_parts // self.threads
+        with ThreadPool(thread_num) as pool:
+            chunksize = num_parts // thread_num
             partition_vehicle_start_times = pool.map(process_part_work, range(num_parts), chunksize)
 
             # First reduce into a smaller list in multiple threads,
             # then do final merging in main thread
-            interm_dicts = pool.map(_merge_float_dicts_min, _split_list(partition_vehicle_start_times, self.threads), chunksize=1)
+            interm_dicts = pool.map(_merge_float_dicts_min, _split_list(partition_vehicle_start_times, thread_num), chunksize=1)
             self._vehicle_depart_times = _merge_float_dicts_min(interm_dicts)
-           
-            print("Processing done, postprocessing...")
 
             pool.map(self._postprocess_partition, range(num_parts), chunksize)
 
-            print("Postprocessing done")
+            self._final_duplicates_check(num_parts)
+            self._final_route_connection_check(num_parts)
+            
+            belonging = pool.map(self._read_partition_vehicles, range(num_parts), chunksize)
+
+            shared = set()
+            for ls1, ls2 in itertools.product(belonging, belonging):
+                if ls1 != ls2:
+                    for id in ls1:
+                        if id in ls2:
+                            shared.add(id)
+                            
+            if len(shared) > 0:
+                print(f'[WARN] Vehicles shared between partitions: {shared}', file=sys.stderr)
+
+            if verbose:
+                for part_idx, ls in enumerate(belonging):
+                    ls.sort(key=lambda x: int(re.sub(r'[^\d]', '', x)))
+                    print(f"Vehicles starting in partition {part_idx} ({len(ls)}): [ ", ', '.join(ls), "]")
+
 
         if self.png:
             generate_network_image([os.path.join(self.data_folder, f"part{i}.net.xml") for i in range(num_parts)], 
@@ -227,6 +255,10 @@ class NetworkPartitioning:
                 self._temp_files,
                 edge_weights_file,
             )
+            
+        print("Generating edge data json...")
+        postprocessor = PartitionDataGen(num_parts, self.data_folder)
+        postprocessor.generate_partition_data()
         
         print("Cleaning up temp files...")
 
@@ -306,7 +338,7 @@ class NetworkPartitioning:
             net_part, processed_routes_path,
             "--routes-output", interm_rou_part,
             "--orig-net", self.net_file,
-            "--disconnected-action", "keep"
+            # "--disconnected-action", "keep" # TEMP, TODO: re enable when split routes handled
         ]))
 
         vehicle_depart_times: dict[str, float] = {}
@@ -382,8 +414,6 @@ class NetworkPartitioning:
 
         interm_rou_part = os.path.abspath(os.path.join(self.data_folder, f"part{part_idx}.interm.rou.xml"))
         rou_part = os.path.abspath(os.path.join(self.data_folder, f"part{part_idx}.rou.xml"))
-        
-        belonging = []
 
         with open(interm_rou_part, 'r', encoding='utf-8') as fr:
             route_part_tree = ET.parse(fr)
@@ -394,13 +424,11 @@ class NetworkPartitioning:
             for vehicle in vehicles:
                 id = vehicle.attrib["id"]
                 depart = float(vehicle.attrib["depart"])
-                if depart > self._vehicle_depart_times[id]:
+                if depart > self._vehicle_depart_times[id] + 0.001:
                     remove.append(vehicle)
                 elif devmode and self._devmode_remove_vehicle(vehicle):
                     remove.append(vehicle)
                     dev_removed += 1
-                else:
-                    belonging.append(vehicle)
 
             # Duplicate routes (likely unhandled edge cases in partitioning and cutting)
             routes = route_part_el.findall("route")
@@ -423,13 +451,106 @@ class NetworkPartitioning:
             if dup_route_removed > 0:
                 print(f"Removed {dup_route_removed} duplicate routes (likely unhandled edge cases)")
 
-        belonging.sort(key=lambda x: int(re.sub(r'[^\d]', '', x.attrib["id"])))
+    def _final_duplicates_check(self, num_parts):
+        """Check for duplicates not caught by starting time check, 
+        might be caused by vehicles starting in border edges.
+        """
+        route_parts = [os.path.abspath(os.path.join(self.data_folder, f"part{part_idx}.rou.xml")) for part_idx in range(num_parts)]
+        
+        # Keep the vehicle with the longest route
+        # (if a edge was split with a vehicle starting there, 
+        # it will likely get a minimal route included in the one
+        # in its copy in the neighbor partition)
+        vehicle_route_lengths = defaultdict(list)
+        for rou_part in route_parts:            
+            with open(rou_part, 'r', encoding='utf-8') as f:
+                route_part_el: Element = ET.parse(f).getroot()
+                
+            for veh in route_part_el.findall(f'.//vehicle'):
+                id = veh.attrib["id"]
+                route_id = veh.attrib["route"]
+                route_el = route_part_el.find(f".//route[@id='{route_id}']")
+                route_len = len(route_el.attrib["edges"].split(" "))
+                vehicle_route_lengths[id].append(route_len)
+        
+        # After checking, keep only the ones with longest route
+        for i, rou_part in enumerate(route_parts):
+            with open(rou_part, 'r', encoding='utf-8') as f:
+                tree = ET.parse(f)
+                route_part_el: Element = tree.getroot()
+            
+            delete = []
+            for veh in route_part_el.findall(f'.//vehicle'):
+                id = veh.attrib["id"]
+                route_id = veh.attrib["route"]
+                route_el = route_part_el.find(f".//route[@id='{route_id}']")
+                route_len = len(route_el.attrib["edges"].split(" "))
+                max_len = max(vehicle_route_lengths[id])
+                
+                rem = route_len < max_len
+                # edge case: if somehow (depends on SUMO cutRoutes) there
+                # are routes in different parts with the same edges, 
+                # remove all but one (arbitrarily)
+                rem = rem or len([x for x in vehicle_route_lengths[id] if x == max_len]) > 1
+                if rem:
+                    # directly remove route here as it doesn't affect iterator
+                    route_part_el.remove(route_el)
+                    delete.append(veh)
+                    vehicle_route_lengths[id].remove(route_len)
 
-        if verbose:
-            print(f"Vehicles starting in partition {part_idx}: [ ", ', '.join([v.attrib["id"] for v in belonging]), "]")
+            # Delete in separate loop to avoid messing with the iterator
+            for veh in delete:
+                route_part_el.remove(veh)
+                
+            tree.write(rou_part, encoding='utf-8')
+                
+            print(f"Partition {i}: removed {len(delete)} additional duplicate vehicles")
+
+    def __each_shares_element_with_prec(self, lst: list[list]):
+        return all(set(lst[i]) & set(lst[i - 1]) for i in range(1, len(lst)))
+
+    def _final_route_connection_check(self, num_parts: int):
+        route_parts = [os.path.abspath(os.path.join(self.data_folder, f"part{part_idx}.rou.xml")) for part_idx in range(num_parts)]
+        route_segs_by_id = defaultdict(list)
+        
+        for file in route_parts:
+            tree = ET.parse(file)
+            root = tree.getroot()
+            for route in root.findall(".//route"):
+                route_segs_by_id[route.attrib["id"]].append(route.attrib["edges"].split(" "))
+
+        matching = []
+
+        for id in route_segs_by_id:
+            lists = route_segs_by_id[id]
+            if not self.__each_shares_element_with_prec(lists):
+                matching.append(id)
+                
+        for file in route_parts:
+            tree = ET.parse(file)
+            root = tree.getroot()
+            for id in matching:
+                for route in root.findall(f".//route[@id='{id}']"):
+                    root.remove(route)
+                for veh in root.findall(f".//vehicle[@route='{id}']"):
+                    root.remove(veh)
+       
+            tree.write(file, encoding='utf-8')
+                
+        if len(matching) > 0:
+            print(f"[WARN] {len(matching)} routes with non continuous edges", file=sys.stderr)
+
+    def _read_partition_vehicles(self, part_idx):
+        rou_part = os.path.abspath(os.path.join(self.data_folder, f"part{part_idx}.rou.xml"))
+        with open(rou_part, 'r', encoding='utf-8') as f:
+            route_part_el: Element = ET.parse(f).getroot()
+        return [el.attrib['id'] for el in route_part_el.findall(f'.//vehicle')]
+
+def _get_inf():
+    return float("inf")
 
 def _merge_float_dicts_min(dicts: list[dict[str, float]]) -> dict[str, float]:
-    result_dict = defaultdict(float)
+    result_dict = defaultdict(_get_inf)
     
     for input_dict in dicts:
         for key, value in input_dict.items():
@@ -451,8 +572,28 @@ def _split_list(list: list, n: int) -> list[list]:
 
     return parts
 
+def _save_args(args: object):
+    args_path = os.path.join(args.data_folder, "partArgs.json")
+    with open(args_path, 'w', encoding='utf-8') as f:
+        json.dump(args.__dict__, f)
+        
+def _check_args(args: object):
+    args_path = os.path.join(args.data_folder, "partArgs.json")
+    try:
+        if os.path.exists(args_path):
+            with open(args_path, 'r', encoding='utf-8') as f:
+                old_args = json.load(f)
+            return old_args == args.__dict__
+    except Exception:
+        print("Coudldn't check for previous calls' args", file=sys.stderr)
+    return False
+
 def worker(args):
     global verbose, devmode
+    
+    if not args.force and _check_args(args):
+        print("Partitioning same as previous gen in this folder, skipping (use --force to ignore this and run anyways)")
+        return
 
     if args.verbose:
         verbose = True
@@ -487,6 +628,8 @@ def worker(args):
     )
     
     partitioning.partition_network(args.num_parts)
+    
+    _save_args(args)
 
 def main(args):
     worker_process = Process(target=worker, args=[args])

@@ -23,4 +23,4 @@ if (!(Test-Path -Path $condaEnvPath -PathType Container)) {
 }
 
 Write-Host "Launching main"
-bin/main.exe $args
+bin/ParallelSumo.exe $args

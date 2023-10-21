@@ -5,61 +5,72 @@ Parallelizes a SUMO simulation. Partitions a SUMO network by number of threads,
 and runs each parallel SUMO network partition in a PartitionManager.
 
 Author: Phillip Taylor
-*/
 
+Contributions: Filippo Lenzi
+*/
+#include "ParallelSim.hpp"
+
+#include <csignal>
+#include <cstdio>
+#include <cstring>
+#include <exception>
 #include <iostream>
 #include <fstream>
 #include <ctime>
+#include <nlohmann/json_fwd.hpp>
+#include <ratio>
+#include <sstream>
 #include <string>
-#include <unistd.h>
 #include <stdlib.h>
-#include <sys/types.h>
-#include <sys/wait.h>
 #include <fcntl.h>
 #include <iterator>
+#include <sys/types.h>
 #include <unordered_map>
 #include <vector>
 #include <set>
+#include <filesystem> // C++17
+#include <chrono>
+
+#include <zmq.h>
+#include <zmq.hpp>
+#include <nlohmann/json.hpp>
+
+#include "messagingShared.hpp"
 #include "libs/tinyxml2.h"
-#include "ParallelSim.hpp"
+#include "globals.hpp"
 #include "utils.hpp"
 #include "args.hpp"
-#include <filesystem> // C++17
-#include <barrier> // C++20
-#include "SumoConnectionRouter.hpp"
+#include "psumoTypes.hpp"
+
+#ifdef PSUMO_SINGLE_EXECUTABLE
+  #include <unistd.h>
+  #include "PartitionManager.hpp"
+#endif
 
 namespace fs = std::filesystem;
 
-typedef std::unordered_multimap<std::string, int>::iterator umit;
+using namespace std;
+using namespace psumo;
+using namespace chrono;
 
-ParallelSim::ParallelSim(const std::string& host, int port, std::string cfg, bool gui, int threads, std::vector<std::string>& sumoArgs, Args& args) :
-  host(host),
-  port(port),
+typedef std::unordered_multimap<string, int>::iterator umit;
+
+ParallelSim::ParallelSim(string cfg, bool gui, int threads, vector<string>& sumoArgs, Args& args) :
   cfgFile(cfg),
   numThreads(threads),
   sumoArgs(sumoArgs),
-  args(args),
-  dataFolder("data")
+  args(args)
   {
 
-  // set paths for sumo executable binaries
-  std::string sumoExe;
-  if(gui)
-    sumoExe = "/bin/sumo-gui";
-  else
-    sumoExe = "/bin/sumo";
+  #ifdef PSUMO_SINGLE_EXECUTABLE
+    cout << "ParallelSim | Creating in single executable mode!" << endl;
+  #endif
 
-  std::string sumoPath;
-  char* sumoPathPtr(getenv("SUMO_HOME"));
-  if (sumoPathPtr == NULL) {
-    std::cout << "$SUMO_HOME is not set! Must set $SUMO_HOME." << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  else {
-    sumoPath = sumoPathPtr;
-    std::cout << "$SUMO_HOME is set to '" << sumoPath << "'" << std::endl;
-    SUMO_BINARY = sumoPath + sumoExe;
-  }
+  // set paths for sumo executable binaries
+  #ifdef PSUMO_SINGLE_EXECUTABLE
+  SUMO_BINARY = getSumoPath(gui);
+  #endif
+
   // get end time
   tinyxml2::XMLDocument cfgDoc;
   tinyxml2::XMLError e = cfgDoc.LoadFile(cfgFile.c_str());
@@ -90,7 +101,7 @@ ParallelSim::ParallelSim(const std::string& host, int port, std::string cfg, boo
 
 void ParallelSim::getFilePaths(){
   // get paths for net and route files
-  std::string cfgStr(cfgFile);
+  string cfgStr(cfgFile);
   int found = cfgStr.find_last_of("/\\");
   path = cfgStr.substr(0,found+1);
   // load sumo cfg file
@@ -120,15 +131,16 @@ void ParallelSim::getFilePaths(){
   }
 
   // set net-file
-  std::string netText(netFileEl->Attribute("value"));
+  string netText(netFileEl->Attribute("value"));
   netText = path+netText;
   netFile.assign(netText);
   // set routes-file
-  std::string routeText(routeFileEl->Attribute("value"));
+  string routeText(routeFileEl->Attribute("value"));
   routeText= path+routeText;
   routeFile.assign(routeText);
 
 }
+
 
 void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
   // Filippo Lenzi: Originally was implemented in C++
@@ -144,11 +156,11 @@ void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
     pythonCommand = pythonPathStr / pythonCommand;
   }
 
-  std::vector<std::string> partArgs {
-    pythonCommand, "scripts/createParts.py",
-    "-n", std::to_string(numThreads),
-    "-C", cfgFile,
-    "--data-folder", dataFolder
+  vector<string> partArgs {
+    "scripts/createParts.py",
+    "-N", std::to_string(numThreads),
+    "-c", cfgFile,
+    "--data-folder", args.dataDir
   };
 
   if (!metis) {
@@ -162,37 +174,28 @@ void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
     partArgs.push_back(std::to_string(args.partitioningThreads));
   }
 
-  pid_t pid;
+  std::cout << "Running createParts.py to split graph and create partition files..." << std::endl;
+
+  auto time0 = high_resolution_clock::now();
+
+  runProcess(pythonCommand, partArgs);
+
   int status;
-  switch(pid = fork()) {
-    case -1:
-      // fork() has failed
-      perror("fork");
-      break;
-    case 0:
-      std::cout << "Running createParts.py to split graph and create partition files..." << std::endl;
-      std::cout << "command: ";
-      for (int i = 0; i < partArgs.size(); i++) std::cout << partArgs[i] << " ";
-      std::cout << std::endl;
-      EXECVP_CPP(partArgs);
-      std::cerr << "execvp() for createParts.py has failed: " << errno << std::endl;
-      exit(EXIT_FAILURE);
-      break;
-    default:
-      // waiting for convertToMetis.py
-      pid = wait(&status);
-      if(WEXITSTATUS(status)) {
-        std::cout << "failed while partitioning" << std::endl;
-        exit(EXIT_FAILURE);
-      }
-      printf("partitioning successful with status: %d\n", WEXITSTATUS(status));
-      break;
+  waitProcess(&status);
+  if(WEXITSTATUS(status)) {
+    std::cout << "failed while partitioning" << std::endl;
+    exit(EXIT_FAILURE);
   }
+  printf("partitioning successful with status: %d\n", WEXITSTATUS(status));
+
+  auto time1 = high_resolution_clock::now();
+  auto duration = duration_cast<microseconds>(time1 - time0).count() / 1000.0;
+  cout << "Partitioning took " << duration<< "ms!" << endl;
 }
 
 void ParallelSim::loadRealNumThreads() {
   // Read actual partition num in case METIS had empty partitions
-  std::ifstream partNumFile(dataFolder + "/numParts.txt"); // Open the input file
+  std::ifstream partNumFile(args.dataDir + "/numParts.txt"); // Open the input file
 
   if (partNumFile.is_open()) {
     int number;
@@ -209,13 +212,13 @@ void ParallelSim::loadRealNumThreads() {
   }
 }
 
-void ParallelSim::calcBorderEdges(std::vector<std::vector<border_edge_t>>& borderEdges, std::vector<std::vector<int>>& partNeighbors){
-  std::unordered_multimap<std::string, int> allEdges;
-  std::vector<std::set<int>> partNeighborSets(numThreads);
+void ParallelSim::calcBorderEdges(vector<vector<border_edge_t>>& borderEdges, vector<vector<partId_t>>& partNeighbors){
+  std::unordered_multimap<string, int> allEdges;
+  vector<std::set<partId_t>> partNeighborSets(numThreads);
 
   // add all edges to map, mapping edge ids to partition ids
   for(int i=0; i<numThreads; i++) {
-    std::string currNetFile = dataFolder + "/part"+std::to_string(i)+".net.xml";
+    string currNetFile = args.dataDir + "/part"+std::to_string(i)+".net.xml";
     tinyxml2::XMLDocument currNet;
     tinyxml2::XMLError e = currNet.LoadFile(currNetFile.c_str());
     tinyxml2::XMLElement* netEl = currNet.FirstChildElement("net");
@@ -228,7 +231,7 @@ void ParallelSim::calcBorderEdges(std::vector<std::vector<border_edge_t>>& borde
   // find border edges
   umit it = allEdges.begin();
   while(it != allEdges.end()) {
-    std::string key = it->first;
+    string key = it->first;
     if(allEdges.count(key)>1) {
       std::pair<umit, umit> edgePair = allEdges.equal_range(key);
       umit edgeIt1 = edgePair.first;
@@ -237,7 +240,7 @@ void ParallelSim::calcBorderEdges(std::vector<std::vector<border_edge_t>>& borde
       border_edge_t borderEdge2 = {};
       borderEdge1.id = key;
       borderEdge2.id = key;
-      std::string currNetFile = dataFolder + "/part"+std::to_string(edgeIt1->second)+".net.xml";
+      string currNetFile = args.dataDir + "/part"+std::to_string(edgeIt1->second)+".net.xml";
       tinyxml2::XMLDocument currNet;
       tinyxml2::XMLError e = currNet.LoadFile(currNetFile.c_str());
       tinyxml2::XMLElement* netEl = currNet.FirstChildElement("net");
@@ -250,7 +253,7 @@ void ParallelSim::calcBorderEdges(std::vector<std::vector<border_edge_t>>& borde
             (borderEdge2.lanes).push_back(laneEl->Attribute("id"));
           }
           // determine from and to partitions -  find junction to determine if dead end
-          const std::string fromJunc = el->Attribute("from");
+          const string fromJunc = el->Attribute("from");
           int from;
           int to;
           for(tinyxml2::XMLElement* junEl = netEl->FirstChildElement("junction"); junEl != NULL; junEl = junEl->NextSiblingElement("junction")) {
@@ -292,64 +295,271 @@ void ParallelSim::calcBorderEdges(std::vector<std::vector<border_edge_t>>& borde
   }
 }
 
+// Not reference so thread starts correctly
+void ParallelSim::waitForPartitions(vector<pid_t> pids) {
+  map<pid_t, partId_t> pidParts;
+  for (int i = 0; i < pids.size(); i++) {
+    pidParts[pids[i]] = i;
+  }
+
+  if (args.verbose)
+    __printVector(pids, "Coordinator[t] | Started partition wait thread, pids are: ", ", ", true, std::cout);
+  while (pids.size() > 0) {
+    int status;
+    pid_t pid = waitProcess(&status);
+    if (pid == -1) {
+      perror("waitProcess\n");
+    } else if (pid == 0) {
+      continue;
+    } else {
+      // A child process has exited
+      printf("Coordinator[t] | Partition %d [pid %d] exited with status %d at step %d/%d\n", pidParts[pid], pid, status, steps, endTime);
+      pids.erase(std::remove(pids.begin(), pids.end(), pid), pids.end());
+
+      if (status != 0) {
+        perror("Partition ended with an error!\n");
+        for (auto pid : pids) {
+          // killProcess(pid);
+        }
+
+        exit(status);
+      }
+    }
+  }
+}
+
 void ParallelSim::startSim(){
   if (numThreads > 1)
-    this->loadRealNumThreads();
+    loadRealNumThreads();
 
   if (numThreads == 1) {
     std::cout << "Running in 1 thread mode, will use the original cfg (not intended? check your --num-threads param or the partitions created)" << std::endl;
   }
 
-  std::string partCfg;
-  std::vector<PartitionManager*> parts;
-  std::vector<SumoConnectionRouter*> routers;
+  string partCfg;
 
   std::cout << "Will end at time " << endTime << std::endl;
 
-  std::barrier<> syncBarrier(numThreads);
+  // Context for ZeroMQ message-passing, ideally one per program
+  zmq::context_t zctx{1};
 
-  std::vector<std::vector<border_edge_t>> borderEdges(numThreads);
-  std::vector<std::vector<int>> partNeighbors(numThreads);
-  calcBorderEdges(borderEdges, partNeighbors);
+  // Now Python does this
+  // vector<vector<border_edge_t>> borderEdges(numThreads);
+  // vector<vector<int>> partNeighbors(numThreads);
+  // calcBorderEdges(borderEdges, partNeighbors);
+
+  vector<pid_t> pids(numThreads);
 
   // create partitions
-  for(int i=0; i<numThreads; i++) {
-    if (numThreads > 1)
-      partCfg = dataFolder + "/part"+std::to_string(i)+".sumocfg";
-    else // Only one thread, so use normal config, for the purpose of benchmarking comparisions
-      partCfg = cfgFile;
-    printf("Creating partition manager %d on cfg file %s, port=%d\n", i, partCfg.c_str(), port+i);
+  for(partId_t i=0; i<numThreads; i++) {
+    #ifndef PSUMO_SINGLE_EXECUTABLE
+      // If in separate executables mode, 
+      // create a new process with the partition
+      // by launching its exe
 
-    // Memory shared in stack but not an issue as it gets used only in the constructor
-    std::vector<partitionPort> partitionPorts(partNeighbors[i].size() + 1);
-    partitionPorts[0] = {i, port+i};
-    for (int j = 0; j < partNeighbors[i].size(); j++) {
-      int neighborIdx = partNeighbors[i][j];
-      partitionPorts[j+1] = {neighborIdx, port+neighborIdx};
+      // // Pass data needed for the partition constructor as json
+      // nlohmann::json partData;
+      // partData["id"] = i;
+      // partData["neighbors"] = partNeighbors[i];
+      // // nlohmann::json handles the conversion, see psumoTypes.cpp
+      // partData["borderEdges"] = borderEdges[i];
+      // std::ofstream out(getPartitionDataFile(args.dataDir, i));
+      // out << partData.dump(2);
+      // out.close();
+
+      pid_t pid;
+
+      auto exeDir = getCurrentExeDirectory();
+      vector<string> partArgs ({
+        "-P", to_string(i),
+        "-T", to_string(endTime),
+        // Base ParallelSumo args, not all needed by partition
+        // but pass everything for consistency
+        "-N", to_string(args.numThreads),
+        "-c", args.cfg,
+        "--part-threads", to_string(args.partitioningThreads),
+        "--data-dir", args.dataDir
+      });
+      if (args.gui) partArgs.push_back("--gui");
+      if (args.skipPart) partArgs.push_back("--skip-part");
+      if (args.keepPoly) partArgs.push_back("--keep-poly");
+      if (args.verbose)  partArgs.push_back("--verbose");
+      
+      if (args.verbose)
+        printf("Coordinator | Starting process for part %i\n", i);
+      pid = runProcess(exeDir / PROGRAM_NAME_PART, partArgs);
+    #else
+
+    printf("SINGLE EXE VER NOT SUPPORTED AS OF NOW; IS OLD VER\n");
+    exit(EXIT_FAILURE);
+    // If in single executable mode, fork and create the partition here
+    // (still in a new process)
+
+    pid = fork();
+    if (pid == 0) {
+      printf("Creating partition manager %d on cfg file %s\n", i, partCfg.c_str());
+
+        if (numThreads > 1)
+          partCfg = args.dataDir + "/part"+std::to_string(i)+".sumocfg";
+        else // Only one thread, so use normal config, for the purpose of benchmarking comparisions
+          partCfg = cfgFile;
+
+        PartitionManager part(
+          SUMO_BINARY, i, partCfg, endTime, 
+          partNeighbors[i], zctx, numThreads,
+          sumoArgs, args
+        );
+        part.setMyBorderEdges(borderEdges[i]);
+        part.startPartitionLocalProcess();
+        printf("Finished partition %d\n", i);
+        exit(0);
+    } else {
+    #endif
+
+      printf("Created partition %d on pid %d\n", i, pid);
+      pids[i] = pid;
+      // if needed, add pid to a partition pids list later
+    
+    #ifdef PSUMO_SINGLE_EXECUTABLE
+    }
+    #endif
+  }
+
+  // Check for partition pids in case of unexpected exit in a subthread
+  thread waitThread(&ParallelSim::waitForPartitions, this, pids);
+
+  // From here, coordination process
+  coordinatePartitionsSync(zctx);
+
+  waitThread.join();
+}
+
+void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
+  if (args.verbose)
+    printf("Coordinator | Starting coordinator routine...\n");
+
+  // Initialize sockets used to sync partitions in a barrier-like fashion
+  vector<zmq::socket_t*> sockets(numThreads);
+  for (int i = 0; i < numThreads; i++) {
+    string uri = psumo::getSyncSocketId(args.dataDir, i);
+    try {
+      sockets[i] = new zmq::socket_t{zctx, zmq::socket_type::rep};
+      sockets[i]->set(zmq::sockopt::linger, 0 );
+      sockets[i]->bind(uri);
+    } catch (zmq::error_t& e) {
+      stringstream msg;
+      msg << "Coordinator | ZMQ error in binding socket " << i << " to '" << uri
+        << "': " << e.what() << "/" << e.num() << endl;
+      cerr << msg.str();
+      exit(-1);
+    }
+  }
+
+  if (args.verbose)
+    printf("Coordinator | Bound sockets\n");
+
+  vector<zmq::pollitem_t> pollitems(numThreads);
+  for (int i = 0; i < numThreads; i++) {
+    // operator void* included in the ZeroMQ C++ wrapper, 
+    // needed to make poll work as it operates on the C version
+    pollitems[i].socket = sockets[i]->operator void*();
+    // pollitems[i].socket = *sockets[i]; // Should be equivalent, but let's use the operator
+    pollitems[i].events = ZMQ_POLLIN;
+  }
+
+  vector<bool> partitionReachedBarrier(numThreads);
+  vector<bool> partitionStopped(numThreads);
+  zmq::message_t message;
+
+  for (int i = 0; i < numThreads; i++) {
+    partitionReachedBarrier[i] = false;
+    partitionStopped[i] = false;
+  }
+
+  int barrierPartitions = 0;
+  int stoppedPartitions = 0;
+
+  high_resolution_clock::time_point time0;
+  bool setTime = false;
+
+  // First barrier is before simulation start, 
+  // we want to count real simulation steps
+  steps = -1;
+
+  while (true) {
+    zmq::poll(pollitems);
+
+    for (int i = 0; i < numThreads; i++) {
+      auto item = pollitems[i];
+      // Message arrived on corresponding socket
+      if (item.revents & ZMQ_POLLIN) {
+        auto socket = sockets[i];
+        auto result = socket->recv(message);
+        int opcode;
+        std::memcpy(&opcode, message.data(), sizeof(int));
+
+        switch(opcode) {
+          case SyncOps::BARRIER:
+          if (!partitionReachedBarrier[i]) {
+            partitionReachedBarrier[i] = true;
+            barrierPartitions++;
+            if (args.verbose)
+              printf("Coordinator | Partition %d reached barrier (%d/%d)\n", i, barrierPartitions, numThreads); // TEMP
+          } else {
+            stringstream msg;
+            msg << "Partition sent reached barrier message twice! Is " << i << endl;
+            cerr << msg.str();
+            // Send message just incase, but this is undefined behavior
+            socket->send(zmq::str_buffer("repeated"), zmq::send_flags::none);
+          }
+          break;
+
+          case SyncOps::FINISHED:
+          if (!partitionStopped[i]) {
+            partitionStopped[i] = true;
+            stoppedPartitions++;
+            // Partition stopping doesn't block signaling partition, so immediately respond
+            sockets[i]->send(zmq::str_buffer("ok"), zmq::send_flags::none);
+          } else {
+            stringstream msg;
+            msg << "Partition sent finished message twice! Is " << i << endl;
+            cerr << msg.str();
+            // Send message just incase, but this is undefined behavior
+            socket->send(zmq::str_buffer("repeated"), zmq::send_flags::none);
+          }
+          break;
+        }
+      }
     }
 
-    SumoConnectionRouter* router = new SumoConnectionRouter(i, host, partitionPorts, numThreads);
-    PartitionManager* part = new PartitionManager(SUMO_BINARY, i, syncBarrier, *router, partCfg, port+i, endTime, sumoArgs, args);
-    part->setNumPartitions(numThreads);
-    parts.push_back(part);
-    routers.push_back(router);
-  }
+    if (stoppedPartitions >= numThreads) {
+      break;
+    }
+    if (barrierPartitions >= numThreads) {
+      if (args.verbose)
+        printf("Coordinator | All partitions reached barrier\n");
+      steps++;
+      barrierPartitions = 0;
+      for (int i = 0; i < numThreads; i++) partitionReachedBarrier[i] = false;
 
-  // start parallel simulations
-  for(int i=0; i<numThreads; i++) {
-    parts[i]->setMyBorderEdges(borderEdges[i]);
-    if(!parts[i]->startPartition()){
-      printf("Error creating partition %d", i);
-      exit(EXIT_FAILURE);
+      // All partitions reached barrier, reply to each to unlock it
+      for (int i = 0; i < numThreads; i++) {
+        sockets[i]->send(zmq::str_buffer("ok"), zmq::send_flags::none);
+      }
+
+      if (!setTime) {
+        setTime = true;
+        // start time at first barrier
+        time0 = high_resolution_clock::now();
+      }
     }
   }
-  // join all threads when finished executing
-  for (int i=0; i<numThreads; i++) {
-    parts[i]->waitForPartition();
+
+  for (int i = 0; i < numThreads; i++) {
+    delete sockets[i];
   }
-  
-  for(int i=0; i<numThreads; i++) {
-    delete parts[i];
-    delete routers[i];
-  }
+
+  high_resolution_clock::time_point time1 = high_resolution_clock::now();
+  auto duration = duration_cast<microseconds>(time1 - time0).count() / 1000.0;
+  cout << "Parallel simulation took " << duration << "ms!" << endl;
 }

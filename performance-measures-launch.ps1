@@ -1,10 +1,10 @@
 $files = @(
-    # "./assets/spider0.sumocfg",
-    # "./assets/spider1.sumocfg",
-    # "./assets/spider2.sumocfg",
+    "./assets/spider0.sumocfg",
+    "./assets/spider1.sumocfg",
+    "./assets/spider2.sumocfg",
     # generated with scripts\Random-Simulation.ps1 grid_large --grid --grid.number 100 --grid.length 20
     # about 1GB large, so gitignored
-    "./assets/grid_large.sumocfg" 
+    # "./assets/grid_large.sumocfg" 
 )
 
 $threadNumbers = @(

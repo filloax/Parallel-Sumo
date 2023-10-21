@@ -11,31 +11,33 @@ Contributions: Filippo Lenzi
 #pragma once
 
 #include <cstdlib>
-#include "libs/traciapi/TraCIAPI.h"
-#include "PartitionManager.hpp"
+#include <zmq.hpp>
 #include "args.hpp"
+#include "psumoTypes.hpp"
 
 class ParallelSim {
   private:
+    #ifdef PSUMO_SINGLE_EXECUTABLE
     std::string SUMO_BINARY;
-    TraCIAPI conn;
-    std::string host;
+    #endif
     std::string path;
     std::string cfgFile;
     std::string netFile;
     std::string routeFile;
-    std::string dataFolder;
-    int port;
     int numThreads;
     std::vector<std::string>& sumoArgs;
     int endTime;
+    int steps;
     Args args;
     // sets the border edges for all partitions
-    void calcBorderEdges(std::vector<std::vector<border_edge_t>>& borderEdges, std::vector<std::vector<int>>& partNeighbors);
+    void calcBorderEdges(std::vector<std::vector<psumo::border_edge_t>>& borderEdges, std::vector<std::vector<psumo::partId_t>>& partNeighbors);
     void loadRealNumThreads();
 
+    void coordinatePartitionsSync(zmq::context_t&);
+    void waitForPartitions(std::vector<pid_t> pids);
+
   public:
-    ParallelSim(const std::string& host, int port, const std::string file, bool gui, int threads, std::vector<std::string>& sumoArgs, Args& args);
+    ParallelSim(const std::string file, bool gui, int threads, std::vector<std::string>& sumoArgs, Args& args);
     // gets network and route file paths
     void getFilePaths();
     // partition the SUMO network
@@ -44,4 +46,9 @@ class ParallelSim {
     // execute parallel sumo simulations in created partitions
     void startSim();
 
+
+    enum SyncOps {
+        BARRIER,
+        FINISHED
+    };
 };
