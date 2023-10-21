@@ -390,7 +390,7 @@ void PartitionManager::runSimulation() {
   vector<string> simArgs {
     binary, 
     "-c", cfg, 
-    // "--start",
+    "--start",
     // Output vehicle paths
     "--netstate-dump", args.dataDir+"/output"+to_string(id)+".xml",
     // Log stdout/stderr

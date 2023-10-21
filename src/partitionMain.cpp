@@ -35,7 +35,11 @@ using namespace psumo;
 void loadPartData(int id, string dataFolder, vector<border_edge_t>& borderEdges, vector<partId_t>&, unordered_map<partId_t, unordered_set<string>>&, unordered_map<string, unordered_set<string>>&);
 
 int main(int argc, char* argv[]) {
-    argparse::ArgumentParser program(PROGRAM_NAME_PART, PROGRAM_VER);
+    #ifdef HAVE_LIBSUMOGUI
+        argparse::ArgumentParser program(PROGRAM_NAME_PART_GUI, PROGRAM_VER);
+    #else
+        argparse::ArgumentParser program(PROGRAM_NAME_PART, PROGRAM_VER);
+    #endif
     PartArgs args(program);
 
     try {

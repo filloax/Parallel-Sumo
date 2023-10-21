@@ -56,7 +56,11 @@ include_directories(
 add_executable(ParallelSumo ${SOURCE_FILES_COORDINATOR} ${LIB_FILES})
 if (NOT PSUMO_SINGLE_EXECUTABLE)
     add_executable(ParallelSumo-Partition ${SOURCE_FILES_PARTITION} ${LIB_FILES})
+    add_executable(ParallelSumo-Partition-Gui ${SOURCE_FILES_PARTITION} ${LIB_FILES})
+    target_compile_definitions(ParallelSumo-Partition-Gui PRIVATE HAVE_LIBSUMOGUI)
     message(STATUS "Added partition executable")
+else()
+    message(WARN "Single executable mode not supported, was left enabled for future expandability")
 endif()
 
 
@@ -108,13 +112,18 @@ target_link_libraries(ParallelSumo
 target_link_libraries(ParallelSumo-Partition
     cppzmq zmq sumocpp nlohmann_json::nlohmann_json argparse
 )
+target_link_libraries(ParallelSumo-Partition-Gui
+    cppzmq zmq sumocpp nlohmann_json::nlohmann_json argparse
+)
 
 # boost only used in debug
 if (Boost_FOUND)
     target_include_directories(ParallelSumo PUBLIC ${Boost_INCLUDE_DIRS})
     target_include_directories(ParallelSumo-Partition PUBLIC ${Boost_INCLUDE_DIRS})
+    target_include_directories(ParallelSumo-Partition-Gui PUBLIC ${Boost_INCLUDE_DIRS})
     target_link_libraries(ParallelSumo dl)
     target_link_libraries(ParallelSumo-Partition dl)
+    target_link_libraries(ParallelSumo-Partition-Gui dl)
     add_definitions(-DBOOST_STACKTRACE_USE_ADDR2LINE)
 endif()
 
@@ -143,6 +152,8 @@ target_sources(ParallelSumo-Partition PRIVATE
     ${SRC_DIR}/partArgs.hpp
     ${SRC_DIR}/globals.hpp
 )
+get_target_property(TargetPar_SOURCES ParallelSumo-Partition SOURCES)
+set_target_properties(ParallelSumo-Partition-Gui PROPERTIES SOURCES "${TargetPar_SOURCES}")
 
 message(STATUS "Include directories = ${INCLUDE_DIRECTORIES}")
 
