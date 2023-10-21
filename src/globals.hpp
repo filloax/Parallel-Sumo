@@ -2,4 +2,4 @@
 
 #define PROGRAM_NAME "ParallelSumo"
 #define PROGRAM_NAME_PART "ParallelSumo-Partition"
-#define PROGRAM_VER "0.4"
+#define PROGRAM_VER "0.6"
