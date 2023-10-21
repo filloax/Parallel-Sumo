@@ -12,7 +12,7 @@ files=(
 threadNumbers=(
     1
     4
-    $(( $(nproc) / 2 ))# num cores in testing machine
+    $(( $(nproc) / 2 )) # num cores in testing machine
     $(nproc) # num logical cores in testing machine
 )
 

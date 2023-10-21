@@ -296,13 +296,13 @@ void ParallelSim::calcBorderEdges(vector<vector<border_edge_t>>& borderEdges, ve
 }
 
 // Not reference so thread starts correctly
-void waitForPartitions(vector<pid_t> pids, bool verbose) {
+void ParallelSim::waitForPartitions(vector<pid_t> pids) {
   map<pid_t, partId_t> pidParts;
   for (int i = 0; i < pids.size(); i++) {
     pidParts[pids[i]] = i;
   }
 
-  if (verbose)
+  if (args.verbose)
     __printVector(pids, "Coordinator[t] | Started partition wait thread, pids are: ", ", ", true, std::cout);
   while (pids.size() > 0) {
     int status;
@@ -313,7 +313,7 @@ void waitForPartitions(vector<pid_t> pids, bool verbose) {
       continue;
     } else {
       // A child process has exited
-      printf("Coordinator[t] | Partition %d [pid %d] exited with status %d\n", pidParts[pid], pid, status);
+      printf("Coordinator[t] | Partition %d [pid %d] exited with status %d at step %d/%d\n", pidParts[pid], pid, status, steps, endTime);
       pids.erase(std::remove(pids.begin(), pids.end(), pid), pids.end());
 
       if (status != 0) {
@@ -426,7 +426,7 @@ void ParallelSim::startSim(){
   }
 
   // Check for partition pids in case of unexpected exit in a subthread
-  thread waitThread(&waitForPartitions, pids, args.verbose);
+  thread waitThread(&ParallelSim::waitForPartitions, this, pids);
 
   // From here, coordination process
   coordinatePartitionsSync(zctx);
@@ -482,6 +482,10 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
   high_resolution_clock::time_point time0;
   bool setTime = false;
 
+  // First barrier is before simulation start, 
+  // we want to count real simulation steps
+  steps = -1;
+
   while (true) {
     zmq::poll(pollitems);
 
@@ -534,6 +538,7 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
     if (barrierPartitions >= numThreads) {
       if (args.verbose)
         printf("Coordinator | All partitions reached barrier\n");
+      steps++;
       barrierPartitions = 0;
       for (int i = 0; i < numThreads; i++) partitionReachedBarrier[i] = false;
 

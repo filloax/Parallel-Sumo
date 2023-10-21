@@ -222,6 +222,10 @@ void PartitionManager::addVehicle(
 
 
 void PartitionManager::handleIncomingEdges(int num, vector<vector<string>>& prevIncomingVehicles) {
+  /*
+  Temporarily test how the system works without this part
+  (slowing down shadow vehicle on previous partition)
+  ---
   for(int toEdgeIdx = 0; toEdgeIdx < num; toEdgeIdx++) {
     vector<string> edgeVehicles = Edge::getLastStepVehicleIDs(incomingBorderEdges[toEdgeIdx].id.c_str());
     int fromId = incomingBorderEdges[toEdgeIdx].from;
@@ -254,6 +258,7 @@ void PartitionManager::handleIncomingEdges(int num, vector<vector<string>>& prev
     }
     prevIncomingVehicles[toEdgeIdx] = edgeVehicles;
   }
+  */
 }
 
 void PartitionManager::handleOutgoingEdges(int num, vector<vector<string>>& prevOutgoingVehicles) {

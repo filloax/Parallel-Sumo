@@ -27,12 +27,14 @@ class ParallelSim {
     int numThreads;
     std::vector<std::string>& sumoArgs;
     int endTime;
+    int steps;
     Args args;
     // sets the border edges for all partitions
     void calcBorderEdges(std::vector<std::vector<psumo::border_edge_t>>& borderEdges, std::vector<std::vector<psumo::partId_t>>& partNeighbors);
     void loadRealNumThreads();
 
     void coordinatePartitionsSync(zmq::context_t&);
+    void waitForPartitions(std::vector<pid_t> pids);
 
   public:
     ParallelSim(const std::string file, bool gui, int threads, std::vector<std::string>& sumoArgs, Args& args);
