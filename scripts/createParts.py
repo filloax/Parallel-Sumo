@@ -56,8 +56,8 @@ def check_nparts(value):
     return ivalue
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-n', '--num-parts', required=True, type=check_nparts)
-parser.add_argument('-C', '--cfg-file', required=True, type=str, help="Path to the SUMO .sumocfg simulation config")
+parser.add_argument('-N', '--num-parts', required=True, type=check_nparts)
+parser.add_argument('-c', '--cfg-file', required=True, type=str, help="Path to the SUMO .sumocfg simulation config")
 parser.add_argument('--data-folder', default='data', help="Folder to store output in")
 parser.add_argument('--keep-poly', action='store_true', help="Keep poly files from the sumocfg (disabled by default for performance)")
 parser.add_argument('--no-metis', action='store_true', help="Partition network using grid (unsupported)")

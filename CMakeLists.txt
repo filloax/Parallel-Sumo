@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0.0)
+cmake_minimum_required(VERSION 3.5.0)
 project(ParallelSumo)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -11,15 +11,6 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-# Check for Clang compiler
-find_program(CLANG_COMPILER clang++)
-if(CLANG_COMPILER)
-    message(STATUS "Found Clang compiler: ${CLANG_COMPILER}")
-    set(CMAKE_CXX_COMPILER ${CLANG_COMPILER})
-else()
-    message(WARNING "Clang compiler not found. Using default C++ compiler.")
-endif()
 
 # Add source files
 set(SRC_DIR src)
@@ -101,14 +92,15 @@ else()
 endif()
 
 # Sumo
-add_library(sumocpp SHARED IMPORTED)
-# $ENV{SUMO_HOME}/include
-# $ENV{SUMO_HOME}/src
+# Libsumo should be included in /usr/include or equivalent in a correct install
+# add_library(sumocpp SHARED IMPORTED)
 
-set_target_properties(sumocpp PROPERTIES
-  IMPORTED_LOCATION "$ENV{SUMO_HOME}/bin/libsumocpp.so"
-  INTERFACE_INCLUDE_DIRECTORIES "$ENV{SUMO_HOME}/src"
-)
+# set_target_properties(sumocpp PROPERTIES
+#   IMPORTED_LOCATION "$ENV{SUMO_HOME}/bin/libsumocpp.so"
+#   INTERFACE_INCLUDE_DIRECTORIES "$ENV{SUMO_HOME}/src"
+#   IMPORTED_LOCATION "libsumocpp.so"
+#   INTERFACE_INCLUDE_DIRECTORIES "."
+# )
 
 # Link directories and libraries
 
@@ -164,3 +156,13 @@ get_target_property(TargetPar_SOURCES ParallelSumo-Partition SOURCES)
 set_target_properties(ParallelSumo-Partition-Gui PROPERTIES SOURCES "${TargetPar_SOURCES}")
 
 message(STATUS "Include directories = ${INCLUDE_DIRECTORIES}")
+
+# Set last to avoid being overridden by modules
+# Check for Clang compiler
+find_program(CLANG_COMPILER clang++)
+if(CLANG_COMPILER)
+    message(STATUS "Found Clang compiler: ${CLANG_COMPILER}")
+    set(CMAKE_CXX_COMPILER ${CLANG_COMPILER})
+else()
+    message(WARNING "Clang compiler not found. Using default C++ compiler.")
+endif()

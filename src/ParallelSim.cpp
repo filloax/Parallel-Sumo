@@ -158,8 +158,8 @@ void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
 
   vector<string> partArgs {
     "scripts/createParts.py",
-    "-n", std::to_string(numThreads),
-    "-C", cfgFile,
+    "-N", std::to_string(numThreads),
+    "-c", cfgFile,
     "--data-folder", args.dataDir
   };
 
