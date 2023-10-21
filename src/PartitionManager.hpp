@@ -38,6 +38,7 @@ private:
     std::vector<border_edge_t> outgoingBorderEdges;
     const std::vector<partId_t> neighborPartitions;
     const std::unordered_map<partId_t, std::unordered_set<std::string>> neighborRoutes;
+    const std::unordered_map<std::string, std::unordered_set<std::string>> routeEndsInEdges;
     std::map<int, PartitionEdgesStub*> neighborPartitionStubs;
     std::map<int, NeighborPartitionHandler*> neighborClientHandlers;
     zmq::context_t& zcontext;
@@ -81,6 +82,7 @@ public:
     PartitionManager(const std::string binary, partId_t id, std::string& cfg, int endTime,
         std::vector<partId_t>& neighborPartitions, 
         std::unordered_map<partId_t, std::unordered_set<std::string>>& neighborRoutes,
+        std::unordered_map<std::string, std::unordered_set<std::string>>& routeEndsInEdges,
         zmq::context_t& zcontext, int numThreads,
         std::vector<std::string> sumoArgs, 
         #ifdef PSUMO_SINGLE_EXECUTABLE

@@ -57,6 +57,7 @@ PartitionManager::PartitionManager(
   partId_t id, string& cfg, int endTime,
   vector<partId_t>& neighborPartitions,
   unordered_map<partId_t, unordered_set<string>>& neighborRoutes,
+  unordered_map<string, unordered_set<string>>& routeEndsInEdges,
   zmq::context_t& zcontext, int numThreads,
   vector<string> sumoArgs,
   #ifdef PSUMO_SINGLE_EXECUTABLE
@@ -71,6 +72,7 @@ PartitionManager::PartitionManager(
   endTime(endTime),
   neighborPartitions(neighborPartitions),
   neighborRoutes(neighborRoutes),
+  routeEndsInEdges(routeEndsInEdges),
   zcontext(zcontext),
   sumoArgs(sumoArgs),
   args(args),
@@ -263,18 +265,26 @@ void PartitionManager::handleIncomingEdges(int num, vector<vector<string>>& prev
 
 void PartitionManager::handleOutgoingEdges(int num, vector<vector<string>>& prevOutgoingVehicles) {
   for(int outEdgeIdx = 0; outEdgeIdx < num; outEdgeIdx++) {
-    vector<string> edgeVehicles = Edge::getLastStepVehicleIDs(outgoingBorderEdges[outEdgeIdx].id.c_str());
-    partId_t toId = outgoingBorderEdges[outEdgeIdx].to;
-    auto toRoutesIt = neighborRoutes.find(toId);
-
-    if (toRoutesIt == neighborRoutes.end()) {
-      // No routes in neighbor somehow, continue
-      continue;
-    }
-
+    auto borderEdge = outgoingBorderEdges[outEdgeIdx];
+    vector<string> edgeVehicles = Edge::getLastStepVehicleIDs(borderEdge.id.c_str());
+    partId_t toId = borderEdge.to;
 
     if(!edgeVehicles.empty()) {
+      auto toRoutesIt = neighborRoutes.find(toId);
+      if (toRoutesIt == neighborRoutes.end()) {
+        // No routes in neighbor somehow, continue
+        continue;
+      }
       unordered_set<string> toRoutes = toRoutesIt->second;
+
+      auto routesEndingInEdgeIt = routeEndsInEdges.find(borderEdge.id);
+      if (routesEndingInEdgeIt == routeEndsInEdges.end()) {
+        // No local routes ending in this edge (meaning no vehicles
+        // will pass to the next from here), continue
+        continue;
+      }
+      unordered_set<string> routesEndingInEdge = routesEndingInEdgeIt->second;
+
       PartitionEdgesStub* partStub = neighborPartitionStubs[toId];
       
       for(string veh : edgeVehicles) {
@@ -283,6 +293,12 @@ void PartitionManager::handleOutgoingEdges(int num, vector<vector<string>>& prev
 
         if (!toRoutes.contains(route)) {
           // Vehicle doesn't need to pass to neighbor
+          continue;
+        }
+
+        if (!routesEndingInEdge.contains(route)) {
+          // Vehicle passes to neighbor, but not from this edge
+          // (Happens in some simulation edge cases)
           continue;
         }
 

@@ -41,6 +41,8 @@ public:
     PartitionEdgesStub(partId_t ownerId, partId_t targetId, int numThreads, zmq::context_t& zcontext, Args& args);
     ~PartitionEdgesStub();
 
+    // If possible, use hasVehicle and hasVehicleInEdge instead, as they
+    // transfer less data
     std::vector<std::string> getEdgeVehicles(const std::string& edgeId);
     bool hasVehicle(const std::string& vehId);
     bool hasVehicleInEdge(const std::string& vehId, const std::string& edgeId);

@@ -39,7 +39,7 @@ if 'SUMO_HOME' in os.environ:
     net_tools = os.path.join(SUMO_HOME, 'tools', 'net')
     sys.path.append(os.path.join(route_tools))
 
-    import sumolib  # noqa
+    import sumolib
     from cutRoutes import main as cut_routes, get_options as cut_routes_options
 
     DUAROUTER = sumolib.checkBinary('duarouter')

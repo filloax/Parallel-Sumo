@@ -32,7 +32,7 @@ Contributions: Filippo Lenzi
 using namespace std;
 using namespace psumo;
 
-void loadPartData(int id, string dataFolder, vector<border_edge_t>& borderEdges, vector<partId_t>& partNeighbors,     unordered_map<partId_t, unordered_set<string>>& partNeighborRoutes);
+void loadPartData(int id, string dataFolder, vector<border_edge_t>& borderEdges, vector<partId_t>&, unordered_map<partId_t, unordered_set<string>>&, unordered_map<string, unordered_set<string>>&);
 
 int main(int argc, char* argv[]) {
     argparse::ArgumentParser program(PROGRAM_NAME_PART, PROGRAM_VER);
@@ -59,9 +59,13 @@ int main(int argc, char* argv[]) {
     vector<border_edge_t> borderEdges;
     vector<partId_t> partNeighbors;
     unordered_map<partId_t, unordered_set<string>> partNeighborRoutes;
+    unordered_map<string, unordered_set<string>> routesEndingInEdge;
 
     if (args.numThreads > 1) {
-        loadPartData(args.partId, args.dataDir, borderEdges, partNeighbors, partNeighborRoutes);
+        loadPartData(args.partId, 
+            args.dataDir, borderEdges, partNeighbors, 
+            partNeighborRoutes, routesEndingInEdge
+        );
     } else {
         cout << "Starting partition in 1 thread mode (almost no special treatment, more or less base sumo run)" << endl;
         cfg = args.cfg; 
@@ -72,6 +76,7 @@ int main(int argc, char* argv[]) {
     PartitionManager partManager(
         getSumoPath(args.gui), args.partId, cfg, args.endTime,
         partNeighbors, partNeighborRoutes, 
+        routesEndingInEdge,
         zctx, args.numThreads,
         args.sumoArgs, args 
     );
@@ -93,7 +98,8 @@ void loadPartData(
     int id, string dataFolder, 
     vector<border_edge_t>& borderEdges, 
     vector<partId_t>& partNeighbors,
-    unordered_map<partId_t, unordered_set<string>>& partNeighborRoutes
+    unordered_map<partId_t, unordered_set<string>>& partNeighborRoutes,
+    unordered_map<string, unordered_set<string>>& routesEndingInEdge
 ) {
     const auto dataFile = getPartitionDataFile(dataFolder, id);
     
@@ -124,4 +130,6 @@ void loadPartData(
         unordered_set<string> neighRoutes(routesVector.begin(), routesVector.end());
         partNeighborRoutes[neighId] = neighRoutes;
     }
+
+    routesEndingInEdge = data["borderRouteEnds"].template get<unordered_map<string, unordered_set<string>>>();
 }
