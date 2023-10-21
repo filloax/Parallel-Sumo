@@ -26,4 +26,4 @@ if time_match:
     time = float(time_match.group(1))
 
 # Print the CSV row
-print(f'{time, part_time}')
+print(f'{time}, {part_time}')

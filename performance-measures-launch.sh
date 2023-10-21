@@ -23,7 +23,9 @@ for cfg in "${files[@]}"; do
         for i in 1 .. 5; do
             echo "Running with: -N $N -c $cfg"
             echo "python ./measure-performance.py -N $N -c $cfg"
-            echo "$cfg,$N,$(python ./measure-performance.py -N $N -c $cfg)" >> "testResults/test3.csv"
+            perf_res=$(python ./measure-performance.py -N $N -c $cfg)
+            echo "Results: $perf_res"
+            echo "$cfg,$N,$perf_res" >> "testResults/test3.csv"
         done
     done
 done

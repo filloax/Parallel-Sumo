@@ -538,7 +538,7 @@ class NetworkPartitioning:
             tree.write(file, encoding='utf-8')
                 
         if len(matching) > 0:
-            print(f"[WARN] Routes with non continuous edges ({len(matching)}): {matching}", file=sys.stderr)
+            print(f"[WARN] {len(matching)} routes with non continuous edges", file=sys.stderr)
 
     def _read_partition_vehicles(self, part_idx):
         rou_part = os.path.abspath(os.path.join(self.data_folder, f"part{part_idx}.rou.xml"))
