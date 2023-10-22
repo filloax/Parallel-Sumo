@@ -51,7 +51,7 @@ set(SOURCE_FILES_PARTITION
 
 # Add library files
 set(LIB_FILES
-    # ${LIBS_DIR}/tinyxml2.cpp #Currently unused
+    ${LIBS_DIR}/tinyxml2.cpp #Currently unused
 )
 
 message(STATUS "SUMO_HOME=$ENV{SUMO_HOME}")

@@ -13,7 +13,7 @@ First, you need to install Eclipse [SUMO](https://eclipse.dev/sumo/), and the [B
 First, you need to install ZeroMQ on your system, to have it available as a dependency, and also CMake. On Arch (both as a OS install or using [ArchWSL](https://github.com/yuk7/ArchWSL) in Windows with WSL), for example, install the following packages:
 
 ```
-sudo pacman -S zeromq cppzeromq nlohmann-json boost clang ninja cmake 
+sudo pacman -S zeromq cppzmq nlohmann-json boost clang ninja cmake 
 ```
 
 On Ubuntu/distros with apt:
