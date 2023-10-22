@@ -43,13 +43,13 @@ typedef struct {
   double speed;
 } add_veh_t;
 
-template <typename T, int N> class OperationQueue {
+template <typename T> class OperationQueue {
   public:
-  std::array<T, N> queue;
+  std::array<T, OPERATION_QUEUE_SIZE> queue;
   int currentSize;
 
   bool append(T el) {
-    if (currentSize < N) {
+    if (currentSize < OPERATION_QUEUE_SIZE) {
       queue[currentSize] = el;
       currentSize++;
       return true;
@@ -86,8 +86,8 @@ private:
   std::mutex secondThreadSignalLock;
   std::condition_variable secondThreadCondition;
 
-  OperationQueue<set_veh_speed_t, OPERATION_QUEUE_SIZE> setSpeedQueue;
-  OperationQueue<add_veh_t, OPERATION_QUEUE_SIZE> addVehicleQueue;
+  OperationQueue<set_veh_speed_t> setSpeedQueue;
+  OperationQueue<add_veh_t> addVehicleQueue;
 
   void listenCheck();
   void listenThreadLogic();

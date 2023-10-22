@@ -37,9 +37,7 @@ NeighborPartitionHandler::NeighborPartitionHandler(PartitionManager& owner, int 
     stop_(false),
     term(false),
     threadWaiting(false),
-    zcontext(ContextPool::newContext(1)),
-    addVehicleQueue(array<add_veh_t, OPERATION_QUEUE_SIZE>()),
-    setSpeedQueue(array<set_veh_speed_t, OPERATION_QUEUE_SIZE>())
+    zcontext(ContextPool::newContext(1))
 {
     socket = zmq::socket_t{zcontext, zmq::socket_type::rep};
     socket.set(zmq::sockopt::linger, 0 );
