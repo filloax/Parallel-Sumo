@@ -1,6 +1,20 @@
 cmake_minimum_required(VERSION 3.5.0)
 project(ParallelSumo)
 
+if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    # require at least gcc 13
+    if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 13)
+        message(FATAL_ERROR "GCC version must be at least 13, is ${CMAKE_CXX_COMPILER_VERSION}!")
+    endif()
+elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    # require at least clang 14
+    if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 14)
+        message(FATAL_ERROR "Clang version must be at least 14, is ${CMAKE_CXX_COMPILER_VERSION}!")
+    endif()
+else()
+    message(WARNING "You are using an unsupported compiler! Compilation has only been tested with Clang and GCC.")
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 
 option(PSUMO_SINGLE_EXECUTABLE "Create a single executable 
@@ -102,10 +116,14 @@ endif()
 # this is for using it from source, etc
 if (EXISTS "$ENV{SUMO_HOME}/src")
     set(HAS_SUMOCPP true)
+    set(SUMOCPP_INCLUDES "$ENV{SUMO_HOME}/src")
+
+    find_library(SUMO_CPP_LIBRARY sumocpp PATHS "$ENV{SUMO_HOME}/bin" /usr/lib)
+
     add_library(sumocpp SHARED IMPORTED)
 
     set_target_properties(sumocpp PROPERTIES
-        IMPORTED_LOCATION "$ENV{SUMO_HOME}/bin/libsumocpp.so"
+        IMPORTED_LOCATION "${SUMO_CPP_LIBRARY}"
         INTERFACE_INCLUDE_DIRECTORIES "$ENV{SUMO_HOME}/src"
     )
     message(STATUS "Using sumolib from SUMO sources at $ENV{SUMO_HOME}/src")
@@ -125,6 +143,8 @@ endif()
 
 if (HAS_SUMOCPP)
     list(APPEND LIBS sumocpp)
+else()
+    list(APPEND LIBS -lsumocpp)
 endif()
 
 # boost only used in debug
@@ -169,27 +189,3 @@ get_target_property(TargetPar_SOURCES ParallelSumo-Partition SOURCES)
 set_target_properties(ParallelSumo-Partition-Gui PROPERTIES SOURCES "${TargetPar_SOURCES}")
 
 message(STATUS "Include directories = ${INCLUDE_DIRECTORIES}")
-
-# Set last to avoid being overridden by modules
-# Check for Clang compiler
-find_program(CLANG_COMPILER clang++)
-if(CLANG_COMPILER)
-    message(STATUS "Found Clang compiler: ${CLANG_COMPILER}")
-    set(CMAKE_CXX_COMPILER ${CLANG_COMPILER})
-else()
-    message(STATUS "Clang compiler not found. Using default C++ compiler.")
-endif()
-
-if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    # require at least gcc 13
-    if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 13)
-        message(FATAL_ERROR "GCC version must be at least 13!")
-    endif()
-elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-    # require at least clang 14
-    if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 14)
-        message(FATAL_ERROR "Clang version must be at least 14!")
-    endif()
-else()
-    message(WARNING "You are using an unsupported compiler! Compilation has only been tested with Clang and GCC.")
-endif()
