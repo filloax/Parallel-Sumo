@@ -17,5 +17,6 @@ build-windows/**
 !build-windows/.dir
 build-msys/**
 !build-msys/.dir
+build-ubuntu/**
 .cache/**
 compile_commands.json

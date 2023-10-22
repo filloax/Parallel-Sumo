@@ -17,6 +17,7 @@ Author: Filippo Lenzi
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <format>
 
 namespace psumo {
   class NeighborPartitionHandler;

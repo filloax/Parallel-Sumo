@@ -7,6 +7,14 @@ option(PSUMO_SINGLE_EXECUTABLE "Create a single executable
     using fork instead of making partitions a separate exe
     (currently doesn't work)" OFF)
 
+if (NOT DEFINED ENV{SUMO_HOME})
+    message(FATAL_ERROR 
+    "SUMO_HOME environment variable must be set, both at 
+    compilation and when the program runs. Normally installing SUMO should do 
+    it, try rebooting if it is still not set after SUMO install, or manually set 
+    it.")
+endif()
+
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
@@ -43,7 +51,7 @@ set(SOURCE_FILES_PARTITION
 
 # Add library files
 set(LIB_FILES
-    ${LIBS_DIR}/tinyxml2.cpp
+    # ${LIBS_DIR}/tinyxml2.cpp #Currently unused
 )
 
 message(STATUS "SUMO_HOME=$ENV{SUMO_HOME}")
@@ -63,15 +71,15 @@ else()
     message(WARN "Single executable mode not supported, was left enabled for future expandability")
 endif()
 
-
-# ## load in pkg-config support
-# find_package(PkgConfig)
-# ## use pkg-config to get hints for 0mq locations
-# pkg_check_modules(PC_ZeroMQ QUIET zmq)
-
 #find cppzmq wrapper, installed by make of cppzmq
-find_package(cppzmq REQUIRED)
-message(STATUS "ZMQ CPP dir: " ${cppzmq_INCLUDE_DIR})
+find_package(cppzmq QUIET)
+if (cppzmq_FOUND)
+    message(STATUS "ZMQ CPP dir: " ${cppzmq_INCLUDE_DIR})
+else()
+    message(STATUS 
+    "ZMQ CPP CMake config not found; some distributions do not give it as cppzmq is 
+    already in the system include folders, if that isn't the case the build will error.")
+endif()
 
 find_package(nlohmann_json 3.2.0 REQUIRED)
 
@@ -83,49 +91,54 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(argparse)
 
- # used only in debug
-find_package(Boost 1.83)
-if (Boost_FOUND)
+if (CMAKE_BUILD_TYPE EQUAL DEBUG)
+    # used only in debug
+    find_package(Boost 1.83 REQUIRED)
     message(STATUS "Boost dir: ${Boost_INCLUDE_DIRS}")
-else()
-    message(STATUS "Boost not found! Not required other than for debug")
 endif()
 
 # Sumo
-# Libsumo should be included in /usr/include or equivalent in a correct install
-# add_library(sumocpp SHARED IMPORTED)
+# Libsumo should be included in /usr/include or equivalent in a standard install
+# this is for using it from source, etc
+if (EXISTS "$ENV{SUMO_HOME}/src")
+    set(HAS_SUMOCPP true)
+    add_library(sumocpp SHARED IMPORTED)
 
-# set_target_properties(sumocpp PROPERTIES
-#   IMPORTED_LOCATION "$ENV{SUMO_HOME}/bin/libsumocpp.so"
-#   INTERFACE_INCLUDE_DIRECTORIES "$ENV{SUMO_HOME}/src"
-#   IMPORTED_LOCATION "libsumocpp.so"
-#   INTERFACE_INCLUDE_DIRECTORIES "."
-# )
+    set_target_properties(sumocpp PROPERTIES
+        IMPORTED_LOCATION "$ENV{SUMO_HOME}/bin/libsumocpp.so"
+        INTERFACE_INCLUDE_DIRECTORIES "$ENV{SUMO_HOME}/src"
+    )
+    message(STATUS "Using sumolib from SUMO sources at $ENV{SUMO_HOME}/src")
+else()
+    message(STATUS "SUMO source not in SUMO_HOME, will use sumolib from standard SUMO install (this is normal, unless you want to build SUMO from source)")
+endif()
 
 # Link directories and libraries
 
 link_directories($ENV{SUMO_HOME}/bin)
 
-target_link_libraries(ParallelSumo
-    cppzmq zmq sumocpp nlohmann_json::nlohmann_json argparse
-)
-target_link_libraries(ParallelSumo-Partition
-    cppzmq zmq sumocpp nlohmann_json::nlohmann_json argparse
-)
-target_link_libraries(ParallelSumo-Partition-Gui
-    cppzmq zmq sumocpp nlohmann_json::nlohmann_json argparse
-)
+set(LIBS nlohmann_json::nlohmann_json argparse)
+
+if (cppzmq_FOUND)
+    list(APPEND LIBS cppzmq zmq)
+endif()
+
+if (HAS_SUMOCPP)
+    list(APPEND LIBS sumocpp)
+endif()
 
 # boost only used in debug
 if (Boost_FOUND)
     target_include_directories(ParallelSumo PUBLIC ${Boost_INCLUDE_DIRS})
     target_include_directories(ParallelSumo-Partition PUBLIC ${Boost_INCLUDE_DIRS})
     target_include_directories(ParallelSumo-Partition-Gui PUBLIC ${Boost_INCLUDE_DIRS})
-    target_link_libraries(ParallelSumo dl)
-    target_link_libraries(ParallelSumo-Partition dl)
-    target_link_libraries(ParallelSumo-Partition-Gui dl)
+    list(APPEND LIBS dl)
     add_definitions(-DBOOST_STACKTRACE_USE_ADDR2LINE)
 endif()
+
+target_link_libraries(ParallelSumo ${LIBS})
+target_link_libraries(ParallelSumo-Partition ${LIBS})
+target_link_libraries(ParallelSumo-Partition-Gui ${LIBS})
 
 if (PSUMO_SINGLE_EXECUTABLE)
     message(STATUS "PSUMO_SINGLE_EXECUTABLE on")
@@ -164,5 +177,19 @@ if(CLANG_COMPILER)
     message(STATUS "Found Clang compiler: ${CLANG_COMPILER}")
     set(CMAKE_CXX_COMPILER ${CLANG_COMPILER})
 else()
-    message(WARNING "Clang compiler not found. Using default C++ compiler.")
+    message(STATUS "Clang compiler not found. Using default C++ compiler.")
+endif()
+
+if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    # require at least gcc 13
+    if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 13)
+        message(FATAL_ERROR "GCC version must be at least 13!")
+    endif()
+elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    # require at least clang 14
+    if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 14)
+        message(FATAL_ERROR "Clang version must be at least 14!")
+    endif()
+else()
+    message(WARNING "You are using an unsupported compiler! Compilation has only been tested with Clang and GCC.")
 endif()

@@ -13,17 +13,26 @@ First, you need to install Eclipse [SUMO](https://eclipse.dev/sumo/), and the [B
 First, you need to install ZeroMQ on your system, to have it available as a dependency, and also CMake. On Arch (both as a OS install or using [ArchWSL](https://github.com/yuk7/ArchWSL) in Windows with WSL), for example, install the following packages:
 
 ```
-sudo pacman -S zeromq cppzeromq nlohmann-json clang ninja cmake 
+sudo pacman -S zeromq cppzeromq nlohmann-json boost clang ninja cmake 
+```
+
+On Ubuntu/distros with apt:
+
+```
+sudo add-apt-repository ppa:sumo/stable && sudo apt update
+sudo apt install sumo sumo-tools sumo-doc libzmq3-dev ninja-build nlohmann-json3-dev libboost-all-dev cmake libc++-dev
 ```
 
 SUMO can be installed via various means depending on your OS distribution, check its website linked above. I personally used `yay -S sumo` in Arch/WSL. If your SUMO installation doesn't include libsumo headers, you also will need to install its source in the $SUMO_HOME/src folder.
 
 The general process for building is:
 - `cd` to the `build` folder
-- Run `cmake .. -GNinja`
+- Run `cmake .. -GNinja DCMAKE_BUILD_TYPE=Release` (or just `cmake .. -GNinja` if you want debug mode)
 - Run `ninja`
 
 It is recommended to use Linux, or WSL if you're on Windows. Currently uses POSIX functions (mainly fork) that are hard to get rid of without rewriting more of the program, so Visual Studio compilation is not yet supported.
+
+In case you installed some of these by non-standard sources, some mingling with CMake settings might be required to add them to the compilation path.
 
 <details markdown="1">
 <summary>Old methods</summary>
@@ -34,6 +43,11 @@ It is recommended to use Linux, or WSL if you're on Windows. Currently uses POSI
 - Optional: add msys64/usr/bin folder to PATH
 - Run `make -f Makefile_win` command either in Powershell with msys folders in path, or from the msys2 terminal. Make sure you're running it in the project's folder!
 </details>
+
+
+### Compiling errors
+
+If you get errors such as `'format' file not found`, you probably have a old compiler. G++ 12 or Clang++ 14 are required.
 
 ---
 

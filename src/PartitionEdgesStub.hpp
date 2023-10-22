@@ -9,6 +9,7 @@ Author: Filippo Lenzi
 #pragma once
 
 #include <zmq.hpp>
+#include <format>
 
 class PartitionEdgesStub;
 

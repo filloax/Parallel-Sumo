@@ -20,6 +20,7 @@ Contributions: Filippo Lenzi
 #include <map>
 #include <zmq.hpp>
 #include <thread>
+#include <format>
 
 #include "args.hpp"
 #include "psumoTypes.hpp"
