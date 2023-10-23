@@ -26,8 +26,8 @@ sudo apt install sumo sumo-tools sumo-doc libzmq3-dev ninja-build nlohmann-json3
 SUMO can be installed via various means depending on your OS distribution, check its website linked above. I personally used `yay -S sumo` in Arch/WSL. If your SUMO installation doesn't include libsumo headers, you also will need to install its source in the $SUMO_HOME/src folder.
 
 The general process for building is:
+- Run `configure.sh` in the project root
 - `cd` to the `build` folder
-- Run `cmake .. -GNinja DCMAKE_BUILD_TYPE=Release` (or just `cmake .. -GNinja` if you want debug mode)
 - Run `ninja`
 
 It is recommended to use Linux, or WSL if you're on Windows. Currently uses POSIX functions (mainly fork) that are hard to get rid of without rewriting more of the program, so Visual Studio compilation is not yet supported.
