@@ -34,10 +34,10 @@ PartitionEdgesStub::PartitionEdgesStub(partId_t ownerId, partId_t targetId, int 
     id(targetId),
     connected(false),
     socketUri(psumo::getSocketName(args.dataDir, ownerId, targetId, numThreads)),
-    args(args)
+    args(args),
+    socket(makeSocket(zcontext, zmq::socket_type::req))
 {
-    socket = zmq::socket_t{zcontext, zmq::socket_type::req};
-    socket.set(zmq::sockopt::linger, 0 );
+
 }
 
 const int DISCONNECT_CONTEXT_TERMINATED_ERR = 156384765;
@@ -45,7 +45,7 @@ const int DISCONNECT_CONTEXT_TERMINATED_ERR = 156384765;
 PartitionEdgesStub::~PartitionEdgesStub() {
     if (connected) {
         try {
-            socket.close();
+            close(*socket);
         } catch (zmq::error_t& e) {
             // If the context is already terminated, then not a problem if it didn't disconnect
             if (e.num() != DISCONNECT_CONTEXT_TERMINATED_ERR) {
@@ -53,16 +53,18 @@ PartitionEdgesStub::~PartitionEdgesStub() {
             }
         }
     }
+
+    delete socket;
 }
 
 void PartitionEdgesStub::connect() {
-    socket.connect(socketUri);
+    psumo::connect(*socket, socketUri);
     connected = true;
 }
 
 void PartitionEdgesStub::disconnect() {
     connected = false;
-    socket.close();
+    close(*socket);
 }
 
 std::vector<std::string> PartitionEdgesStub::getEdgeVehicles(const std::string& edgeId) {
@@ -80,11 +82,11 @@ std::vector<std::string> PartitionEdgesStub::getEdgeVehicles(const std::string& 
     std::memcpy( data + sizeof(int), edgeId.data(),  edgeId.size() + 1);
 
     log("Sending getEdge\n");
-    socket.send(message, zmq::send_flags::none);
+    socket->send(message, zmq::send_flags::none);
 
     log("Receiving getEdge reply\n");
     zmq::message_t reply;
-    auto response = socket.recv(reply);
+    auto response = socket->recv(reply);
 
     auto out = readStringsFromMessage(reply);
 
@@ -114,11 +116,11 @@ bool PartitionEdgesStub::hasVehicle(const std::string& vehId) {
     std::memcpy(data + sizeof(int), vehId.data(), vehId.size() + 1);
 
     log("Sending hasVehicle\n");
-    socket.send(message, zmq::send_flags::none);
+    socket->send(message, zmq::send_flags::none);
 
     log("Receiving hasVehicle reply\n");
     zmq::message_t reply;
-    auto response = socket.recv(reply);
+    auto response = socket->recv(reply);
 
     bool result;
     std::memcpy(&result, static_cast<char*>(reply.data()), sizeof(bool));
@@ -142,11 +144,11 @@ bool PartitionEdgesStub::hasVehicleInEdge(const std::string& vehId, const std::s
     std::memcpy(data, &opcode, sizeof(int));
 
     log("Sending hasVehicleInEdge\n");
-    socket.send(message, zmq::send_flags::none);
+    socket->send(message, zmq::send_flags::none);
 
     log("Receiving hasVehicleInEdge reply\n");
     zmq::message_t reply;
-    auto response = socket.recv(reply);
+    auto response = socket->recv(reply);
 
     bool result;
     std::memcpy(&result, static_cast<char*>(reply.data()), sizeof(bool));
@@ -174,12 +176,12 @@ void PartitionEdgesStub::setVehicleSpeed(const string& vehId, double speed) {
         vehId.data(), vehId.size() + 1);
 
     log("Sending setSpeed\n");
-    socket.send(message, zmq::send_flags::none);
+    socket->send(message, zmq::send_flags::none);
 
     log("Receiving setSpeed reply\n");
     // unused reply, required by zeroMQ
     zmq::message_t reply;
-    auto response = socket.recv(reply);
+    auto response = socket->recv(reply);
 }
 
 void PartitionEdgesStub::addVehicle(
@@ -211,12 +213,12 @@ void PartitionEdgesStub::addVehicle(
         &speed,  sizeof(double));
 
     log("Sending addVehicle\n");
-    socket.send(message, zmq::send_flags::none);
+    socket->send(message, zmq::send_flags::none);
 
     log("Receiving addVehicle reply\n");
     // unused reply, required by zeroMQ
     zmq::message_t reply;
-    auto response = socket.recv(reply);
+    auto response = socket->recv(reply);
 }
 
 template<typename... _Args > 

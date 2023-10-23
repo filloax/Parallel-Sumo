@@ -45,7 +45,8 @@ private:
     std::map<int, PartitionEdgesStub*> neighborPartitionStubs;
     std::map<int, NeighborPartitionHandler*> neighborClientHandlers;
     zmq::context_t& zcontext;
-    zmq::socket_t coordinatorSocket;
+    // Pointer to handle ZMQ memory with certainty
+    zmq::socket_t* coordinatorSocket;
     std::unordered_set<std::string> allVehicleIds;
     std::mutex allVehicleIds_lock;
     bool allVehicleIdsUpdated = false;

@@ -39,33 +39,23 @@ NeighborPartitionHandler::NeighborPartitionHandler(PartitionManager& owner, int 
     threadWaiting(false),
     zcontext(ContextPool::newContext(1))
 {
-    socket = zmq::socket_t{zcontext, zmq::socket_type::rep};
-    socket.set(zmq::sockopt::linger, 0 );
-
-    controlSocketMain = zmq::socket_t{zcontext, zmq::socket_type::pair};
-    controlSocketMain.set(zmq::sockopt::linger, 0 );
-    controlSocketThread = zmq::socket_t{zcontext, zmq::socket_type::pair};
-    controlSocketThread.set(zmq::sockopt::linger, 0 );
+    socket = makeSocket(zcontext, zmq::socket_type::rep);
+    controlSocketMain = makeSocket(zcontext, zmq::socket_type::pair);
+    controlSocketThread = makeSocket(zcontext, zmq::socket_type::pair);
 }
 
 const int DISCONNECT_CONTEXT_TERMINATED_ERR = 156384765;
     
 NeighborPartitionHandler::~NeighborPartitionHandler() {
     stop();
-    try {
-        socket.close();
-    } catch (zmq::error_t& e) {
-        // If the context is already terminated, then not a problem if it didn't disconnect
-        if (e.num() != DISCONNECT_CONTEXT_TERMINATED_ERR) {
-            stringstream msg;
-            logerr("Error in disconnecting socket during destructor: {}/{}\n", e.what(), e.num());
-        }
-    }
+    delete socket;
+    delete controlSocketMain;
+    delete controlSocketThread;
 }
 
 void NeighborPartitionHandler::start() {
     try {
-        socket.bind(socketUri);
+        bind(*socket, socketUri);
     } catch (zmq::error_t& e) {
         logerr("ZMQ error in binding socket {} to {}: {}/{}\n", clientId, socketUri, e.what(), e.num());
         exit(EXIT_FAILURE);
@@ -74,8 +64,8 @@ void NeighborPartitionHandler::start() {
         stringstream uris;
         uris << "inproc://nb" << clientId << "-" << owner.getId();
         auto uri = uris.str();
-        controlSocketThread.bind(uri);
-        controlSocketMain.connect(uri);
+        bind(*controlSocketThread, uri);
+        connect(*controlSocketMain, uri);
     } catch (zmq::error_t& e) {
         logerr("ZMQ error in binding inproc sockets: {}/{}\n", e.what(), e.num());
         exit(EXIT_FAILURE);
@@ -85,14 +75,51 @@ void NeighborPartitionHandler::start() {
 }
 
 void NeighborPartitionHandler::stop() {
-    log("Terminating when possible\n");
+    if (stop_) return;
+    
+    log("Terminating...\n");
     term = true;
     stop_ = true;
-    controlSocketMain.send(zmq::str_buffer("stop"), zmq::send_flags::none);
+    controlSocketMain->send(zmq::str_buffer("stop"), zmq::send_flags::none);
+
+    join();
+    
+    try {
+        close(*socket);
+    } catch (zmq::error_t& e) {
+        // If the context is already terminated, then not a problem if it didn't disconnect
+        if (e.num() != DISCONNECT_CONTEXT_TERMINATED_ERR) {
+            stringstream msg;
+            logerr("Error in disconnecting socket during destructor: {}/{}\n", e.what(), e.num());
+        }
+    }
+    try {
+        close(*controlSocketMain);
+    } catch (zmq::error_t& e) {
+        // If the context is already terminated, then not a problem if it didn't disconnect
+        if (e.num() != DISCONNECT_CONTEXT_TERMINATED_ERR) {
+            stringstream msg;
+            logerr("Error in disconnecting socket during destructor: {}/{}\n", e.what(), e.num());
+        }
+    }
+    try {
+        close(*controlSocketThread);
+    } catch (zmq::error_t& e) {
+        // If the context is already terminated, then not a problem if it didn't disconnect
+        if (e.num() != DISCONNECT_CONTEXT_TERMINATED_ERR) {
+            stringstream msg;
+            logerr("Error in disconnecting socket during destructor: {}/{}\n", e.what(), e.num());
+        }
+    }
 }
 
 void NeighborPartitionHandler::join() {
-    listenThread.join();
+    if (listening) {
+        listenThread.join();
+        log("Listen thread joined\n");
+    } else {
+        log("Listen thread already joined\n");
+    }
 }
 
 void NeighborPartitionHandler::listenOn() {
@@ -112,8 +139,8 @@ void NeighborPartitionHandler::listenCheck() {
     // Wait for the first message between the partition socket and the thread socket,
     // thread socket meaning work should be interrupted (partition stopped)
     zmq::pollitem_t pollitems[] = { 
-        { socket, 0, ZMQ_POLLIN, 0 }, 
-        { controlSocketThread, 0, ZMQ_POLLIN, 0 } 
+        { castPollSocket(*socket), 0, ZMQ_POLLIN, 0 }, 
+        { castPollSocket(*controlSocketThread), 0, ZMQ_POLLIN, 0 } 
     };
 
     log("Waiting for requests...\n");
@@ -132,7 +159,7 @@ void NeighborPartitionHandler::listenCheck() {
     zmq::message_t request;
     if (pollitems[0].revents & ZMQ_POLLIN) {
         zmq::message_t message;
-        auto _ = socket.recv(request, zmq::recv_flags::none);
+        auto _ = socket->recv(request, zmq::recv_flags::none);
     }
 
     // Read int representing operations to call from the message
@@ -164,7 +191,7 @@ void NeighborPartitionHandler::listenCheck() {
 
     if (!alreadyReplied) {
         log("Sending generic reply for opcode {}\n", opcode);
-        socket.send(zmq::str_buffer("ok"));
+        socket->send(zmq::str_buffer("ok"));
     }
 }
 
@@ -194,7 +221,7 @@ void NeighborPartitionHandler::listenThreadLogic() {
         logerr("SUMO error: {}\n=== {} QUITTING ===\n", e.what(), getPid());
         exit(EXIT_FAILURE);
     } catch(zmq::error_t& e) {
-        logerr("SUMO error: {}/{}\n=== {} QUITTING ===\n", e.what(), e.num(), getPid());
+        logerr("ZMQ error: {}/{}\n=== {} QUITTING ===\n", e.what(), e.num(), getPid());
         exit(EXIT_FAILURE);
     }
     #endif
@@ -221,7 +248,7 @@ bool NeighborPartitionHandler::handleGetEdgeVehicles(zmq::message_t& request) {
         cout << ss.str();
     }
 
-    socket.send(reply, zmq::send_flags::none);
+    socket->send(reply, zmq::send_flags::none);
     return true;
 }
 
@@ -240,7 +267,7 @@ bool NeighborPartitionHandler::handleHasVehicle(zmq::message_t& request) {
     std::memcpy(static_cast<char*>(reply.data()), &has, sizeof(bool));
     log("Sending reply to hasVehicle({}): {}\n", vehId, has);
 
-    socket.send(reply, zmq::send_flags::none);
+    socket->send(reply, zmq::send_flags::none);
     return true;
 }
 
@@ -257,7 +284,7 @@ bool NeighborPartitionHandler::handleHasVehicleInEdge(zmq::message_t& request) {
     std::memcpy(static_cast<char*>(reply.data()), &has, sizeof(bool));
     log("Sending reply to hasVehicleInEdge({}, {}): {}\n", vehId, edgeId, has);
 
-    socket.send(reply, zmq::send_flags::none);
+    socket->send(reply, zmq::send_flags::none);
     return true;
 }
 

@@ -105,10 +105,12 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(argparse)
 
-if (CMAKE_BUILD_TYPE EQUAL DEBUG)
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     # used only in debug
-    find_package(Boost 1.83 REQUIRED)
+    find_package(Boost REQUIRED)
     message(STATUS "Boost dir: ${Boost_INCLUDE_DIRS}")
+else()
+    message(STATUS "Not debug mode, won't use boost")
 endif()
 
 # Sumo
@@ -149,16 +151,36 @@ endif()
 
 # boost only used in debug
 if (Boost_FOUND)
-    target_include_directories(ParallelSumo PUBLIC ${Boost_INCLUDE_DIRS})
-    target_include_directories(ParallelSumo-Partition PUBLIC ${Boost_INCLUDE_DIRS})
-    target_include_directories(ParallelSumo-Partition-Gui PUBLIC ${Boost_INCLUDE_DIRS})
+    list(APPEND LIBS     
+        ${Boost_STACKTRACE_BASIC_LIBRARY}
+        ${Boost_STACKTRACE_BACKTRACE_LIBRARY}
+        ${Boost_STACKTRACE_ADDR2LINE_LIBRARY}
+        ${Boost_STACKTRACE_NOOP_LIBRARY}
+    )
+    # target_include_directories(ParallelSumo PUBLIC ${Boost_INCLUDE_DIRS})
+    # target_include_directories(ParallelSumo-Partition PUBLIC ${Boost_INCLUDE_DIRS})
+    # target_include_directories(ParallelSumo-Partition-Gui PUBLIC ${Boost_INCLUDE_DIRS})
+
+    # enable stacktrace file lines
+    target_compile_definitions(ParallelSumo PUBLIC BOOST_STACKTRACE_USE_ADDR2LINE _GLIBCXX_ASSERTIONS)
+    target_compile_definitions(ParallelSumo-Partition PUBLIC BOOST_STACKTRACE_USE_ADDR2LINE _GLIBCXX_ASSERTIONS)
+    target_compile_definitions(ParallelSumo-Partition-Gui PUBLIC BOOST_STACKTRACE_USE_ADDR2LINE _GLIBCXX_ASSERTIONS)
+    target_compile_options(ParallelSumo PRIVATE "-g;-fno-inline")
+    target_compile_options(ParallelSumo-Partition PRIVATE "-g;-fno-inline")
+    target_compile_options(ParallelSumo-Partition-Gui PRIVATE "-g;-fno-inline")
+    target_link_options(ParallelSumo PRIVATE "-no-pie")
+    target_link_options(ParallelSumo-Partition PRIVATE "-no-pie")
+    target_link_options(ParallelSumo-Partition-Gui PRIVATE "-no-pie")
+    message(STATUS "Adding no-pie mode, security issue out of debug")
+
     list(APPEND LIBS dl)
-    add_definitions(-DBOOST_STACKTRACE_USE_ADDR2LINE)
 endif()
 
-target_link_libraries(ParallelSumo ${LIBS})
-target_link_libraries(ParallelSumo-Partition ${LIBS})
-target_link_libraries(ParallelSumo-Partition-Gui ${LIBS})
+message(STATUS "Used libs: ${LIBS}")
+
+target_link_libraries(ParallelSumo LINK_PUBLIC ${LIBS})
+target_link_libraries(ParallelSumo-Partition LINK_PUBLIC ${LIBS})
+target_link_libraries(ParallelSumo-Partition-Gui LINK_PUBLIC ${LIBS})
 
 if (PSUMO_SINGLE_EXECUTABLE)
     message(STATUS "PSUMO_SINGLE_EXECUTABLE on")

@@ -20,14 +20,15 @@ Contributions: Filippo Lenzi
 
 #include <nlohmann/json.hpp>
 #include <zmq.hpp>
-
 #include <argparse/argparse.hpp>
+
 #include "partArgs.hpp"
 #include "globals.hpp"
-#include "src/ContextPool.hpp"
+#include "ContextPool.hpp"
 #include "utils.hpp"
 #include "psumoTypes.hpp"
 #include "PartitionManager.hpp"
+#include "utils.hpp"
 
 using namespace std;
 using namespace psumo;
@@ -95,7 +96,14 @@ int main(int argc, char* argv[]) {
     }
 
     // Deleting context blocks forever
-    // ContextPool::destroyAll();
+    if (args.verbose) {
+        printf("\tPartition %d process %d clearing zmq contexts\n", args.partId, getPid());
+    }
+    ContextPool::destroyAll();
+    if (args.verbose) {
+        printf("\tPartition %d process %d ended\n", args.partId, getPid());
+    }
+    return 0;
 }
 
 void loadPartData(

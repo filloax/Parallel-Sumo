@@ -2,6 +2,7 @@
 
 #include <boost/stacktrace/stacktrace_fwd.hpp>
 #include <cstring>
+#include <map>
 #include <memory>
 #include <string>
 #include <iostream>
@@ -30,7 +31,7 @@ namespace psumo {
 pid_t runProcess(string exePath, vector<string>& args) {
     std::cout << "command: " << exePath << " ";
     for (int i = 0; i < args.size(); i++) std::cout << args[i] << " ";
-    std::cout << std::endl;
+    std::cout << std:: endl;
 
     #ifndef USING_WIN
         int pid = fork();
@@ -78,6 +79,12 @@ pid_t getPid() {
         cerr << "Windows getpid NYI!" << endl;
         exit(EXIT_FAILURE);
     #endif
+}
+
+zmq::socket_t* makeSocket(zmq::context_t& context_, zmq::socket_type type_)  {
+    auto socket = new zmq::socket_t{context_, type_};
+    socket->set(zmq::sockopt::linger, 0 );
+    return socket;
 }
 
 zmq::message_t createMessageWithStrings(vector<string> &strings, int offset, int spaceAfter) {

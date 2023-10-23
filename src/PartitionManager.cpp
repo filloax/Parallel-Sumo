@@ -79,8 +79,7 @@ PartitionManager::PartitionManager(
   numThreads(numThreads),
   running(false)
   {
-    coordinatorSocket = zmq::socket_t{zcontext, zmq::socket_type::req};
-    coordinatorSocket.set(zmq::sockopt::linger, 0 );
+    coordinatorSocket = makeSocket(zcontext, zmq::socket_type::req);
     for (partId_t partId : neighborPartitions) {
       auto stub = new PartitionEdgesStub(id, partId, numThreads, zcontext, args);
       neighborPartitionStubs[partId] = stub;
@@ -90,6 +89,7 @@ PartitionManager::PartitionManager(
   }
 
 PartitionManager::~PartitionManager() {
+  delete coordinatorSocket;
   for (partId_t partId : neighborPartitions) {
     delete neighborPartitionStubs[partId];
     delete neighborClientHandlers[partId];
@@ -360,13 +360,13 @@ void PartitionManager::arriveWaitBarrier() {
   int opcode = ParallelSim::SyncOps::BARRIER;
   zmq::message_t message(sizeof(int));
   std::memcpy(message.data(), &opcode, sizeof(int));
-  coordinatorSocket.send(message, zmq::send_flags::none);
+  coordinatorSocket->send(message, zmq::send_flags::none);
 
   logminor("Waiting for barrier...\n", id); //TEMP
 
   // Receive response, essentially blocking
   // output not needed so just pass the previous message
-  auto _ = coordinatorSocket.recv(message);
+  auto _ = coordinatorSocket->recv(message);
 
   logminor("Reached barrier...\n", id); //TEMP
 }
@@ -375,11 +375,14 @@ void PartitionManager::signalFinish() {
   int opcode = ParallelSim::SyncOps::FINISHED;
   zmq::message_t message(sizeof(int));
   std::memcpy(message.data(), &opcode, sizeof(int));
-  coordinatorSocket.send(message, zmq::send_flags::none);
+  logminor("Signaling partition end...\n");
+  coordinatorSocket->send(message, zmq::send_flags::none);
 
   // Receive response, essentially blocking
-  // output not needed so just pass the previous message
-  auto _ = coordinatorSocket.recv(message);
+  // output not needed so just pass blank one
+  zmq::message_t __;
+  auto _ = coordinatorSocket->recv(__);
+  logminor("Signaled partition end...\n");
 }
 
 // Only run in new process
@@ -446,7 +449,7 @@ void PartitionManager::runSimulation() {
   std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
   try {
-    coordinatorSocket.connect(psumo::getSyncSocketId(args.dataDir, id));
+    connect(*coordinatorSocket, psumo::getSyncSocketId(args.dataDir, id));
   } catch(zmq::error_t& e) {
     logerr("ZMQ Error in connecting to coordinator process: {}\n", e.what());
     exit(EXIT_FAILURE);
@@ -512,7 +515,8 @@ void PartitionManager::runSimulation() {
   log("FINISHED!\n");
 
   signalFinish();
-  
+  close(*coordinatorSocket);
+ 
   Simulation::close("ParallelSim terminated.");
   numInstancesRunning--;
 }

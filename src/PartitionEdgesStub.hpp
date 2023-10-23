@@ -23,8 +23,8 @@ private:
     partId_t ownerId;
     partId_t id;
     bool connected;
-    std::string socketUri;
-    zmq::socket_t socket;
+    const std::string socketUri;
+    zmq::socket_t* socket;
 
     template<typename... _Args > 
         void log(std::format_string<_Args...>  format, _Args&&... args);

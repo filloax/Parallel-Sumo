@@ -71,9 +71,10 @@ due to the Req/Rep model in ZeroMQ.
 class NeighborPartitionHandler {
 private:
   zmq::context_t& zcontext; // Separate context to handle stuff while partition manager waits for barrier
-  zmq::socket_t socket;
-  zmq::socket_t controlSocketMain;
-  zmq::socket_t controlSocketThread;
+  // Pointers to be 100% sure about memory clearing with ZMQ
+  zmq::socket_t* socket;
+  zmq::socket_t* controlSocketMain;
+  zmq::socket_t* controlSocketThread;
   const int clientId;
   PartitionManager& owner;
   const std::string socketUri;

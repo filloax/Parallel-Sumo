@@ -366,8 +366,7 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
   for (int i = 0; i < numThreads; i++) {
     string uri = psumo::getSyncSocketId(args.dataDir, i);
     try {
-      sockets[i] = new zmq::socket_t{zctx, zmq::socket_type::rep};
-      sockets[i]->set(zmq::sockopt::linger, 0 );
+      sockets[i] = makeSocket(zctx, zmq::socket_type::rep);
       sockets[i]->bind(uri);
     } catch (zmq::error_t& e) {
       stringstream msg;
@@ -385,7 +384,7 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
   for (int i = 0; i < numThreads; i++) {
     // operator void* included in the ZeroMQ C++ wrapper, 
     // needed to make poll work as it operates on the C version
-    pollitems[i].socket = sockets[i]->operator void*();
+    pollitems[i].socket = castPollSocket(*sockets[i]);
     // pollitems[i].socket = *sockets[i]; // Should be equivalent, but let's use the operator
     pollitems[i].events = ZMQ_POLLIN;
   }
@@ -479,6 +478,7 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
   }
 
   for (int i = 0; i < numThreads; i++) {
+    sockets[i]->close();
     delete sockets[i];
   }
 
