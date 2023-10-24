@@ -33,5 +33,12 @@ jobs:
       - name: Create Archive
         run: |
           cp bin parsumo
-          zip -r parsumo.zip parsumo
+          zip -r parsumo_x86_64-linux-gnu.zip parsumo
         working-directory: ${{ github.workspace }}
+
+      - name: Publish Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: parsumo_x86_64-linux-gnu
+          path: parsumo_x86_64-linux-gnu.zip
+  
