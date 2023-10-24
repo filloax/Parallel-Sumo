@@ -1,4 +1,4 @@
-name: Build
+name: Build-Ubuntu
 on:
   push:
     tags:
@@ -22,9 +22,13 @@ jobs:
           generator: Ninja
           c-compiler: gcc-13
           cxx-compiler: g++-13
+        env:
+          SUMO_HOME: /usr/share/sumo
 
       - name: Build the project
         run: cmake --build build
+        env:
+          SUMO_HOME: /usr/share/sumo
 
       - name: Create Archive
         run: |
