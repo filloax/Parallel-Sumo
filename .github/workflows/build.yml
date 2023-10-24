@@ -7,8 +7,11 @@ jobs:
   build-project:
     runs-on: ubuntu-latest
     steps:
-      - name: Setup required gcc
-        run: sudo apt install gcc-13 g++-13
+      - name: Install requirements
+        run: |
+          sudo add-apt-repository ppa:sumo/stable
+          sudo apt update
+          sudo apt install gcc-13 sumo sumo-tools sumo-doc libzmq3-dev ninja-build nlohmann-json3-dev libboost-all-dev cmake libc++-dev
 
       - name: Checkout the repository
         uses: actions/checkout@v3.5.3
