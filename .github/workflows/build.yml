@@ -45,6 +45,6 @@ jobs:
       - name: Publish Artifact
         uses: actions/upload-artifact@v2
         with:
-          name: parsumo_x86_64-linux-gnu_${{ steps.get_version.outputs.VERSION }}
+          name: parsumo_x86_64-linux-gnu_${{ steps.get_version.outputs.VERSION }}.zip
           path: parsumo_x86_64-linux-gnu_${{ steps.get_version.outputs.VERSION }}.zip
   
