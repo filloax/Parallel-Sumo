@@ -30,6 +30,7 @@ Contributions: Filippo Lenzi
 #include <set>
 #include <filesystem> // C++17
 #include <chrono>
+#include <thread>
 
 #include <zmq.h>
 #include <zmq.hpp>
