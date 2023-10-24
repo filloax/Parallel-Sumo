@@ -7,6 +7,9 @@ jobs:
   build-project:
     runs-on: ubuntu-latest
     steps:
+      - name: Setup required git
+        run: sudo apt install gcc-13 g++-13
+
       - name: Checkout the repository
         uses: actions/checkout@v3.5.3
 
