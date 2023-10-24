@@ -141,6 +141,9 @@ set(LIBS nlohmann_json::nlohmann_json argparse)
 
 if (cppzmq_FOUND)
     list(APPEND LIBS cppzmq zmq)
+else()
+    # Just add linker flag, assume headers are in system include folder
+    list(APPEND LIBS -lzmq)
 endif()
 
 if (HAS_SUMOCPP)
