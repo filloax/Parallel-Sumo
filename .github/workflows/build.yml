@@ -1,0 +1,25 @@
+name: Build
+on:
+  push:
+    tags:
+      - v*
+jobs:
+  build-project:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v3.5.3
+
+      - name: Configure the project
+        uses: threeal/cmake-action@v1.3.0
+        # with:
+          # generator: Ninja
+
+      - name: Build the project
+        run: cmake --build build
+
+      - name: Create Archive
+        run: |
+          cp bin parsumo
+          zip -r parsumo.zip parsumo
+        working-directory: ${{ github.workspace }}
