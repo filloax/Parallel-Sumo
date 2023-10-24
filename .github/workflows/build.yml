@@ -2,11 +2,16 @@ name: Build-Ubuntu
 on:
   push:
     tags:
-      - v*
+      - 'v[0-9].*'
+
 jobs:
   build-project:
     runs-on: ubuntu-latest
     steps:
+      - name: Get the version
+        id: get_version
+        run: 'echo "VERSION=${GITHUB_REF/refs\/tags\/v/}" >> $GITHUB_OUTPUT'
+
       - name: Install requirements
         run: |
           sudo add-apt-repository ppa:sumo/stable
@@ -33,12 +38,12 @@ jobs:
       - name: Create Archive
         run: |
           cp bin parsumo
-          zip -r parsumo_x86_64-linux-gnu.zip parsumo
+          zip -r parsumo_x86_64-linux-gnu_${{ steps.get_version.outputs.VERSION }}.zip parsumo
         working-directory: ${{ github.workspace }}
 
       - name: Publish Artifact
         uses: actions/upload-artifact@v2
         with:
-          name: parsumo_x86_64-linux-gnu
-          path: parsumo_x86_64-linux-gnu.zip
+          name: parsumo_x86_64-linux-gnu_${{ steps.get_version.outputs.VERSION }}
+          path: parsumo_x86_64-linux-gnu_${{ steps.get_version.outputs.VERSION }}.zip
   
