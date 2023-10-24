@@ -7,7 +7,7 @@ jobs:
   build-project:
     runs-on: ubuntu-latest
     steps:
-      - name: Setup required git
+      - name: Setup required gcc
         run: sudo apt install gcc-13 g++-13
 
       - name: Checkout the repository
@@ -15,8 +15,10 @@ jobs:
 
       - name: Configure the project
         uses: threeal/cmake-action@v1.3.0
-        # with:
-          # generator: Ninja
+        with:
+          generator: Ninja
+          c-compiler: gcc-13
+          cxx-compiler: g++-13
 
       - name: Build the project
         run: cmake --build build
