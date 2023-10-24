@@ -8,6 +8,17 @@ Remember to set the SUMO_HOME environment variable to the directory containing S
 
 First, you need to install Eclipse [SUMO](https://eclipse.dev/sumo/), and the [Boost](https://www.boost.org/) libraries. This version of Parallel-Sumo also requires the [pymetis](https://github.com/inducer/pymetis) python package, which requires python from 3.4 to 3.10. Check the repository page for install instructions especially on Windows, will need to download either it with conda from conda-forge (the other binary option in its repo is outdated). We include a *install-pymetis.ps1* Powershell script to do that.
 
+### Binaries
+
+Binaries are automatically built with GitHub actions, latest version can be found [here](https://github.com/filloax/Parallel-Sumo/suites/17581327676/artifacts/1004545522), but check in the [Actions tab](https://github.com/filloax/Parallel-Sumo/actions/workflows/build.yml) if you want to be sure it is the latest one, as the link is updated manually.
+
+<details markdown="1">
+<summary>How-to</summary>
+
+The binaries are built on Ubuntu by GitHub and should work in any Linux x86_64 system. Download/clone this repository, create a bin folder inside it, download the binaries in the bin folder and you should be able to run launch.sh.
+
+</details>
+
 ### How to compile:
 
 First, you need to install ZeroMQ on your system, to have it available as a dependency, and also CMake. On Arch (both as a OS install or using [ArchWSL](https://github.com/yuk7/ArchWSL) in Windows with WSL), for example, install the following packages:
