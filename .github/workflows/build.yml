@@ -37,7 +37,8 @@ jobs:
 
       - name: Create Archive
         run: |
-          cp bin parsumo
+          mkdir parsumo
+          mv bin/* parsumo/
           zip -r parsumo_x86_64-linux-gnu_${{ steps.get_version.outputs.VERSION }}.zip parsumo
         working-directory: ${{ github.workspace }}
 
