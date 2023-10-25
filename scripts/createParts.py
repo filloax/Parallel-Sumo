@@ -32,6 +32,7 @@ from convertToMetis import main as convert_to_metis, weight_funs, WEIGHT_ROUTE_N
 from sumobin import run_duarouter, run_netconvert
 from sumo2png import generate_network_image
 from partitiondatagen import PartitionDataGen
+from partroutes import part_route
 
 if 'SUMO_HOME' in os.environ:
     SUMO_HOME = os.environ['SUMO_HOME']
@@ -65,6 +66,7 @@ parser.add_argument('-w', '--weight-fun', choices=weight_funs, nargs="*", defaul
 parser.add_argument('-nw', '--no-weight', action='store_true', help="Do not use edge weights in partitioning")
 parser.add_argument('-T', '--threads', type=int, default=8, help="Threads to use for processing the partitioning of the network, will be capped to partition num")
 # remove default True later
+parser.add_argument('--use-cut-routes', action='store_true', help="Use cutRoutes.py with postprocessing instead of our custom script to cut the routes (probably slower, but might handle different cases)")
 parser.add_argument('-t', '--timing', action='store_true', help="Measure the timing for the whole process")
 parser.add_argument('--dev-mode', action='store_false', help="Remove some currently unhandled edge cases from the routes (not ideal in release, currently works inversely for easier development)")
 parser.add_argument('--png', action='store_true', help="Output network images for each partition")
@@ -87,6 +89,7 @@ class NetworkPartitioning:
         weight_functions: list[str] = [WEIGHT_ROUTE_NUM],
         threads: int = 1,
         timing: bool = False,
+        use_cut_routes: bool = False,
     ) -> None:
         self.cfg_file = cfg_file
         self.use_metis = use_metis
@@ -96,6 +99,7 @@ class NetworkPartitioning:
         self.weight_functions = weight_functions
         self.threads = threads
         self.timing = timing
+        self.use_cut_routes = use_cut_routes
         
         cfg_tree = ET.parse(self.cfg_file)
         cfg_root = cfg_tree.getroot()
@@ -113,7 +117,7 @@ class NetworkPartitioning:
         self._vehicle_depart_times = None
         
     def partition_network(self, num_parts: int):
-        if devmode:
+        if self.use_cut_routes and devmode:
             print("-------------------------------")
             print("--          DEV MODE         --")
             print("-- Some edge cases will get  --")
@@ -212,14 +216,19 @@ class NetworkPartitioning:
         # ThreadPool (instead of Pool) to make sharing objects etc. possible
         with ThreadPool(thread_num) as pool:
             chunksize = num_parts // thread_num
-            partition_vehicle_start_times = pool.map(process_part_work, range(num_parts), chunksize)
 
-            # First reduce into a smaller list in multiple threads,
-            # then do final merging in main thread
-            interm_dicts = pool.map(_merge_float_dicts_min, _split_list(partition_vehicle_start_times, thread_num), chunksize=1)
-            self._vehicle_depart_times = _merge_float_dicts_min(interm_dicts)
+            if self.use_cut_routes:
+                partition_vehicle_start_times = pool.map(process_part_work, range(num_parts), chunksize)
+                # First reduce into a smaller list in multiple threads,
+                # then do final merging in main thread
+                interm_dicts = pool.map(_merge_float_dicts_min, _split_list(partition_vehicle_start_times, thread_num), chunksize=1)
+                self._vehicle_depart_times = _merge_float_dicts_min(interm_dicts)
 
-            pool.map(self._postprocess_partition, range(num_parts), chunksize)
+                pool.map(self._postprocess_partition, range(num_parts), chunksize)
+             
+            # Using our script, we don't need to remove duplicate vehicles after the fact
+            else:
+                pool.map(process_part_work, range(num_parts), chunksize)
 
             self._final_duplicates_check(num_parts)
             self._final_route_connection_check(num_parts)
@@ -232,7 +241,7 @@ class NetworkPartitioning:
                     for id in ls1:
                         if id in ls2:
                             shared.add(id)
-                            
+
             if len(shared) > 0:
                 print(f'[WARN] Vehicles shared between partitions: {shared}', file=sys.stderr)
 
@@ -332,29 +341,39 @@ class NetworkPartitioning:
         run_netconvert(net_file=self.net_file, output=net_part, extra_options=netconvert_options)
         print(f"Partition {part_idx} successfully created")
 
-        print(f"Running cutRoutes.py to create routes for partition {part_idx}...")
-        # Put output of cut_routes in temp file, edit it, then save it
-        cut_routes(cut_routes_options([
-            net_part, processed_routes_path,
-            "--routes-output", interm_rou_part,
-            "--orig-net", self.net_file,
-            # "--disconnected-action", "keep" # TEMP, TODO: re enable when split routes handled
-        ]))
+        if self.use_cut_routes:
+            print(f"Running cutRoutes.py to create routes for partition {part_idx}...")
+            # Put output of cut_routes in temp file, edit it, then save it
+            cut_routes(cut_routes_options([
+                net_part, processed_routes_path,
+                "--routes-output", interm_rou_part,
+                "--orig-net", self.net_file,
+                # "--disconnected-action", "keep" # TEMP, TODO: re enable when split routes handled
+            ]))
 
-        vehicle_depart_times: dict[str, float] = {}
-        
-        with open(interm_rou_part, 'r', encoding='utf-8') as f:
-            route_part_el: Element = ET.parse(f).getroot()
-            vehicles = route_part_el.findall("vehicle")
-            for vehicle in vehicles:
-                id = vehicle.attrib["id"]
-                depart = float(vehicle.attrib["depart"])
+            vehicle_depart_times: dict[str, float] = {}
+            
+            with open(interm_rou_part, 'r', encoding='utf-8') as f:
+                route_part_el: Element = ET.parse(f).getroot()
+                vehicles = route_part_el.findall("vehicle")
+                for vehicle in vehicles:
+                    id = vehicle.attrib["id"]
+                    depart = float(vehicle.attrib["depart"])
 
-                if id not in vehicle_depart_times:
-                    vehicle_depart_times[id] = depart
-                # Shouldn't happen (means vehicle has duplicate id), but check anyways
-                elif vehicle_depart_times[id] > depart:
-                    vehicle_depart_times[id] = depart
+                    if id not in vehicle_depart_times:
+                        vehicle_depart_times[id] = depart
+                    # Shouldn't happen (means vehicle has duplicate id), but check anyways
+                    elif vehicle_depart_times[id] > depart:
+                        vehicle_depart_times[id] = depart
+ 
+            # Do all non-thread-safe/locking operations at the end
+            with self._temp_files_lock:
+                self._temp_files.add(interm_rou_part)
+        else:
+            print(f"Cutting route with partroutes for partition {part_idx}")
+            # note that we don't need postprocessing using our script, as it already
+            # avoids repeating the same vehicle etc
+            part_route(processed_routes_path, net_part, rou_part)
 
         # Create sumo cfg file for partition
         with open(self.cfg_file, "r") as source, open(cfg_part, "w") as dest:
@@ -398,11 +417,10 @@ class NetworkPartitioning:
 
         cfg_part_tree.write(cfg_part)
 
-        # Do all non-thread-safe/locking operations at the end
-        with self._temp_files_lock:
-            self._temp_files.add(interm_rou_part)
-
-        return vehicle_depart_times
+        if self.use_cut_routes:
+            return vehicle_depart_times
+        else:
+            None
 
     def _devmode_remove_vehicle(self, vehicle: Element):
         id = vehicle.attrib["id"]
@@ -625,6 +643,7 @@ def worker(args):
         weight_funs,
         args.threads,
         args.timing,
+        args.use_cut_routes,
     )
     
     partitioning.partition_network(args.num_parts)

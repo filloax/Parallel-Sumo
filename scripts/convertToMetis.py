@@ -30,7 +30,6 @@ parser.add_argument('--check-connection', action='store_true', help="Check if th
 if 'SUMO_HOME' in os.environ:
     tools = os.path.join(os.environ['SUMO_HOME'], 'tools')
     sys.path.append(os.path.join(tools))
-    from sumolib.output import parse, parse_fast
     from sumolib.net import readNet
     from sumolib.net.edge import Edge
     from sumolib.net.node import Node

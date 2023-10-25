@@ -113,7 +113,7 @@ def part_route(
     ):
         raise ValueError("Won't handle trip or flow (without route) tags! Convert them using SUMO duarouter first.")
         
-    with ThreadPool(8) as pool:
+    with ThreadPool(4) as pool:
         edge_ids = pool.map(lambda e: e.getID(), net.getEdges())
         routes = routes_tree.xpath(f".//{_ROUTE}")
         new_routes = pool.map(lambda route: _filter_or_split_route(route, edge_ids, split_interrupted_routes), routes)
