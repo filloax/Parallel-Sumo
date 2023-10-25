@@ -6,3 +6,5 @@ pyproj #for net2geojson
 geopandas
 matplotlib
 contextily
+lxml # for better xpath
+rtree
