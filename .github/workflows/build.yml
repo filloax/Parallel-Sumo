@@ -39,7 +39,7 @@ jobs:
 
       - name: Create distribution
         id: dist
-        run: "scripts/dist.sh \"linux-gnu_${{ steps.get_version.outputs.VERSION }}\" | grep -oE 'Saved to: .*$' | cut -d ' ' -f 3 | xargs -I{} basename {} | sed 's/.*/DIST=&/' >> $GITHUB_OUTPUT"
+        run: "scripts/dist.sh \"x86_64-linux-gnu_${{ steps.get_version.outputs.VERSION }}\" | grep -oE 'Saved to: .*$' | cut -d ' ' -f 3 | xargs -I{} basename {} | sed 's/.*/DIST=&/' >> $GITHUB_OUTPUT"
         working-directory: ${{ github.workspace }}
 
       - name: Publish Artifact
@@ -51,6 +51,6 @@ jobs:
       - name: Publish Release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: ${{ steps.dist.outputs.DIST }}
+          artifacts: dist/${{ steps.dist.outputs.DIST }}
           allowUpdates: true
   
