@@ -16,6 +16,8 @@ import argparse
 import lxml.etree
 from lxml.etree import _Element as Element, _ElementTree as ElementTree
 from multiprocessing.pool import ThreadPool
+import copy
+import itertools
 
 if 'SUMO_HOME' in os.environ:
     SUMO_HOME = os.environ['SUMO_HOME']
@@ -29,9 +31,9 @@ else:
     sys.exit("please declare environment variable 'SUMO_HOME'")
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-r", "--routes", type=str, help="Routes input file")
-parser.add_argument("-n", "--network", type=str, help="Partition input file")
-parser.add_argument("-o", "--out", type=str, help="Output partitioned route file")
+parser.add_argument("-r", "--routes", required=True, type=str, help="Routes input file")
+parser.add_argument("-n", "--network", required=True, type=str, help="Partition input file")
+parser.add_argument("-o", "--out", required=True, type=str, help="Output partitioned route file")
 
 # from demand xml schema http://sumo.dlr.de/xsd/routes_file.xsd
 # from route xml schema http://sumo.dlr.de/xsd/routeTypes.xsd
@@ -75,6 +77,10 @@ unhandled_tags = [
     _INCLUDE,
 ]
 
+def _route_node_is_first(route_node: Element) -> bool:
+    id: str = route_node.attrib["id"]
+    return id.endswith("_part0") or "_part" not in id
+
 def part_route(
     routes_file: str,
     partition_network_file: str,
@@ -113,14 +119,14 @@ def part_route(
     ):
         raise ValueError("Won't handle trip or flow (without route) tags! Convert them using SUMO duarouter first.")
         
+    routes = routes_tree.findall(_ROUTE)
     with ThreadPool(4) as pool:
         edge_ids = pool.map(lambda e: e.getID(), net.getEdges())
-        routes = routes_tree.xpath(f".//{_ROUTE}")
-        new_routes = pool.map(lambda route: _filter_or_split_route(route, edge_ids, split_interrupted_routes), routes)
-        new_routes_f = iter(route for route in routes for routes in new_routes if routes is not None)
-        routes_by_id = {route.attrib["id"]: route for route in new_routes_f}
-            
-    output_root.extend(routes_by_id[id] for id in routes_by_id)
+        new_routes = list(itertools.chain(*pool.map(lambda route: _filter_or_split_route(route, edge_ids, split_interrupted_routes), routes)))
+    # routes_by_id = {route.attrib["id"]: route for route in new_routes}
+    routes_first_parts_by_id = {route.attrib["id_og"]: route for route in new_routes if _route_node_is_first(route)}
+                
+    output_root.extend(new_routes)
     
     unhandled_tags_copy = unhandled_tags.copy()
     for child in routes_root:
@@ -128,12 +134,13 @@ def part_route(
         if child.tag in keep_tags:
             output_root.append(child)
         elif child.tag in route_owners:
-            if child.find(".//route"):
+            if child.find("route"):
                 raise ValueError("Nested routes inside vehicles or other are not supported!")
             route_id = child.attrib["route"]
-            route = routes_by_id[route_id]
-            if "is_start" in route.attrib:
-                output_root.append(child)
+            if route_id in routes_first_parts_by_id:
+                route = routes_first_parts_by_id[route_id]
+                if "is_start" in route.attrib:
+                    output_root.append(child)
 
         elif child.tag in unhandled_tags_copy:
             print(f"[WARN] Removed {child.tag} element(s) as it is not supported yet", file=sys.stderr)
@@ -142,8 +149,10 @@ def part_route(
     out_tree: ElementTree = lxml.etree.ElementTree(output_root)
     out_tree.write(output_route_file)
 
+__EMPTY = []
+
 # Note that route can get modified
-def _filter_or_split_route(route: Element, part_edge_ids: list, keep_multipart = False)->list[Element] | None:
+def _filter_or_split_route(route: Element, part_edge_ids: list, keep_multipart = False)->list[Element]:
     edges: list[str] = route.attrib["edges"].split()
     
     route_parts = []
@@ -159,17 +168,26 @@ def _filter_or_split_route(route: Element, part_edge_ids: list, keep_multipart =
         route_parts.append(current_part)
         
     if len(route_parts) == 0:
-        return None
+        return __EMPTY
     elif len(route_parts) == 1:
         route.set("edges", ' '.join(route_parts[0]))
+        route.set("id_og", route.attrib["id"])
         if (route_parts[0][0] == edges[0]):
             route.set("is_start", "true")
         return [route]
     elif not keep_multipart:
-        return None
+        return __EMPTY
     else:
-        # TODO: implement multipart routes
-        return None
+        parts = [ copy.copy(route) for _ in route_parts ]
+        id = route.attrib["id"]
+        for (i, part), part_edges in zip(enumerate(parts), route_parts):
+            part.set("id", f"{id}_part{i}")
+            part.set("id_og", id)
+            part.set("edges", ' '.join(part_edges))
+            if part_edges[0] == edges[0]:
+                part.set("is_start", "true")
+        return parts
+            
     
 if __name__ == '__main__':
     args = parser.parse_args()

@@ -13,8 +13,8 @@ if __name__ == '__main__':
 import itertools
 import os, sys
 import glob
-import xml.etree.ElementTree as ET
-from xml.etree.ElementTree import Element
+import lxml.etree
+from lxml.etree import _Element as Element, _ElementTree as ElementTree
 import argparse
 import re
 import contextily as cx
@@ -101,8 +101,8 @@ class NetworkPartitioning:
         self.timing = timing
         self.use_cut_routes = use_cut_routes
         
-        cfg_tree = ET.parse(self.cfg_file)
-        cfg_root = cfg_tree.getroot()
+        cfg_tree: ElementTree = lxml.etree.parse(self.cfg_file)
+        cfg_root: Element = cfg_tree.getroot()
         cfg_dir = os.path.dirname(self.cfg_file)
 
         self.net_file: str = os.path.join(cfg_dir, cfg_root.find("./input/net-file").attrib["value"])
@@ -140,8 +140,8 @@ class NetworkPartitioning:
         print("Parsing network file...")
 
         # Load network XML
-        network_tree = ET.parse(self.net_file)
-        network = network_tree.getroot()
+        network_tree: ElementTree = lxml.etree.parse(self.net_file)
+        network: Element = network_tree.getroot()
 
         part_bounds_list = []
         netconvert_options = tuple([])
@@ -292,8 +292,8 @@ class NetworkPartitioning:
         for f in glob.glob(f'{self.data_folder}/*.alt.xml'):
             os.remove(f)
 
-        routes_tree = ET.parse(interm_file_path)
-        routes: ET.Element = routes_tree.getroot()
+        routes_tree: ElementTree = lxml.etree.parse(interm_file_path)
+        routes: Element = routes_tree.getroot()
 
         # Takes routes defined inside of vehicles out of the vehicles
         count = 0
@@ -302,7 +302,7 @@ class NetworkPartitioning:
             if route_el is not None:
                 vehicle_id = vehicle.attrib.get("id", -1)
                 id = f"vr_{vehicle_id}_{count}"
-                route_ref_el = ET.Element("route")
+                route_ref_el = lxml.etree.Element("route")
                 route_ref_el.set("id", id)
                 route_ref_el.set("edges", route_el.get("edges"))
                 vehicle.set("route", id)
@@ -354,7 +354,7 @@ class NetworkPartitioning:
             vehicle_depart_times: dict[str, float] = {}
             
             with open(interm_rou_part, 'r', encoding='utf-8') as f:
-                route_part_el: Element = ET.parse(f).getroot()
+                route_part_el: Element = lxml.etree.parse(f).getroot()
                 vehicles = route_part_el.findall("vehicle")
                 for vehicle in vehicles:
                     id = vehicle.attrib["id"]
@@ -381,8 +381,8 @@ class NetworkPartitioning:
                 dest.write(line)
 
         # Set partition net-file and route-files in cfg file
-        cfg_part_tree = ET.parse(cfg_part)
-        cfg_part_el = cfg_part_tree.getroot()
+        cfg_part_tree: ElementTree = lxml.etree.parse(cfg_part)
+        cfg_part_el: Element = cfg_part_tree.getroot()
         parent_map = {c:p for p in cfg_part_tree.iter() for c in p}
         input_el = cfg_part_el.find("input")
         net_file_el = input_el.find("net-file")
@@ -434,7 +434,7 @@ class NetworkPartitioning:
         rou_part = os.path.abspath(os.path.join(self.data_folder, f"part{part_idx}.rou.xml"))
 
         with open(interm_rou_part, 'r', encoding='utf-8') as fr:
-            route_part_tree = ET.parse(fr)
+            route_part_tree: ElementTree = lxml.etree.parse(fr)
             route_part_el: Element = route_part_tree.getroot()
             vehicles = route_part_el.findall("vehicle")
             remove = []
@@ -469,6 +469,9 @@ class NetworkPartitioning:
             if dup_route_removed > 0:
                 print(f"Removed {dup_route_removed} duplicate routes (likely unhandled edge cases)")
 
+    def _get_route_for_id(self, routes_root: Element, id: str):
+        return routes_root.xpath(f".//route[@id='{id}' or @id_og='{id}']")[0]
+
     def _final_duplicates_check(self, num_parts):
         """Check for duplicates not caught by starting time check, 
         might be caused by vehicles starting in border edges.
@@ -482,26 +485,26 @@ class NetworkPartitioning:
         vehicle_route_lengths = defaultdict(list)
         for rou_part in route_parts:            
             with open(rou_part, 'r', encoding='utf-8') as f:
-                route_part_el: Element = ET.parse(f).getroot()
+                route_part_el: Element = lxml.etree.parse(f).getroot()
                 
-            for veh in route_part_el.findall(f'.//vehicle'):
+            for veh in route_part_el.findall('vehicle'):
                 id = veh.attrib["id"]
                 route_id = veh.attrib["route"]
-                route_el = route_part_el.find(f".//route[@id='{route_id}']")
+                route_el = self._get_route_for_id(route_part_el, route_id)
                 route_len = len(route_el.attrib["edges"].split(" "))
                 vehicle_route_lengths[id].append(route_len)
         
         # After checking, keep only the ones with longest route
         for i, rou_part in enumerate(route_parts):
             with open(rou_part, 'r', encoding='utf-8') as f:
-                tree = ET.parse(f)
+                tree = lxml.etree.parse(f)
                 route_part_el: Element = tree.getroot()
             
             delete = []
-            for veh in route_part_el.findall(f'.//vehicle'):
+            for veh in route_part_el.findall('vehicle'):
                 id = veh.attrib["id"]
                 route_id = veh.attrib["route"]
-                route_el = route_part_el.find(f".//route[@id='{route_id}']")
+                route_el = self._get_route_for_id(route_part_el, route_id)
                 route_len = len(route_el.attrib["edges"].split(" "))
                 max_len = max(vehicle_route_lengths[id])
                 
@@ -532,9 +535,9 @@ class NetworkPartitioning:
         route_segs_by_id = defaultdict(list)
         
         for file in route_parts:
-            tree = ET.parse(file)
-            root = tree.getroot()
-            for route in root.findall(".//route"):
+            tree = lxml.etree.parse(file)
+            root: Element = tree.getroot()
+            for route in root.findall("route"):
                 route_segs_by_id[route.attrib["id"]].append(route.attrib["edges"].split(" "))
 
         matching = []
@@ -545,8 +548,8 @@ class NetworkPartitioning:
                 matching.append(id)
                 
         for file in route_parts:
-            tree = ET.parse(file)
-            root = tree.getroot()
+            tree: ElementTree = lxml.etree.parse(file)
+            root: Element = tree.getroot()
             for id in matching:
                 for route in root.findall(f".//route[@id='{id}']"):
                     root.remove(route)
@@ -561,7 +564,7 @@ class NetworkPartitioning:
     def _read_partition_vehicles(self, part_idx):
         rou_part = os.path.abspath(os.path.join(self.data_folder, f"part{part_idx}.rou.xml"))
         with open(rou_part, 'r', encoding='utf-8') as f:
-            route_part_el: Element = ET.parse(f).getroot()
+            route_part_el: Element = lxml.etree.parse(f).getroot()
         return [el.attrib['id'] for el in route_part_el.findall(f'.//vehicle')]
 
 def _get_inf():
