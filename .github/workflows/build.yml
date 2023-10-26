@@ -37,12 +37,12 @@ jobs:
 
       - name: Create distribution
         id: dist
-        run: "scripts/dist.sh \"linux-gnu_${{ steps.get_version.outputs.VERSION }}\" | grep -oE 'Saved to: .*$' | cut -d ' ' -f 3 | sed 's/.*/DIST=&/' >> $GITHUB_OUTPUT"
+        run: "scripts/dist.sh \"linux-gnu_${{ steps.get_version.outputs.VERSION }}\" | grep -oE 'Saved to: .*$' | cut -d ' ' -f 3 | xargs -I{} basename {} | sed 's/.*/DIST=&/' >> $GITHUB_OUTPUT"
         working-directory: ${{ github.workspace }}
 
       - name: Publish Artifact
         uses: actions/upload-artifact@v2
         with:
           name: ${{ steps.dist.outputs.DIST }}
-          path: ${{ steps.dist.outputs.DIST }}
+          path: dist/${{ steps.dist.outputs.DIST }}
   
