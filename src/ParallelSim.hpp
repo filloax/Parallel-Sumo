@@ -25,7 +25,6 @@ class ParallelSim {
     std::string netFile;
     std::string routeFile;
     int numThreads;
-    std::vector<std::string>& sumoArgs;
     int endTime;
     int steps;
     Args args;
@@ -37,7 +36,7 @@ class ParallelSim {
     void waitForPartitions(std::vector<pid_t> pids);
 
   public:
-    ParallelSim(const std::string file, bool gui, int threads, std::vector<std::string>& sumoArgs, Args& args);
+    ParallelSim(const std::string file, bool gui, int threads, Args& args);
     // gets network and route file paths
     void getFilePaths();
     // partition the SUMO network

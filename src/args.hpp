@@ -19,6 +19,8 @@ public:
     Args(argparse::ArgumentParser& program):
     program(program)
     {
+        program.add_description("Run the traffic simulation program SUMO in parallel using multiple processes");
+        program.add_epilog("Additional arguments can be added, optionally separated by a pipe ('--').\nArguments before the pipe (or all of them without a pipe) are passed to the SUMO executable, and arguments after are passed to the createParts.py Python script (run './run-with-env.sh python scripts/createParts.py' --help to check available options).");
         program.add_argument("-c", "--cfg")
             .help("Sumo config path")
             // For demo purposes
@@ -55,7 +57,13 @@ public:
     }
 
     void parse_known_args(int argc, char* argv[]) {
-        sumoArgs = program.parse_known_args(argc, argv);
+        auto extraArgs = program.parse_known_args(argc, argv);
+        // Split partitioning args and sumo args via extra args
+        auto pipeIt = std::find(extraArgs.begin(), extraArgs.end(), "--");
+        sumoArgs.insert(sumoArgs.begin(), extraArgs.begin(), pipeIt);
+        if (pipeIt != extraArgs.end()) {
+            partitioningArgs.insert(partitioningArgs.begin(), pipeIt + 1, extraArgs.end());
+        }
         
         cfg = program.get<std::string>("--cfg");
         numThreads = program.get<int>("--num-threads");
@@ -97,5 +105,6 @@ public:
     std::string dataDir;
     bool verbose;
     std::vector<std::string> sumoArgs;
+    std::vector<std::string> partitioningArgs;
     argparse::ArgumentParser& program;
 };

@@ -56,10 +56,9 @@ using namespace chrono;
 
 typedef std::unordered_multimap<string, int>::iterator umit;
 
-ParallelSim::ParallelSim(string cfg, bool gui, int threads, vector<string>& sumoArgs, Args& args) :
+ParallelSim::ParallelSim(string cfg, bool gui, int threads, Args& args) :
   cfgFile(cfg),
   numThreads(threads),
-  sumoArgs(sumoArgs),
   args(args)
   {
 
@@ -157,7 +156,7 @@ void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
     pythonCommand = pythonPathStr / pythonCommand;
   }
 
-  vector<string> partArgs {
+  vector<string> partitioningArgs {
     "scripts/createParts.py",
     "-N", std::to_string(numThreads),
     "-c", cfgFile,
@@ -165,21 +164,24 @@ void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
   };
 
   if (!metis) {
-    partArgs.push_back("--no-metis");
+    partitioningArgs.push_back("--no-metis");
   }
   if (keepPoly) {
-    partArgs.push_back("--keep-poly");
+    partitioningArgs.push_back("--keep-poly");
   }
   if (args.partitioningThreads) {
-    partArgs.push_back("--threads");
-    partArgs.push_back(std::to_string(args.partitioningThreads));
+    partitioningArgs.push_back("--threads");
+    partitioningArgs.push_back(std::to_string(args.partitioningThreads));
   }
+  
+  if (args.partitioningArgs.size() > 0)
+    partitioningArgs.insert(partitioningArgs.end(), args.partitioningArgs.begin(), args.partitioningArgs.end());
 
   std::cout << "Running createParts.py to split graph and create partition files..." << std::endl;
 
   auto time0 = high_resolution_clock::now();
 
-  runProcess(pythonCommand, partArgs);
+  runProcess(pythonCommand, partitioningArgs);
 
   int status;
   waitProcess(&status);
@@ -302,6 +304,8 @@ void ParallelSim::startSim(){
       if (args.skipPart) partArgs.push_back("--skip-part");
       if (args.keepPoly) partArgs.push_back("--keep-poly");
       if (args.verbose)  partArgs.push_back("--verbose");
+      if (args.sumoArgs.size() > 0)
+        partArgs.insert(partArgs.end(), args.sumoArgs.begin(), args.sumoArgs.end());
       
       if (args.verbose)
         printf("Coordinator | Starting process for part %i\n", i);
