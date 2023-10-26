@@ -26,7 +26,7 @@ namespace psumo {
 
 namespace psumo {
 
-static const size_t OPERATION_QUEUE_SIZE = 512;
+static const size_t OPERATION_QUEUE_SIZE = 1024;
 
 typedef struct {
   std::string vehId;
@@ -46,7 +46,7 @@ typedef struct {
 template <typename T> class OperationQueue {
   public:
   std::array<T, OPERATION_QUEUE_SIZE> queue;
-  int currentSize;
+  int currentSize = 0;
 
   bool append(T el) {
     if (currentSize < OPERATION_QUEUE_SIZE) {
