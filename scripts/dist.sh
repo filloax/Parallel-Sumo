@@ -2,9 +2,9 @@
 
 DIST_NAME=$1
 if [ -z $DIST_NAME ]; then
-    DIST_FILE="dist/parsumo.tar.gz"
+    DIST_FILE="dist/parsumo.tar.zip"
 else
-    DIST_FILE="dist/parsumo_$DIST_NAME.tar.gz"
+    DIST_FILE="dist/parsumo_$DIST_NAME.zip"
 fi
 
 PROJ_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )"/.. &> /dev/null && pwd )
@@ -37,7 +37,7 @@ cp -r bin "$DST_FOLDER/"
 cp DIST_README.md "$DST_FOLDER/README.txt"
 
 echo Zipping...
-tar -czf "$DIST_FILE" parsumo
+zip -r "$DIST_FILE" parsumo
 
 rm -rf parsumo
 
