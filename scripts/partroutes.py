@@ -182,8 +182,15 @@ def _filter_or_split_route(route: Element, part_edge_ids: list, keep_multipart =
     else:
         parts = [ copy.copy(route) for _ in route_parts ]
         id = route.attrib["id"]
+        
+        # Make sure each number for the same route has the same amount of digits, 
+        # so sorting in route processing works well
+        digits = len(str(len(parts)))
+        
         for (i, part), part_edges in zip(enumerate(parts), route_parts):
-            part.set("id", f"{id}_part{i}")
+            i_str = str(i)
+            i_prefix = ('0'*(digits-len(i_str)))+i_str
+            part.set("id", f"{id}_part{i_prefix}")
             part.set("id_og", id)
             part.set("edges", ' '.join(part_edges))
             if part_edges[0] == edges[0]:

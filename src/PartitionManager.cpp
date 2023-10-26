@@ -157,18 +157,17 @@ void PartitionManager::loadRouteMetadata() {
   }
 
   for (
-    tinyxml2::XMLElement* vehicle = routesEl->FirstChildElement("vehicle"); 
-    vehicle; 
-    vehicle = vehicle->NextSiblingElement("vehicle")
+    tinyxml2::XMLElement* route = routesEl->FirstChildElement("route"); 
+    route; 
+    route = route->NextSiblingElement("route")
   ) {
-    auto routeId = vehicle->Attribute("route");
+    auto routeId = route->Attribute("id");
     if (routeId) {
       string routeIdStr(routeId);
       int partIndex = routeIdStr.find("_part");
       // Route id contains part -> is multipart
       if (partIndex != string::npos) {
-        // If the route is in this map, it's multipart
-        vehicleMultipartRouteProgress[string(vehicle->Attribute("id"))] = 0;
+        multipartRoutes.insert(routeIdStr.substr(0, partIndex));
       }
     } else {
       logerr("sumo routes file error: route with no id!\n");
@@ -272,10 +271,16 @@ void PartitionManager::addVehicle(
 ) {
   string routeIdAdapted;
   // Adapt vehicle routes in case of multipart routes
-  if (vehicleMultipartRouteProgress.contains(vehId)) {
-    // Will be set again when the vehicle exits, no need to set it here
-    int newPartProgress = vehicleMultipartRouteProgress[vehId] + 1;
-    routeIdAdapted = routeId + "_part" + to_string(newPartProgress); 
+  if (multipartRoutes.contains(routeId)) {
+    if (vehicleMultipartRouteProgress.contains(vehId)) {
+      // Will be set again when the vehicle exits, no need to set it here
+      int newPartProgress = vehicleMultipartRouteProgress[vehId] + 1;
+      routeIdAdapted = routeId + "_part" + to_string(newPartProgress); 
+    } else {
+      // Initialize it here, came from other partition
+      vehicleMultipartRouteProgress[vehId] = 0;
+      routeIdAdapted = routeId + "_part0"; 
+    }
   } else {
     routeIdAdapted = routeId;
   }

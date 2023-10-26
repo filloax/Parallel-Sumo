@@ -42,7 +42,7 @@ private:
     const std::vector<partId_t> neighborPartitions;
     const std::unordered_map<partId_t, std::unordered_set<std::string>> neighborRoutes;
     const std::unordered_map<std::string, std::unordered_set<std::string>> routeEndsInEdges;
-    const std::unordered_map<std::string, std::string> multipartRoutes;
+    std::unordered_set<std::string> multipartRoutes;
     std::map<int, PartitionEdgesStub*> neighborPartitionStubs;
     std::map<int, NeighborPartitionHandler*> neighborClientHandlers;
     // For vehicles with more than one route part, count last one the vehicle used

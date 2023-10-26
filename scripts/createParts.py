@@ -68,13 +68,13 @@ parser.add_argument('-T', '--threads', type=int, default=8, help="Threads to use
 # remove default True later
 parser.add_argument('--use-cut-routes', action='store_true', help="Use cutRoutes.py with postprocessing instead of our custom script to cut the routes (probably slower, but might handle different cases)")
 parser.add_argument('-t', '--timing', action='store_true', help="Measure the timing for the whole process")
-parser.add_argument('--dev-mode', action='store_false', help="Remove some currently unhandled edge cases from the routes (not ideal in release, currently works inversely for easier development)")
+# parser.add_argument('--dev-mode', action='store_false', help="Remove some currently unhandled edge cases from the routes (not ideal in release, currently works inversely for easier development)")
 parser.add_argument('--png', action='store_true', help="Output network images for each partition")
 parser.add_argument('-v', '--verbose', action='store_true', help="Additional output")
 parser.add_argument('--force', action='store_true', help="Regenerate even if data folder already contains partition data matching these settings")
 
 verbose = False
-devmode = False
+# devmode = False
 
 def _is_poly_file(path: str):
     return path.endswith(".poly.xml")
@@ -117,7 +117,7 @@ class NetworkPartitioning:
         self._vehicle_depart_times = None
         
     def partition_network(self, num_parts: int):
-        if self.use_cut_routes and devmode:
+        if self.use_cut_routes: # and devmode:
             print("-------------------------------")
             print("--          DEV MODE         --")
             print("-- Some edge cases will get  --")
@@ -231,7 +231,8 @@ class NetworkPartitioning:
                 pool.map(process_part_work, range(num_parts), chunksize)
 
             self._final_duplicates_check(num_parts)
-            self._final_route_connection_check(num_parts)
+            # TODO: check if still needed?
+            # self._final_route_connection_check(num_parts)
             
             belonging = pool.map(self._read_partition_vehicles, range(num_parts), chunksize)
 
@@ -421,11 +422,7 @@ class NetworkPartitioning:
             return vehicle_depart_times
         else:
             None
-
-    def _devmode_remove_vehicle(self, vehicle: Element):
-        id = vehicle.attrib["id"]
-        return re.search(r'_part\d+$', id)
-
+            
     def _postprocess_partition(self, part_idx: int):
         if type(sys.stdout) is ThreadPrefixStream:
             sys.stdout.add_thread_prefix(f"[Post process: {get_ident():5}]")
@@ -438,15 +435,11 @@ class NetworkPartitioning:
             route_part_el: Element = route_part_tree.getroot()
             vehicles = route_part_el.findall("vehicle")
             remove = []
-            dev_removed = 0
             for vehicle in vehicles:
                 id = vehicle.attrib["id"]
                 depart = float(vehicle.attrib["depart"])
                 if depart > self._vehicle_depart_times[id] + 0.001:
                     remove.append(vehicle)
-                elif devmode and self._devmode_remove_vehicle(vehicle):
-                    remove.append(vehicle)
-                    dev_removed += 1
 
             # Duplicate routes (likely unhandled edge cases in partitioning and cutting)
             routes = route_part_el.findall("route")
@@ -464,13 +457,28 @@ class NetworkPartitioning:
                 route_part_el.remove(el)
             route_part_tree.write(rou_part)
 
-            if dev_removed > 0:
-                print(f"Removed {dev_removed} vehicles as part of dev mode")
             if dup_route_removed > 0:
                 print(f"Removed {dup_route_removed} duplicate routes (likely unhandled edge cases)")
 
     def _get_route_for_id(self, routes_root: Element, id: str):
         return routes_root.xpath(f".//route[@id='{id}' or @id_og='{id}']")[0]
+
+    # In case route parts were changed by a script part, fix "holes"
+    def _fix_multipart_route_ids(self, routes_el: Element):
+        route_nodes: list[Element] = routes_el.findall("route")
+        route_nodes.sort(key=lambda route: route.attrib["id"])
+        last_part_num = defaultdict(lambda: -1)
+        
+        for route in route_nodes:
+            id: str = route.attrib["id"]
+            if '_part' in id:
+                [prefix, numPart] = id.split('_part')
+                num = int(numPart)
+                print(id, prefix, numPart, last_part_num.get(prefix, None))
+                if num > last_part_num[prefix] + 1:
+                    num = last_part_num[prefix] + 1
+                    route.set("id", f"{prefix}_part{num}")
+                last_part_num[prefix] = num
 
     def _final_duplicates_check(self, num_parts):
         """Check for duplicates not caught by starting time check, 
@@ -522,7 +530,9 @@ class NetworkPartitioning:
             # Delete in separate loop to avoid messing with the iterator
             for veh in delete:
                 route_part_el.remove(veh)
-                
+                   
+            self._fix_multipart_route_ids(route_part_el)
+             
             tree.write(rou_part, encoding='utf-8')
                 
             print(f"Partition {i}: removed {len(delete)} additional duplicate vehicles")
@@ -610,7 +620,7 @@ def _check_args(args: object):
     return False
 
 def worker(args):
-    global verbose, devmode
+    global verbose #, devmode
     
     if not args.force and _check_args(args):
         print("Partitioning same as previous gen in this folder, skipping (use --force to ignore this and run anyways)")
@@ -619,8 +629,8 @@ def worker(args):
     if args.verbose:
         verbose = True
 
-    if args.dev_mode:
-        devmode = True
+    # if args.dev_mode:
+    #     devmode = True
 
     print(args)
 
