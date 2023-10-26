@@ -6,7 +6,19 @@ Remember to set the SUMO_HOME environment variable to the directory containing S
 
 ### Installation and dependencies
 
-First, you need to install Eclipse [SUMO](https://eclipse.dev/sumo/), and the [Boost](https://www.boost.org/) libraries. This version of Parallel-Sumo also requires the [pymetis](https://github.com/inducer/pymetis) python package, which requires python from 3.4 to 3.10. Check the repository page for install instructions especially on Windows, will need to download either it with conda from conda-forge (the other binary option in its repo is outdated). We include a *install-pymetis.ps1* Powershell script to do that.
+First, you need to install Eclipse [SUMO](https://eclipse.dev/sumo/), and the [Boost](https://www.boost.org/) libraries. Currently, the launch script will automatically download the required Python libraries.
+
+## How-to-use
+
+Launch the script `launch.sh` with **--help** as an argument to check all available options. The main args are **-c** to specify the .sumocfg file to run the simulation from, **-N** to specify the number of processes, and **--gui** if you want to see a GUI of the partition. You can specify arguments to be passed both to SUMO and to the partitioning script (`partRoutes.py`) after the arguments of the program, check the built-in help for more information.
+
+To run a simple demo with a GUI:
+
+```
+./launch.sh -N 2 -c assets/simpleNet.sumocfg --gui
+```
+
+(The car will start at time 100, to give you time to reposition the windows to better look at the system)
 
 ### Binaries
 

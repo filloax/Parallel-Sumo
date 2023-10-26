@@ -7,6 +7,8 @@ on:
 jobs:
   build-project:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Get the version
         id: get_version
@@ -45,4 +47,10 @@ jobs:
         with:
           name: ${{ steps.dist.outputs.DIST }}
           path: dist/${{ steps.dist.outputs.DIST }}
+
+      - name: Publish Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: ${{ steps.dist.outputs.DIST }}
+          allowUpdates: true
   
