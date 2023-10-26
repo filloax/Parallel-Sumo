@@ -33,6 +33,7 @@ Contributions: Filippo Lenzi
 #include <libsumo/libsumo.h>
 #include <zmq.hpp>
 
+#include "libs/tinyxml2.h"
 #include "messagingShared.hpp"
 #include "NeighborPartitionHandler.hpp"
 #include "PartitionEdgesStub.hpp"
@@ -102,6 +103,77 @@ void PartitionManager::setBorderEdges(vector<border_edge_t>& borderEdges) {
       incomingBorderEdges.push_back(e);
     else if(e.from == id)
       outgoingBorderEdges.push_back(e);
+  }
+}
+
+const char* getRoutesFilesValue(string cfg) {
+  tinyxml2::XMLDocument cfgDoc;
+  tinyxml2::XMLError e = cfgDoc.LoadFile(cfg.c_str());
+  if(e) {
+    cerr <<  cfgDoc.ErrorIDToName(e) << endl;
+    exit(EXIT_FAILURE);
+  }
+  tinyxml2::XMLElement* cfgEl = cfgDoc.FirstChildElement("configuration");
+  if (cfgEl == nullptr) {
+    perror("sumo config error: no configuration\n");
+    exit(EXIT_FAILURE);
+  }
+  tinyxml2::XMLElement* inputElement = cfgEl->FirstChildElement("input");
+  if (!inputElement) {
+    perror("sumo config error: no input element in configuration\n");
+    exit(EXIT_FAILURE);
+  }
+  tinyxml2::XMLElement* routeFilesElement = inputElement->FirstChildElement("route-files");
+  if (!routeFilesElement) {
+    perror("sumo config error: no route files element in configuration\n");
+    exit(EXIT_FAILURE);
+  }
+
+  const char* routeFilesValue = routeFilesElement->Attribute("value");
+  if (!routeFilesValue) {
+    perror("sumo config error: no value attribute in route files\n");
+    exit(EXIT_FAILURE);
+  }
+  return routeFilesValue;
+}
+
+void PartitionManager::loadRouteMetadata() {
+  auto routeFilesValue = getRoutesFilesValue(cfg);
+
+  // NOTE: this assumes that there is only one route file, which is the output for 
+  // the partitioning script
+  const filesystem::path dir = filesystem::path(cfg).relative_path();
+  const filesystem::path routeFile = dir / routeFilesValue;
+  tinyxml2::XMLDocument routeDoc;
+  tinyxml2::XMLError e = routeDoc.LoadFile(routeFile.c_str());
+  if(e) {
+    logerr("{}\n", routeDoc.ErrorIDToName(e));
+    exit(EXIT_FAILURE);
+  }
+  tinyxml2::XMLElement* routesEl = routeDoc.FirstChildElement("routes");
+  if (routesEl == nullptr) {
+    std::cout << "sumo routes file error: no routes" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
+  for (
+    tinyxml2::XMLElement* vehicle = routesEl->FirstChildElement("vehicle"); 
+    vehicle; 
+    vehicle = vehicle->NextSiblingElement("vehicle")
+  ) {
+    auto routeId = vehicle->Attribute("route");
+    if (routeId) {
+      string routeIdStr(routeId);
+      int partIndex = routeIdStr.find("_part");
+      // Route id contains part -> is multipart
+      if (partIndex != string::npos) {
+        // If the route is in this map, it's multipart
+        vehicleMultipartRouteProgress[string(vehicle->Attribute("id"))] = 0;
+      }
+    } else {
+      logerr("sumo routes file error: route with no id!\n");
+      exit(EXIT_FAILURE);
+    }
   }
 }
 
@@ -198,6 +270,16 @@ void PartitionManager::addVehicle(
   const strarg_ vehId, const strarg_ routeId, const strarg_ vehType,
   const strarg_ laneId, int laneIndex, double lanePos, double speed
 ) {
+  string routeIdAdapted;
+  // Adapt vehicle routes in case of multipart routes
+  if (vehicleMultipartRouteProgress.contains(vehId)) {
+    // Will be set again when the vehicle exits, no need to set it here
+    int newPartProgress = vehicleMultipartRouteProgress[vehId] + 1;
+    routeIdAdapted = routeId + "_part" + to_string(newPartProgress); 
+  } else {
+    routeIdAdapted = routeId;
+  }
+
   string lanePosStr = std::to_string(lanePos);
   string speedStr = std::to_string(speed);
   #ifndef NDEBUG
@@ -205,7 +287,7 @@ void PartitionManager::addVehicle(
   #endif
   Vehicle::add(
   // Use .c_str() for same reason as [getEdgeVehicles]
-    vehId.c_str(), routeId.c_str(), vehType.c_str(), "now", 
+    vehId.c_str(), routeIdAdapted.c_str(), vehType.c_str(), "now", 
     "first", "base", speedStr
   );
   Vehicle::moveTo(vehId.c_str(), laneId.c_str(), lanePos);
@@ -291,6 +373,17 @@ void PartitionManager::handleOutgoingEdges(int num, vector<vector<string>>& prev
         auto c_veh = veh.c_str();
         string route = Vehicle::getRouteID(c_veh);
 
+        // check if vehicle is on split route
+        int routePartIdx = route.find("_part");
+        bool isMultipart = routePartIdx != string::npos;
+        if (isMultipart) {
+          // Pass just the "main" route id to addvehicle
+          string numStr = route.substr(routePartIdx + 5, route.size() - routePartIdx - 5);
+          int routePartNum = std::stoi(numStr);
+          vehicleMultipartRouteProgress[veh] = routePartNum;
+          route = route.substr(0, routePartIdx);
+        }
+
         if (!toRoutes.contains(route)) {
           // Vehicle doesn't need to pass to neighbor
           continue;
@@ -311,24 +404,7 @@ void PartitionManager::handleOutgoingEdges(int num, vector<vector<string>>& prev
           // from one border edge to another
           bool alreayInTarget = partStub->hasVehicle(veh);
           if(!alreayInTarget) {
-            // check if vehicle is on split route
-            /*
-            int pos = veh.find("_part");
-            if(pos != string::npos) {
-              int routePos = route.find("_part");
-              string routeSub = route.substr(0,routePos+5);
-              // NOTE: Route is now always "_part0"
-              // ERROR
-              route = routeSub+"0";
-              int routePart = 0;
-              string firstEdge = router.getRouteEdges(route, toId)[0];
-              while(firstEdge.compare(outgoingBorderEdges[fromEdgeIdx].id)) {
-                routePart++;
-                route = routeSub+std::to_string(routePart);
-                firstEdge = router.getRouteEdges(route, toId)[0];
-              }
-            }
-            */
+
             #ifndef PSUMO_NO_EXC_CATCH
             try {
             #endif

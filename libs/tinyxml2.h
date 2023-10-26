@@ -64,7 +64,6 @@ distribution.
 #   pragma warning(disable: 4251)
 #endif
 
-//#if defined(_WIN32) || defined(_WIN64) || defined(WIN32) || defined(WIN64) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__MSYS__)
 #ifdef _WIN32
 #   ifdef TINYXML2_EXPORT
 #       define TINYXML2_LIB __declspec(dllexport)

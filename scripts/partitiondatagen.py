@@ -10,6 +10,7 @@ from xml.etree import ElementTree as ET
 from collections import defaultdict
 import os, sys
 import json
+import re
 
 class PartitionDataGen:
     num_parts: int
@@ -92,7 +93,9 @@ class PartitionDataGen:
             route_file = self.routefiles[part_idx]
             root = route_file.getroot()
             for route in root.findall("route"):
-                part_routes[part_idx].append(route.attrib['id'])
+                route_id = route.attrib['id']
+                id_no_part = re.sub(r'_part\d+', '', route_id)
+                part_routes[part_idx].append(id_no_part)
                 
         part_neighbor_routes = [
             {neigh_id: part_routes[neigh_id] for neigh_id in neighbor_lists[part_idx]} 
@@ -113,13 +116,14 @@ class PartitionDataGen:
             root = route_file.getroot()
             
             for route in root.findall(".//route"):
-                id = route.attrib["id"]
+                route_id = route.attrib['id']
+                id_no_part = re.sub(r'_part\d+', '', route_id)
                 route_edges = route.attrib["edges"].split()
                 route_end = route_edges[-1]
 
                 edge = next((edge for edge in border_edges_ls if edge["id"] == route_end), None)
                 if edge:
-                    edge_route_ends[edge["id"]].append(id)
+                    edge_route_ends[edge["id"]].append(id_no_part)
                 
         return part_edge_route_ends
 

@@ -140,6 +140,8 @@ def part_route(
             if route_id in routes_first_parts_by_id:
                 route = routes_first_parts_by_id[route_id]
                 if "is_start" in route.attrib:
+                    # set to proper first id in multipart routes
+                    child.set("route", route.attrib["id"])
                     output_root.append(child)
 
         elif child.tag in unhandled_tags_copy:

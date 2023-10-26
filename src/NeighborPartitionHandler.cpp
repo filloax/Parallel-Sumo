@@ -332,7 +332,7 @@ bool NeighborPartitionHandler::handleAddVehicle(zmq::message_t& request) {
         strings[3],
         laneIndex,
         lanePos,
-        speed
+        speed,
     });
     operationsBufferLock.unlock();
 

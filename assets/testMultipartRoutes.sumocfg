@@ -2,16 +2,14 @@
     <configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
 
     <input>
-        <net-file value="simpleNet.net.xml"/>
-        <route-files value="simpleNet.rou.xml"/>
+        <net-file value="testMultipartRoutes.net.xml"/>
+        <route-files value="testMultipartRoutes.rou.xml"/>
         <gui-settings-file value="gui.settings.xml"/>
-<!--          <additional-files value="e1detectors.xml"/> -->
-
     </input>
 
     <time>
         <begin value="0"/>
-        <end value="200"/>
+        <end value="250"/>
     </time>
 
     <report>
