@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5.0)
-project(ParallelSumo)
+project(ParallelSumo VERSION 0.8)
 
 # Main config
 
@@ -67,7 +67,7 @@ set(SOURCE_FILES_PARTITION
 
 # Add library files
 set(LIB_FILES
-    ${LIBS_DIR}/tinyxml2.cpp #Currently unused
+    ${LIBS_DIR}/tinyxml2.cpp
 )
 
 message(STATUS "SUMO_HOME=$ENV{SUMO_HOME}")
@@ -218,6 +218,15 @@ set_target_properties(ParallelSumo-Partition-Gui PROPERTIES SOURCES "${TargetPar
 
 message(STATUS "Include directories = ${INCLUDE_DIRECTORIES}")
 
+# Install config
+# Used for CPack
+install(TARGETS ParallelSumo ParallelSumo-Partition ParallelSumo-Partition-Gui)
+install(DIRECTORY scripts/ DESTINATION scripts 
+    PATTERN __pycache__ EXCLUDE 
+    PATTERN *.ipynb EXCLUDE 
+)
+install(FILES launch.sh performance-measures-launch.sh run-with-env.sh DESTINATION .)
+install(FILES DIST_README.md DESTINATION . RENAME README.md)
 
 # Cpack config
 set(CPACK_SOURCE_IGNORE_FILES "/build*/"
@@ -232,5 +241,7 @@ set(CPACK_SOURCE_IGNORE_FILES "/build*/"
     "/experiment/"
     ${CPACK_SOURCE_IGNORE_FILES}
 )
-include(CPack)
+set(CPACK_PACKAGE_DIRECTORY "dist")
 set(CPACK_GENERATOR "ZIP")
+set(CPACK_SOURCE_GENERATOR "ZIP")
+include(CPack)
