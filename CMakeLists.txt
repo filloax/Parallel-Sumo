@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.5.0)
 project(ParallelSumo)
 
+# Main config
+
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     # require at least gcc 13
     if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 13)
@@ -125,6 +127,7 @@ if (EXISTS "$ENV{SUMO_HOME}/src")
     add_library(sumocpp SHARED IMPORTED)
 
     set_target_properties(sumocpp PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES /path/client/lib
         IMPORTED_LOCATION "${SUMO_CPP_LIBRARY}"
         INTERFACE_INCLUDE_DIRECTORIES "$ENV{SUMO_HOME}/src"
     )
@@ -214,3 +217,20 @@ get_target_property(TargetPar_SOURCES ParallelSumo-Partition SOURCES)
 set_target_properties(ParallelSumo-Partition-Gui PROPERTIES SOURCES "${TargetPar_SOURCES}")
 
 message(STATUS "Include directories = ${INCLUDE_DIRECTORIES}")
+
+
+# Cpack config
+set(CPACK_SOURCE_IGNORE_FILES "/build*/"
+    "/\\\\..+"
+    "/\\\\..+/"
+    "/dist/"
+    "/bin/"
+    "/lib/"
+    "/data/"
+    "/img/"
+    "/testResults/"
+    "/experiment/"
+    ${CPACK_SOURCE_IGNORE_FILES}
+)
+include(CPack)
+set(CPACK_GENERATOR "ZIP")
