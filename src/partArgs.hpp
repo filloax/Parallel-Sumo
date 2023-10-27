@@ -8,7 +8,7 @@ Author: Filippo Lenzi
 
 #pragma once
 
-#include <argparse/argparse.hpp>
+#include "libs/argparse.hpp"
 #include "args.hpp"
 
 class PartArgs : public Args {

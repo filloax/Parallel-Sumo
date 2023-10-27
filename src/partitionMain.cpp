@@ -20,7 +20,7 @@ Contributions: Filippo Lenzi
 
 #include <nlohmann/json.hpp>
 #include <zmq.hpp>
-#include <argparse/argparse.hpp>
+#include "libs/argparse.hpp"
 
 #include "partArgs.hpp"
 #include "globals.hpp"

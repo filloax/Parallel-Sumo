@@ -13,7 +13,7 @@ Contributions: Filippo Lenzi
 #include <cstdlib>
 #include <vector>
 #include <filesystem>
-#include <argparse/argparse.hpp>
+#include "libs/argparse.hpp"
 #include "ParallelSim.hpp"
 #include "args.hpp"
 #include "globals.hpp"

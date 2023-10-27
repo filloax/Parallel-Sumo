@@ -68,6 +68,7 @@ set(SOURCE_FILES_PARTITION
 # Add library files
 set(LIB_FILES
     ${LIBS_DIR}/tinyxml2.cpp
+    ${LIBS_DIR}/argparse.hpp
 )
 
 message(STATUS "SUMO_HOME=$ENV{SUMO_HOME}")
@@ -84,7 +85,7 @@ if (NOT PSUMO_SINGLE_EXECUTABLE)
     target_compile_definitions(ParallelSumo-Partition-Gui PRIVATE HAVE_LIBSUMOGUI)
     message(STATUS "Added partition executable")
 else()
-    message(WARN "Single executable mode not supported, was left enabled for future expandability")
+    message(FATAL_ERROR "Single executable mode not supported, was left enabled for future expandability")
 endif()
 
 #find cppzmq wrapper, installed by make of cppzmq
@@ -98,14 +99,6 @@ else()
 endif()
 
 find_package(nlohmann_json 3.2.0 REQUIRED)
-
-#fetch argparse
-include(FetchContent)
-FetchContent_Declare(
-    argparse
-    GIT_REPOSITORY https://github.com/p-ranav/argparse.git
-)
-FetchContent_MakeAvailable(argparse)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     # used only in debug
@@ -140,7 +133,7 @@ endif()
 
 link_directories($ENV{SUMO_HOME}/bin)
 
-set(LIBS nlohmann_json::nlohmann_json argparse)
+set(LIBS nlohmann_json::nlohmann_json)
 
 if (cppzmq_FOUND)
     list(APPEND LIBS cppzmq zmq)
@@ -224,6 +217,11 @@ install(TARGETS ParallelSumo ParallelSumo-Partition ParallelSumo-Partition-Gui)
 install(DIRECTORY scripts/ DESTINATION scripts 
     PATTERN __pycache__ EXCLUDE 
     PATTERN *.ipynb EXCLUDE 
+)
+install(DIRECTORY assets/ DESTINATION examples 
+    FILES_MATCHING PATTERN simpleNet.*
+    PATTERN testMultipartRoutes.*
+    PATTERN spider0.*
 )
 install(FILES launch.sh performance-measures-launch.sh run-with-env.sh DESTINATION .)
 install(FILES DIST_README.md DESTINATION . RENAME README.md)
