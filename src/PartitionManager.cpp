@@ -498,7 +498,7 @@ void PartitionManager::signalFinish() {
 }
 
 bool PartitionManager::isMaybeFinished() {
-  return Simulation::getTime() > lastDepartTime + 1 && Simulation::getLoadedNumber() == 0;
+  return Simulation::getTime() > lastDepartTime + 1 && Vehicle::getIDCount() == 0;
 }
 
 bool isFinished(float simTime, int endTime, bool finished) {
@@ -552,7 +552,7 @@ void PartitionManager::runSimulation() {
 
   if (success) {
     log("Simulation loaded with {} starting vehicles, ver. {} - {}\n", 
-      Simulation::getLoadedNumber(), version.first, version.second.c_str());
+      Vehicle::getIDCount(), version.first, version.second.c_str());
   } else {
     stringstream msg;
     msg << "[ERR] [pid=" << getPid() << ",id=" << id << "] Simulation failed to load! Quitting" << std::endl;
