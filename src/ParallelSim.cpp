@@ -87,15 +87,15 @@ ParallelSim::ParallelSim(string cfg, bool gui, int threads, Args& args) :
   if (timeEl != nullptr) {
     tinyxml2::XMLElement* endTimeEl = cfgEl->FirstChildElement("time")->FirstChildElement("end");
     if (endTimeEl == nullptr) {
-      std::cout << "No end time specified. Setting default end time at 1000 steps." << std::endl;
-      endTime = 1000;
+      std::cout << "No end time specified, will only check for empty partitions." << std::endl;
+      endTime = -1;
     } else {
       endTime = std::stoi(endTimeEl->Attribute("value"));
     }
   }
   else {
-    std::cout << "No end time specified. Setting default end time at 1000 steps." << std::endl;
-    endTime = 1000;
+    std::cout << "No end time specified, will only check for empty partitions." << std::endl;
+    endTime = -1;
   }
 }
 
@@ -181,10 +181,12 @@ void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
 
   auto time0 = high_resolution_clock::now();
 
+  std::cout << std::endl << std::endl << ">>> ================================================== <<<" << std::endl << std::endl;
   runProcess(pythonCommand, partitioningArgs);
 
   int status;
   waitProcess(&status);
+  std::cout << std::endl << std::endl << ">>> ================================================== <<<" << std::endl << std::endl;
   if(WEXITSTATUS(status)) {
     std::cout << "failed while partitioning" << std::endl;
     exit(EXIT_FAILURE);
@@ -233,7 +235,11 @@ void ParallelSim::waitForPartitions(vector<pid_t> pids) {
       continue;
     } else {
       // A child process has exited
+      if (endTime >= 0) {
       printf("Coordinator[t] | Partition %d [pid %d] exited with status %d at step %d/%d\n", pidParts[pid], pid, status, steps, endTime);
+      } else {
+      printf("Coordinator[t] | Partition %d [pid %d] exited with status %d at step %d\n", pidParts[pid], pid, status, steps);
+      }
       pids.erase(std::remove(pids.begin(), pids.end(), pid), pids.end());
 
       if (status != 0) {
@@ -258,16 +264,16 @@ void ParallelSim::startSim(){
 
   string partCfg;
 
+  if (endTime >= 0) {
   std::cout << "Will end at time " << endTime << std::endl;
+  } else {
+  std::cout << "Will check empty partitions for end" << std::endl;
+  }
 
   // Context for ZeroMQ message-passing, ideally one per program
   zmq::context_t zctx{1};
 
   // Now Python does this
-  // vector<vector<border_edge_t>> borderEdges(numThreads);
-  // vector<vector<int>> partNeighbors(numThreads);
-  // calcBorderEdges(borderEdges, partNeighbors);
-
   vector<pid_t> pids(numThreads);
 
   // create partitions
@@ -276,16 +282,6 @@ void ParallelSim::startSim(){
       // If in separate executables mode, 
       // create a new process with the partition
       // by launching its exe
-
-      // // Pass data needed for the partition constructor as json
-      // nlohmann::json partData;
-      // partData["id"] = i;
-      // partData["neighbors"] = partNeighbors[i];
-      // // nlohmann::json handles the conversion, see psumoTypes.cpp
-      // partData["borderEdges"] = borderEdges[i];
-      // std::ofstream out(getPartitionDataFile(args.dataDir, i));
-      // out << partData.dump(2);
-      // out.close();
 
       pid_t pid;
 
@@ -395,23 +391,27 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
   }
 
   vector<bool> partitionReachedBarrier(numThreads);
+  vector<bool> partitionReachedStepBarrier(numThreads);
+  vector<bool> partitionEmpty(numThreads);
   vector<bool> partitionStopped(numThreads);
   zmq::message_t message;
 
   for (int i = 0; i < numThreads; i++) {
     partitionReachedBarrier[i] = false;
+    partitionReachedStepBarrier[i] = false;
+    partitionEmpty[i] = false;
     partitionStopped[i] = false;
   }
 
   int barrierPartitions = 0;
+  int stepPartitions = 0;
   int stoppedPartitions = 0;
 
   high_resolution_clock::time_point time0;
   bool setTime = false;
 
-  // First barrier is before simulation start, 
-  // we want to count real simulation steps
-  steps = -1;
+  steps = 0;
+  syncBarrierTimes = 0;
 
   while (true) {
     zmq::poll(pollitems);
@@ -423,38 +423,57 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
         auto socket = sockets[i];
         auto result = socket->recv(message);
         int opcode;
-        std::memcpy(&opcode, message.data(), sizeof(int));
+        auto data = static_cast<char*>(message.data());
+        std::memcpy(&opcode, data, sizeof(int));
 
         switch(opcode) {
           case SyncOps::BARRIER:
-          if (!partitionReachedBarrier[i]) {
-            partitionReachedBarrier[i] = true;
-            barrierPartitions++;
-            if (args.verbose)
-              printf("Coordinator | Partition %d reached barrier (%d/%d)\n", i, barrierPartitions, numThreads); // TEMP
-          } else {
-            stringstream msg;
-            msg << "Partition sent reached barrier message twice! Is " << i << endl;
-            cerr << msg.str();
-            // Send message just incase, but this is undefined behavior
-            socket->send(zmq::str_buffer("repeated"), zmq::send_flags::none);
-          }
-          break;
+            if (!partitionReachedBarrier[i]) {
+              partitionReachedBarrier[i] = true;
+              barrierPartitions++;
+              if (args.verbose)
+                printf("Coordinator | Partition %d reached barrier (%d/%d)\n", i, barrierPartitions, numThreads);
+            } else {
+              stringstream msg;
+              msg << "Partition sent reached barrier message twice! Is " << i << endl;
+              cerr << msg.str();
+              // Send message just incase, but this is undefined behavior
+              socket->send(zmq::str_buffer("repeated"), zmq::send_flags::none);
+            }
+            break;
+
+          case SyncOps::BARRIER_STEP:
+            if (!partitionReachedStepBarrier[i]) {
+              bool empty; 
+              partitionReachedStepBarrier[i] = true;
+              std::memcpy(&empty, data + sizeof(int), sizeof(bool));
+              partitionEmpty[i] = empty;
+              stepPartitions++;
+              if (args.verbose)
+                printf("Coordinator | Partition %d reached step barrier (%d/%d)\n", i, stepPartitions, numThreads);
+            } else {
+              stringstream msg;
+              msg << "Partition sent reached step barrier message twice! Is " << i << endl;
+              cerr << msg.str();
+              // Send message just incase, but this is undefined behavior
+              socket->send(zmq::str_buffer("repeated"), zmq::send_flags::none);
+            }
+            break;
 
           case SyncOps::FINISHED:
-          if (!partitionStopped[i]) {
-            partitionStopped[i] = true;
-            stoppedPartitions++;
-            // Partition stopping doesn't block signaling partition, so immediately respond
-            sockets[i]->send(zmq::str_buffer("ok"), zmq::send_flags::none);
-          } else {
-            stringstream msg;
-            msg << "Partition sent finished message twice! Is " << i << endl;
-            cerr << msg.str();
-            // Send message just incase, but this is undefined behavior
-            socket->send(zmq::str_buffer("repeated"), zmq::send_flags::none);
-          }
-          break;
+            if (!partitionStopped[i]) {
+              partitionStopped[i] = true;
+              stoppedPartitions++;
+              // Partition stopping doesn't block signaling partition, so immediately respond
+              sockets[i]->send(zmq::str_buffer("ok"), zmq::send_flags::none);
+            } else {
+              stringstream msg;
+              msg << "Partition sent finished message twice! Is " << i << endl;
+              cerr << msg.str();
+              // Send message just incase, but this is undefined behavior
+              socket->send(zmq::str_buffer("repeated"), zmq::send_flags::none);
+            }
+            break;
         }
       }
     }
@@ -465,13 +484,47 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
     if (barrierPartitions >= numThreads) {
       if (args.verbose)
         printf("Coordinator | All partitions reached barrier\n");
-      steps++;
+      syncBarrierTimes++;
       barrierPartitions = 0;
       for (int i = 0; i < numThreads; i++) partitionReachedBarrier[i] = false;
 
       // All partitions reached barrier, reply to each to unlock it
       for (int i = 0; i < numThreads; i++) {
         sockets[i]->send(zmq::str_buffer("ok"), zmq::send_flags::none);
+      }
+
+      if (!setTime) {
+        setTime = true;
+        // start time at first barrier
+        time0 = high_resolution_clock::now();
+      }
+    }
+    if (stepPartitions >= numThreads) {
+      if (args.verbose)
+        printf("Coordinator | All partitions reached step barrier\n");
+      steps++;
+      stepPartitions = 0;
+      for (int i = 0; i < numThreads; i++) partitionReachedStepBarrier[i] = false;
+
+      bool allEmpty = true;
+      for (bool empty : partitionEmpty) {
+        if (!empty) {
+          allEmpty = false;
+          break;
+        }
+      }
+
+      if (allEmpty) {
+        if (args.verbose) {
+          printf("Coordinator | All partitions empty after step\n");
+        }
+      }
+
+      // All partitions reached barrier, reply to each to unlock it
+      for (int i = 0; i < numThreads; i++) {
+        zmq::message_t message(sizeof(bool));
+        std::memcpy(message.data(), &allEmpty, sizeof(bool));
+        sockets[i]->send(message, zmq::send_flags::none);
       }
 
       if (!setTime) {

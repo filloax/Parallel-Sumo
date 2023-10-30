@@ -126,6 +126,21 @@ class PartitionDataGen:
                     edge_route_ends[edge["id"]].append(id_no_part)
                 
         return part_edge_route_ends
+    
+    def __get_last_depart_times(self):
+        out = []
+        for part_idx in range(self.num_parts):
+            route_file = self.routefiles[part_idx]
+            root = route_file.getroot()
+            val = 0
+            for el in root:
+                # depart in single elements, end in flow elements
+                if "depart" in el.attrib or "end" in el.attrib:
+                    time = float(el.attrib.get("depart", el.attrib.get("end", None)))  
+                    val = max(time, val)
+                    
+            out.append(val)
+        return out
 
     def generate_partition_data(self):
         self.__load()
@@ -133,10 +148,8 @@ class PartitionDataGen:
         neighbor_lists = self.__find_part_neighbors()
         part_neighbor_routes = self.__get_routes(neighbor_lists)
         part_route_ends = self.__get_route_ends(border_edges)
-        self.__save_to_json_(border_edges, neighbor_lists, part_neighbor_routes, part_route_ends)
-        print(f"Saved edge data to json for {self.num_parts} partitions")
+        part_last_depart_times = self.__get_last_depart_times()
         
-    def __save_to_json_(self, border_edges, neighbor_lists, part_neighbor_routes, part_route_ends):
         for part_id in range(self.num_parts):
             path = os.path.join(self.data_folder, f"partData{part_id}.json")
             with open(path, 'w') as f:
@@ -146,4 +159,7 @@ class PartitionDataGen:
                     'neighbors': neighbor_lists[part_id],
                     'neighborRoutes': part_neighbor_routes[part_id],
                     'borderRouteEnds': part_route_ends[part_id],
+                    'lastDepart': part_last_depart_times[part_id],
                 }, f)
+                
+        print(f"Saved edge data to json for {self.num_parts} partitions")

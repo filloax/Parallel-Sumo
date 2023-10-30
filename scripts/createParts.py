@@ -474,7 +474,6 @@ class NetworkPartitioning:
             if '_part' in id:
                 [prefix, numPart] = id.split('_part')
                 num = int(numPart)
-                print(id, prefix, numPart, last_part_num.get(prefix, None))
                 if num > last_part_num[prefix] + 1:
                     num = last_part_num[prefix] + 1
                     route.set("id", f"{prefix}_part{num}")

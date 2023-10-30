@@ -59,6 +59,7 @@ PartitionManager::PartitionManager(
   vector<partId_t>& neighborPartitions,
   unordered_map<partId_t, unordered_set<string>>& neighborRoutes,
   unordered_map<string, unordered_set<string>>& routeEndsInEdges,
+  float lastDepartTime,
   zmq::context_t& zcontext, int numThreads,
   vector<string> sumoArgs,
   #ifdef PSUMO_SINGLE_EXECUTABLE
@@ -74,6 +75,7 @@ PartitionManager::PartitionManager(
   neighborPartitions(neighborPartitions),
   neighborRoutes(neighborRoutes),
   routeEndsInEdges(routeEndsInEdges),
+  lastDepartTime(lastDepartTime),
   zcontext(zcontext),
   sumoArgs(sumoArgs),
   args(args),
@@ -87,6 +89,8 @@ PartitionManager::PartitionManager(
       auto clientHandler = new NeighborPartitionHandler(*this, partId);
       neighborClientHandlers[partId] = clientHandler;
     }
+
+    logminor("Initialized. lastDepartTime={}, cfg={}\n", lastDepartTime, cfg);
   }
 
 PartitionManager::~PartitionManager() {
@@ -229,7 +233,7 @@ bool PartitionManager::hasVehicle(const string vehId) {
 
   if (args.verbose) {
     stringstream msg;
-    format_to(ostream_iterator<char>(msg), "Manager {} | Has vehicle: current vehicles are [", id);
+    format_to(ostream_iterator<char>(msg), "\tManager {} | hasVehicle: current vehicles are [", id);
     int i = 0;
     for (auto id : allVehicleIds) {
       msg << id;
@@ -240,7 +244,13 @@ bool PartitionManager::hasVehicle(const string vehId) {
     cout << msg.str();
   }
 
-  return allVehicleIds.contains(vehIdToCheck);
+  // logminor("PRE CONTAINS\n");
+  // TODO: it seems that this sometimes leads to a segfault when multiple neighbor handler threads
+  // access it, but it should be thread-safe; investigate later
+  // bool contains = allVehicleIds.contains(vehIdToCheck);
+  auto found = std::find(allVehicleIds.begin(), allVehicleIds.end(), vehIdToCheck);
+  // logminor("POST CONTAINS\n");
+  return found == allVehicleIds.end();
 }
 
 bool PartitionManager::hasVehicleInEdge(const strarg_ vehId, const strarg_ edgeId) {
@@ -452,6 +462,27 @@ void PartitionManager::arriveWaitBarrier() {
   logminor("Reached barrier...\n", id); //TEMP
 }
 
+void PartitionManager::finishStepWait() {
+  int opcode = ParallelSim::SyncOps::BARRIER_STEP;
+  bool maybeFinished = isMaybeFinished();
+
+  zmq::message_t message(sizeof(int) + sizeof(bool));
+  auto data = static_cast<char*>(message.data());
+  std::memcpy(data, &opcode, sizeof(int));
+  std::memcpy(data + sizeof(int), &maybeFinished, sizeof(bool));
+
+  coordinatorSocket->send(message, zmq::send_flags::none);
+
+  logminor("Waiting for step end barrier, maybe finished: {}...\n", maybeFinished);
+
+  // Receive response, essentially blocking
+  zmq::message_t reply(sizeof(bool));
+  auto result = coordinatorSocket->recv(reply);
+  std::memcpy(&finished, reply.data(), sizeof(bool));
+
+  logminor("Reached step end barrier, is finished: {}...\n", finished);
+}
+
 void PartitionManager::signalFinish() {
   int opcode = ParallelSim::SyncOps::FINISHED;
   zmq::message_t message(sizeof(int));
@@ -464,6 +495,18 @@ void PartitionManager::signalFinish() {
   zmq::message_t __;
   auto _ = coordinatorSocket->recv(__);
   logminor("Signaled partition end...\n");
+}
+
+bool PartitionManager::isMaybeFinished() {
+  return Simulation::getTime() > lastDepartTime + 1 && Simulation::getLoadedNumber() == 0;
+}
+
+bool isFinished(float simTime, int endTime, bool finished) {
+  if (endTime > -1) {
+    return simTime >= endTime;
+  } else {
+    return finished;
+  }
 }
 
 // Only run in new process
@@ -561,18 +604,21 @@ void PartitionManager::runSimulation() {
     neighborClientHandlers[partId]->listenOn();
   }
 
-  while(running && Simulation::getTime() < endTime) {
+  while(running && !isFinished(Simulation::getTime(), endTime, finished)) {
     Simulation::step();
 
     allVehicleIdsUpdated = false;
 
-    logminor("Step done ({}/{})\n", (int) Simulation::getTime(), endTime);
+    if (endTime >= 0)
+      logminor("Step done ({}/{})\n", (int) Simulation::getTime(), endTime);
+    else
+      logminor("Step done ({})\n", (int) Simulation::getTime());
     handleIncomingEdges(numToEdges, prevIncomingVehicles);
     logminor("Handled incoming edges\n");
     handleOutgoingEdges(numFromEdges, prevOutgoingVehicles);
     logminor("Handled outgoing edges\n");
     // make sure every time step across partitions is synchronized
-    arriveWaitBarrier();
+    finishStepWait();
 
     // Neighbor handler buffers add vehicle and set speed operations while the 
     // edge handling is going on in each barrier, apply them after to avoid

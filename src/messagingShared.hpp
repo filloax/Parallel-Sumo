@@ -13,6 +13,8 @@ Author: Filippo Lenzi
 #include "psumoTypes.hpp"
 #include "utils.hpp"
 
+// #define SOCK_COUNTS
+
 namespace psumo {
 
 std::string getSocketName(std::string directory, partId_t from, partId_t to, int numThreads);
@@ -27,13 +29,13 @@ std::vector<std::string> readStringsFromMessage(zmq::message_t& message, int off
 // Some inline wrappers for zmq used in debug to check for socket connections
 // may remove later
 
-#ifndef NDEBUG
+#ifdef SOCK_COUNTS
 static int socketCounts = 0;
 #endif
 
 inline void connect(zmq::socket_t& socket, const std::string addr) {
     socket.connect(addr);
-    #ifndef NDEBUG
+    #ifdef SOCK_COUNTS
         // printStackTrace();
         socketCounts++;
         printf("\t\tConnect | Connected sockets: %d [@%d]\n", socketCounts, getPid());
@@ -41,7 +43,7 @@ inline void connect(zmq::socket_t& socket, const std::string addr) {
 }
 inline void bind(zmq::socket_t& socket, const std::string addr) {
     socket.bind(addr);
-    #ifndef NDEBUG
+    #ifdef SOCK_COUNTS
         // printStackTrace();
         socketCounts++;
         printf("\t\tConnect | Connected sockets: %d [@%d]\n", socketCounts, getPid());
@@ -49,7 +51,7 @@ inline void bind(zmq::socket_t& socket, const std::string addr) {
 }
 inline void close(zmq::socket_t& socket) {
     socket.close();
-    #ifndef NDEBUG
+    #ifdef SOCK_COUNTS
         // printStackTrace();
         socketCounts--;
         printf("\t\tDisconnect | Connected sockets: %d [@%d]\n", socketCounts, getPid());

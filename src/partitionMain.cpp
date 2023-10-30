@@ -33,7 +33,7 @@ Contributions: Filippo Lenzi
 using namespace std;
 using namespace psumo;
 
-void loadPartData(int id, string dataFolder, vector<border_edge_t>& borderEdges, vector<partId_t>&, unordered_map<partId_t, unordered_set<string>>&, unordered_map<string, unordered_set<string>>&);
+void loadPartData(int id, string dataFolder, vector<border_edge_t>& borderEdges, vector<partId_t>&, unordered_map<partId_t, unordered_set<string>>&, unordered_map<string, unordered_set<string>>&, float*);
 
 int main(int argc, char* argv[]) {
     #ifdef HAVE_LIBSUMOGUI
@@ -65,11 +65,13 @@ int main(int argc, char* argv[]) {
     vector<partId_t> partNeighbors;
     unordered_map<partId_t, unordered_set<string>> partNeighborRoutes;
     unordered_map<string, unordered_set<string>> routesEndingInEdge;
+    float lastDepartTime;
 
     if (args.numThreads > 1) {
         loadPartData(args.partId, 
             args.dataDir, borderEdges, partNeighbors, 
-            partNeighborRoutes, routesEndingInEdge
+            partNeighborRoutes, routesEndingInEdge, 
+            &lastDepartTime
         );
     } else {
         cout << "Starting partition in 1 thread mode (almost no special treatment, more or less base sumo run)" << endl;
@@ -81,7 +83,7 @@ int main(int argc, char* argv[]) {
     PartitionManager partManager(
         getSumoPath(args.gui), args.partId, cfg, args.endTime,
         partNeighbors, partNeighborRoutes, 
-        routesEndingInEdge,
+        routesEndingInEdge, lastDepartTime,
         zctx, args.numThreads,
         args.sumoArgs, args 
     );
@@ -112,7 +114,8 @@ void loadPartData(
     vector<border_edge_t>& borderEdges, 
     vector<partId_t>& partNeighbors,
     unordered_map<partId_t, unordered_set<string>>& partNeighborRoutes,
-    unordered_map<string, unordered_set<string>>& routesEndingInEdge
+    unordered_map<string, unordered_set<string>>& routesEndingInEdge,
+    float* lastDepartTime
 ) {
     const auto dataFile = getPartitionDataFile(dataFolder, id);
     
@@ -145,4 +148,5 @@ void loadPartData(
     }
 
     routesEndingInEdge = data["borderRouteEnds"].template get<unordered_map<string, unordered_set<string>>>();
+    *lastDepartTime = data["lastDepart"].template get<float>();
 }

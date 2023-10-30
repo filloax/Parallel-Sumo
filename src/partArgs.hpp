@@ -22,8 +22,8 @@ public:
             .scan<'i', int>()
             ;
         program.add_argument("-T", "--end-time")
-            .help("Time to end the simulation at")
-            .default_value(100)
+            .help("Time to end the simulation at, -1 to only check for empty vehicles")
+            .default_value(-1)
             .scan<'i', int>()
             ;
 

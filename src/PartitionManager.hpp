@@ -42,6 +42,7 @@ private:
     const std::vector<partId_t> neighborPartitions;
     const std::unordered_map<partId_t, std::unordered_set<std::string>> neighborRoutes;
     const std::unordered_map<std::string, std::unordered_set<std::string>> routeEndsInEdges;
+    const float lastDepartTime;
     std::unordered_set<std::string> multipartRoutes;
     std::map<int, PartitionEdgesStub*> neighborPartitionStubs;
     std::map<int, NeighborPartitionHandler*> neighborClientHandlers;
@@ -54,7 +55,7 @@ private:
     std::mutex allVehicleIds_lock;
     bool allVehicleIdsUpdated = false;
     std::string cfg;
-    int endTime;
+    int endTime = -1;
     std::vector<std::string> sumoArgs;
     int numThreads;
     #ifdef PSUMO_SINGLE_EXECUTABLE
@@ -63,6 +64,7 @@ private:
     PartArgs& args;
     #endif
     bool running;
+    bool finished = false;
 
     // handle border edges where vehicles are incoming
     void handleIncomingEdges(int, std::vector<std::vector<std::string>>&);
@@ -70,9 +72,12 @@ private:
     void handleOutgoingEdges(int, std::vector<std::vector<std::string>>&);
     // barrier-like behavior via message passing
     void arriveWaitBarrier();
+    // barrier-like behavior via message passing, plus pass amount of vehicles left
+    void finishStepWait();
     // signal to main process that we finished
     void signalFinish();
 
+    bool isMaybeFinished();
     void refreshVehicleIds();
 
     template<typename... _Args > 
@@ -91,6 +96,7 @@ public:
         std::vector<partId_t>& neighborPartitions, 
         std::unordered_map<partId_t, std::unordered_set<std::string>>& neighborRoutes,
         std::unordered_map<std::string, std::unordered_set<std::string>>& routeEndsInEdges,
+        float lastDepartTime,
         zmq::context_t& zcontext, int numThreads,
         std::vector<std::string> sumoArgs, 
         #ifdef PSUMO_SINGLE_EXECUTABLE
