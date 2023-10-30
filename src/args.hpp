@@ -53,6 +53,10 @@ public:
             .default_value(false)
             .implicit_value(true);
         #endif
+        program.add_argument("--log-handled-vehicles")
+            .help("Print a text file in data with the number of handles vehicles at each simulation step for a partition")
+            .default_value(false)
+            .implicit_value(true);
         program.add_argument("--data-dir")
             .help("Data directory to store working files in")
             .default_value("data");
@@ -78,8 +82,9 @@ public:
         skipPart = program.get<bool>("--skip-part");
         keepPoly = program.get<bool>("--keep-poly");
         #ifndef PSUMO_SINGLE_EXECUTABLE
-        pinToCpu = program.get<bool>("--pin-to-cpu");
+        pinToCpu = program.get<bool>("--log-handled-vehicles");
         #endif
+        logHandledVehicles = program.get<bool>("--pin-to-cpu");
         dataDir = program.get<std::string>("--data-dir");
         verbose = program.get<bool>("--verbose");
 
@@ -114,6 +119,7 @@ public:
     #ifndef PSUMO_SINGLE_EXECUTABLE
     bool pinToCpu;
     #endif
+    bool logHandledVehicles;
     std::string dataDir;
     bool verbose;
     std::vector<std::string> sumoArgs;

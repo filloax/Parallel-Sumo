@@ -13,6 +13,7 @@ Contributions: Filippo Lenzi
 #include <cstddef>
 #include <cstdlib>
 #include <exception>
+#include <fstream>
 #include <iostream>
 #include <algorithm>
 #include <iterator>
@@ -569,6 +570,12 @@ void PartitionManager::runSimulation() {
     exit(EXIT_FAILURE);
   }
 
+  filesystem::path logVehiclesFile;
+  if (args.logHandledVehicles) {
+    logVehiclesFile = filesystem::path(args.dataDir) / ("stepVehicles" + to_string(id) + ".csv");
+    std::ofstream(logVehiclesFile, std::ios::out) << "time,vehNo\n";
+  }
+
   // Wait for coordinator process to bind socket
   std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
@@ -613,6 +620,11 @@ void PartitionManager::runSimulation() {
       logminor("Step done ({}/{})\n", (int) Simulation::getTime(), endTime);
     else
       logminor("Step done ({})\n", (int) Simulation::getTime());
+
+    if (args.logHandledVehicles) {
+      std::ofstream(logVehiclesFile, std::ios::app) << Simulation::getTime() << "," << Vehicle::getIDCount() << "\n";
+    }
+
     handleIncomingEdges(numToEdges, prevIncomingVehicles);
     logminor("Handled incoming edges\n");
     handleOutgoingEdges(numFromEdges, prevOutgoingVehicles);

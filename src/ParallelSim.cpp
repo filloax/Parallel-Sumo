@@ -141,13 +141,7 @@ void ParallelSim::getFilePaths(){
 
 }
 
-
-void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
-  // Filippo Lenzi: Originally was implemented in C++
-  // in the original program, but because of it not needing to be
-  // perfectly optimized (as partitioning is run once per simulation configuration)
-  // it was converted to a Python script
-
+pid_t runPython(vector<string>& args) {
   char* pythonPath = std::getenv("PYTHONPATH");
   fs::path pythonCommand = "python";
   if (pythonPath != nullptr) {
@@ -155,6 +149,15 @@ void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
     std::cout << "PYTHONPATH set to " << pythonPathStr << ", using it" << std::endl;
     pythonCommand = pythonPathStr / pythonCommand;
   }
+
+  return runProcess(pythonCommand, args);
+}
+
+void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
+  // Filippo Lenzi: Originally was implemented in C++
+  // in the original program, but because of it not needing to be
+  // perfectly optimized (as partitioning is run once per simulation configuration)
+  // it was converted to a Python script
 
   vector<string> partitioningArgs {
     "scripts/createParts.py",
@@ -182,7 +185,7 @@ void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
   auto time0 = high_resolution_clock::now();
 
   std::cout << std::endl << std::endl << ">>> ================================================== <<<" << std::endl << std::endl;
-  runProcess(pythonCommand, partitioningArgs);
+  runPython(partitioningArgs);
 
   int status;
   waitProcess(&status);
@@ -304,6 +307,7 @@ void ParallelSim::startSim(){
       if (args.skipPart) partArgs.push_back("--skip-part");
       if (args.keepPoly) partArgs.push_back("--keep-poly");
       if (args.pinToCpu) partArgs.push_back("--pin-to-cpu");
+      if (args.logHandledVehicles) partArgs.push_back("--log-handled-vehicles");
       if (args.verbose)  partArgs.push_back("--verbose");
       if (args.sumoArgs.size() > 0)
         partArgs.insert(partArgs.end(), args.sumoArgs.begin(), args.sumoArgs.end());
@@ -361,6 +365,13 @@ void ParallelSim::startSim(){
   coordinatePartitionsSync(zctx);
 
   waitThread.join();
+
+  // Postprocess statistics
+  if (args.logHandledVehicles) {
+    vector<string> gatherArgs { "scripts/gatherStepVehicles.py" };
+    runPython(gatherArgs);
+    int status; waitProcess(&status);
+  }
 }
 
 void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
