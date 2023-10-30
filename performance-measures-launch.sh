@@ -23,7 +23,7 @@ threadNumbers=(
 )
 
 echo "cfg,thread no.,time,part.time" > "testResults/$results_file"
-echo "cfg,thread no.,part,part.time" > "testResults/$results_file_parts"
+echo "cfg,thread no.,part,part.time,vehicles" > "testResults/$results_file_parts"
 
 for cfg in "${files[@]}"; do
     for N in "${threadNumbers[@]}"; do
@@ -37,7 +37,8 @@ for cfg in "${files[@]}"; do
 
             for part_idx in $(seq 0 $(( $N - 1 ))); do
                 part_duration=$(grep -m 1 'Duration:.*s$' "data/log$part_idx.txt" | awk '{print $2}' | sed 's/s//')
-                echo "$cfg,$N,$part_idx,$part_duration" >> "testResults/$results_file_parts"
+                tot_vehicles=$(grep -m 1 'Inserted:' "data/log$part_idx.txt" | awk '{print $2}' )
+                echo "$cfg,$N,$part_idx,$part_duration,$tot_vehicles" >> "testResults/$results_file_parts"
             done
         done
     done
