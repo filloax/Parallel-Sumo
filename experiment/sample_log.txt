@@ -1,0 +1,21 @@
+Loading net-file from '/home/filippo/tesim/Parallel-Sumo/data/part1.net.xml' ... done (55ms).
+Loading additional-files from '/home/filippo/tesim/Parallel-Sumo/assets/bologna-sim/vtype.add.xml' ... done (0ms).
+Loading done.
+Simulation version v1_18_0+2188-429ca5c2ee0 started via libsumo with time: 0.00.
+Simulation ended at time: 3599.00
+Reason: ParallelSim terminated.
+Performance: 
+ Duration: 17.43s
+ Real time factor: 206.459
+ UPS: 15702.156953
+Vehicles: 
+ Inserted: 1326
+ Running: 89
+ Waiting: 0
+Statistics (avg of 1237):
+ RouteLength: 1278.32
+ Speed: 6.31
+ Duration: 210.85
+ WaitingTime: 29.37
+ TimeLoss: 55.21
+ DepartDelay: 0.53
