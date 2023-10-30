@@ -32,7 +32,6 @@ using namespace psumo;
 NeighborPartitionHandler::NeighborPartitionHandler(PartitionManager& owner, int clientId) :
     owner(owner),
     clientId(clientId),
-    socketUri(psumo::getSocketName(owner.getArgs().dataDir, clientId, owner.getId(), owner.getNumThreads())),
     listening(false),
     stop_(false),
     term(false),
@@ -54,6 +53,7 @@ NeighborPartitionHandler::~NeighborPartitionHandler() {
 }
 
 void NeighborPartitionHandler::start() {
+    const string socketUri = psumo::getSocketName(owner.getArgs().dataDir, clientId, owner.getId(), owner.getNumThreads());
     try {
         bind(*socket, socketUri);
     } catch (zmq::error_t& e) {
@@ -114,7 +114,7 @@ void NeighborPartitionHandler::stop() {
 }
 
 void NeighborPartitionHandler::join() {
-    if (listening) {
+    if (listenThread.joinable()) {
         listenThread.join();
         log("Listen thread joined\n");
     } else {
@@ -196,10 +196,10 @@ void NeighborPartitionHandler::listenCheck() {
 }
 
 void NeighborPartitionHandler::listenThreadLogic() {
+    threadDone = false;
     #ifndef NDEBUG
     try {
     #endif
-
     while(!term) {
         if (listening) {
             log("Starting listen loop...\n");
@@ -225,6 +225,7 @@ void NeighborPartitionHandler::listenThreadLogic() {
         exit(EXIT_FAILURE);
     }
     #endif
+    threadDone = true;
 }
 
 bool NeighborPartitionHandler::handleGetEdgeVehicles(zmq::message_t& request) {

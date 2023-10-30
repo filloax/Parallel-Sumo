@@ -77,11 +77,11 @@ private:
   zmq::socket_t* controlSocketThread;
   const int clientId;
   PartitionManager& owner;
-  const std::string socketUri;
   bool threadWaiting;
   bool listening; // Start listening logic, check if still going
   bool stop_; // Stop listening logic, but not thread
   bool term; // Stop listening thread
+  bool threadDone;
   std::thread listenThread;
   std::mutex operationsBufferLock;
   std::mutex secondThreadSignalLock;

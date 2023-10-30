@@ -1,6 +1,8 @@
 #include "utils.hpp"
 
 #include <boost/stacktrace/stacktrace_fwd.hpp>
+#include <cerrno>
+#include <cstdlib>
 #include <cstring>
 #include <map>
 #include <memory>
@@ -17,6 +19,7 @@
     #include <execinfo.h>
     #include <unistd.h>
     #include <sys/wait.h>
+    #include <sched.h>
 #endif
 
 #ifndef NDEBUG
@@ -77,6 +80,22 @@ pid_t getPid() {
         return getpid();
     #else
         cerr << "Windows getpid NYI!" << endl;
+        exit(EXIT_FAILURE);
+    #endif
+}
+
+void bindProcessToCPU(unsigned int cpuId) {
+    #ifndef USING_WIN
+        cpu_set_t mask;
+        CPU_ZERO(&mask);
+        CPU_SET(cpuId, &mask);
+        int result = sched_setaffinity(0, sizeof(mask), &mask);
+        if (result < 0) {
+            std::cerr << "sched_setaffinity failure: " << errno << std::endl;
+            exit(EXIT_FAILURE);
+        }
+    #else
+        cerr << "Windows bindProcessToCPU NYI!" << endl;
         exit(EXIT_FAILURE);
     #endif
 }

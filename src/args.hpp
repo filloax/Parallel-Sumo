@@ -47,6 +47,12 @@ public:
             .help("Keep poly data if present in the original sumocfg (False by default for performance)")
             .default_value(false)
             .implicit_value(true);
+        #ifndef PSUMO_SINGLE_EXECUTABLE
+        program.add_argument("--pin-to-cpu")
+            .help("Force each partition to run on one CPU only (will error in N > n° cpus)")
+            .default_value(false)
+            .implicit_value(true);
+        #endif
         program.add_argument("--data-dir")
             .help("Data directory to store working files in")
             .default_value("data");
@@ -71,6 +77,9 @@ public:
         gui = program.get<bool>("--gui");
         skipPart = program.get<bool>("--skip-part");
         keepPoly = program.get<bool>("--keep-poly");
+        #ifndef PSUMO_SINGLE_EXECUTABLE
+        pinToCpu = program.get<bool>("--pin-to-cpu");
+        #endif
         dataDir = program.get<std::string>("--data-dir");
         verbose = program.get<bool>("--verbose");
 
@@ -102,6 +111,9 @@ public:
     bool gui;
     bool skipPart;
     bool keepPoly;
+    #ifndef PSUMO_SINGLE_EXECUTABLE
+    bool pinToCpu;
+    #endif
     std::string dataDir;
     bool verbose;
     std::vector<std::string> sumoArgs;

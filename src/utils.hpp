@@ -31,6 +31,7 @@ namespace psumo {
     pid_t waitProcess(int* status);
     pid_t getPid();
     void killProcess(pid_t pid);
+    void bindProcessToCPU(unsigned int cpuId);
 
     void printStackTrace();
     std::string getStackTrace();

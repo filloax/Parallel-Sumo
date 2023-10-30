@@ -243,12 +243,16 @@ void ParallelSim::waitForPartitions(vector<pid_t> pids) {
       pids.erase(std::remove(pids.begin(), pids.end(), pid), pids.end());
 
       if (status != 0) {
-        perror("Partition ended with an error!\n");
-        for (auto pid : pids) {
-          // killProcess(pid);
-        }
+        if (!allFinished) {
+          perror("Partition ended with an error!\n");
+          for (auto pid : pids) {
+            killProcess(pid);
+          }
 
-        exit(status);
+          exit(status);
+        } else {
+          perror("Partition ended with an error, but seemingly everything finished!\n");
+        }
       }
     }
   }
@@ -299,6 +303,7 @@ void ParallelSim::startSim(){
       if (args.gui) partArgs.push_back("--gui");
       if (args.skipPart) partArgs.push_back("--skip-part");
       if (args.keepPoly) partArgs.push_back("--keep-poly");
+      if (args.pinToCpu) partArgs.push_back("--pin-to-cpu");
       if (args.verbose)  partArgs.push_back("--verbose");
       if (args.sumoArgs.size() > 0)
         partArgs.insert(partArgs.end(), args.sumoArgs.begin(), args.sumoArgs.end());
@@ -479,6 +484,7 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
     }
 
     if (stoppedPartitions >= numThreads) {
+      allFinished = true;
       break;
     }
     if (barrierPartitions >= numThreads) {

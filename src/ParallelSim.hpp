@@ -28,6 +28,7 @@ class ParallelSim {
     int endTime;
     int steps;
     int syncBarrierTimes;
+    bool allFinished = false;
     Args args;
     // sets the border edges for all partitions
     void calcBorderEdges(std::vector<std::vector<psumo::border_edge_t>>& borderEdges, std::vector<std::vector<psumo::partId_t>>& partNeighbors);

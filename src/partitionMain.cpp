@@ -52,6 +52,11 @@ int main(int argc, char* argv[]) {
         std::exit(1);
     }
 
+    if (args.pinToCpu) {
+        psumo::bindProcessToCPU(args.partId);
+        printf("Pinned partition %d to cpu %d\n", args.partId, args.partId);
+    }
+
     ContextPool::verbose = args.verbose;
 
     filesystem::path dataDir(args.dataDir);
