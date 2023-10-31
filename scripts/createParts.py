@@ -254,13 +254,13 @@ class NetworkPartitioning:
 
         if self.png:
             generate_network_image([os.path.join(self.data_folder, f"part{i}.net.xml") for i in range(num_parts)], 
-                os.path.join(self.data_folder, f"partitions.png"),
+                os.path.join("output", f"partitions.png"),
                 self.data_folder, 
                 self._temp_files,
             )
             # weight color image
             generate_network_image([os.path.join(self.data_folder, f"part{i}.net.xml") for i in range(num_parts)], 
-                os.path.join(self.data_folder, f"partitions_weights.png"),
+                os.path.join("output", f"partitions_weights.png"),
                 self.data_folder, 
                 self._temp_files,
                 edge_weights_file,

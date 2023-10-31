@@ -37,7 +37,10 @@ int main(int argc, char* argv[]) {
     } catch (std::exception& e) {}
     std::filesystem::create_directories(dataDir / "sockets");
     try {
-        std::filesystem::remove_all(OUTDIR);
+        for(auto const& entry: std::filesystem::directory_iterator{OUTDIR}) {
+            if (entry.path().extension() == ".xml")
+                std::filesystem::remove(entry.path());
+        }
     } catch (std::exception& e) {}
     std::filesystem::create_directories(OUTDIR);
 
