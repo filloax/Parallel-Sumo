@@ -19,10 +19,6 @@ endif()
 
 set(CMAKE_CXX_STANDARD 20)
 
-option(PSUMO_SINGLE_EXECUTABLE "Create a single executable 
-    using fork instead of making partitions a separate exe
-    (currently doesn't work)" OFF)
-
 if (NOT DEFINED ENV{SUMO_HOME})
     message(FATAL_ERROR 
     "SUMO_HOME environment variable must be set, both at 
@@ -79,14 +75,10 @@ include_directories(
 )
 
 add_executable(ParallelSumo ${SOURCE_FILES_COORDINATOR} ${LIB_FILES})
-if (NOT PSUMO_SINGLE_EXECUTABLE)
-    add_executable(ParallelSumo-Partition ${SOURCE_FILES_PARTITION} ${LIB_FILES})
-    add_executable(ParallelSumo-Partition-Gui ${SOURCE_FILES_PARTITION} ${LIB_FILES})
-    target_compile_definitions(ParallelSumo-Partition-Gui PRIVATE HAVE_LIBSUMOGUI)
-    message(STATUS "Added partition executable")
-else()
-    message(FATAL_ERROR "Single executable mode not supported, was left enabled for future expandability")
-endif()
+add_executable(ParallelSumo-Partition ${SOURCE_FILES_PARTITION} ${LIB_FILES})
+add_executable(ParallelSumo-Partition-Gui ${SOURCE_FILES_PARTITION} ${LIB_FILES})
+target_compile_definitions(ParallelSumo-Partition-Gui PRIVATE HAVE_LIBSUMOGUI)
+message(STATUS "Added partition executable")
 
 #find cppzmq wrapper, installed by make of cppzmq
 find_package(cppzmq QUIET)
@@ -180,13 +172,6 @@ message(STATUS "Used libs: ${LIBS}")
 target_link_libraries(ParallelSumo LINK_PUBLIC ${LIBS})
 target_link_libraries(ParallelSumo-Partition LINK_PUBLIC ${LIBS})
 target_link_libraries(ParallelSumo-Partition-Gui LINK_PUBLIC ${LIBS})
-
-if (PSUMO_SINGLE_EXECUTABLE)
-    message(STATUS "PSUMO_SINGLE_EXECUTABLE on")
-    add_compile_definitions(PSUMO_SINGLE_EXECUTABLE)
-else()
-    message(STATUS "PSUMO_SINGLE_EXECUTABLE off")
-endif()
 
 # Add header files for IDEs that support autocompletion
 target_sources(ParallelSumo PRIVATE

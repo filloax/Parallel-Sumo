@@ -17,9 +17,7 @@ Contributions: Filippo Lenzi
 
 class ParallelSim {
   private:
-    #ifdef PSUMO_SINGLE_EXECUTABLE
     std::string SUMO_BINARY;
-    #endif
     std::string path;
     std::string cfgFile;
     std::string netFile;

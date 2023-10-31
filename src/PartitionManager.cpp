@@ -64,11 +64,7 @@ PartitionManager::PartitionManager(
   float lastDepartTime,
   zmq::context_t& zcontext, int numThreads,
   vector<string> sumoArgs,
-  #ifdef PSUMO_SINGLE_EXECUTABLE
-  Args& args
-  #else
   PartArgs& args
-  #endif
   ) :
   binary(binary),
   id(id),

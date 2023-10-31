@@ -58,11 +58,7 @@ private:
     int endTime = -1;
     std::vector<std::string> sumoArgs;
     int numThreads;
-    #ifdef PSUMO_SINGLE_EXECUTABLE
-    Args& args;
-    #else
     PartArgs& args;
-    #endif
     bool running;
     bool finished = false;
 
@@ -99,11 +95,7 @@ public:
         float lastDepartTime,
         zmq::context_t& zcontext, int numThreads,
         std::vector<std::string> sumoArgs, 
-        #ifdef PSUMO_SINGLE_EXECUTABLE
-        Args& args
-        #else
         PartArgs& args
-        #endif
     );
     ~PartitionManager();
     

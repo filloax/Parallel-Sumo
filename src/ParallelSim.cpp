@@ -43,11 +43,6 @@ Contributions: Filippo Lenzi
 #include "args.hpp"
 #include "psumoTypes.hpp"
 
-#ifdef PSUMO_SINGLE_EXECUTABLE
-  #include <unistd.h>
-  #include "PartitionManager.hpp"
-#endif
-
 namespace fs = std::filesystem;
 
 using namespace std;
@@ -61,15 +56,6 @@ ParallelSim::ParallelSim(string cfg, bool gui, int threads, Args& args) :
   numThreads(threads),
   args(args)
   {
-
-  #ifdef PSUMO_SINGLE_EXECUTABLE
-    cout << "ParallelSim | Creating in single executable mode!" << endl;
-  #endif
-
-  // set paths for sumo executable binaries
-  #ifdef PSUMO_SINGLE_EXECUTABLE
-  SUMO_BINARY = getSumoPath(gui);
-  #endif
 
   // get end time
   tinyxml2::XMLDocument cfgDoc;
@@ -285,77 +271,45 @@ void ParallelSim::startSim(){
 
   // create partitions
   for(partId_t i=0; i<numThreads; i++) {
-    #ifndef PSUMO_SINGLE_EXECUTABLE
-      // If in separate executables mode, 
-      // create a new process with the partition
-      // by launching its exe
+    // If in separate executables mode, 
+    // create a new process with the partition
+    // by launching its exe
 
-      pid_t pid;
+    pid_t pid;
 
-      auto exeDir = getCurrentExeDirectory();
-      vector<string> partArgs ({
-        "-P", to_string(i),
-        "-T", to_string(endTime),
-        // Base ParallelSumo args, not all needed by partition
-        // but pass everything for consistency
-        "-N", to_string(args.numThreads),
-        "-c", args.cfg,
-        "--part-threads", to_string(args.partitioningThreads),
-        "--data-dir", args.dataDir
-      });
-      if (args.gui) partArgs.push_back("--gui");
-      if (args.skipPart) partArgs.push_back("--skip-part");
-      if (args.keepPoly) partArgs.push_back("--keep-poly");
-      if (args.pinToCpu) partArgs.push_back("--pin-to-cpu");
-      if (args.logHandledVehicles) partArgs.push_back("--log-handled-vehicles");
-      if (args.verbose)  partArgs.push_back("--verbose");
-      if (args.sumoArgs.size() > 0)
-        partArgs.insert(partArgs.end(), args.sumoArgs.begin(), args.sumoArgs.end());
-      
-      if (args.verbose)
-        printf("Coordinator | Starting process for part %i\n", i);
-      filesystem::path path;
-      if (args.gui) {
-        path = exeDir / PROGRAM_NAME_PART_GUI;
-      } else {
-        path = exeDir / PROGRAM_NAME_PART;
-      }
-      pid = runProcess(path, partArgs);
-    #else
-
-    printf("SINGLE EXE VER NOT SUPPORTED AS OF NOW; IS OLD VER\n");
-    exit(EXIT_FAILURE);
-    // If in single executable mode, fork and create the partition here
-    // (still in a new process)
-
-    pid = fork();
-    if (pid == 0) {
-      printf("Creating partition manager %d on cfg file %s\n", i, partCfg.c_str());
-
-        if (numThreads > 1)
-          partCfg = args.dataDir + "/part"+std::to_string(i)+".sumocfg";
-        else // Only one thread, so use normal config, for the purpose of benchmarking comparisions
-          partCfg = cfgFile;
-
-        PartitionManager part(
-          SUMO_BINARY, i, partCfg, endTime, 
-          partNeighbors[i], zctx, numThreads,
-          sumoArgs, args
-        );
-        part.setMyBorderEdges(borderEdges[i]);
-        part.startPartitionLocalProcess();
-        printf("Finished partition %d\n", i);
-        exit(0);
-    } else {
-    #endif
-
-      printf("Created partition %d on pid %d\n", i, pid);
-      pids[i] = pid;
-      // if needed, add pid to a partition pids list later
+    auto exeDir = getCurrentExeDirectory();
+    vector<string> partArgs ({
+      "-P", to_string(i),
+      "-T", to_string(endTime),
+      // Base ParallelSumo args, not all needed by partition
+      // but pass everything for consistency
+      "-N", to_string(args.numThreads),
+      "-c", args.cfg,
+      "--part-threads", to_string(args.partitioningThreads),
+      "--data-dir", args.dataDir
+    });
+    if (args.gui) partArgs.push_back("--gui");
+    if (args.skipPart) partArgs.push_back("--skip-part");
+    if (args.keepPoly) partArgs.push_back("--keep-poly");
+    if (args.pinToCpu) partArgs.push_back("--pin-to-cpu");
+    if (args.logHandledVehicles) partArgs.push_back("--log-handled-vehicles");
+    if (args.verbose)  partArgs.push_back("--verbose");
+    if (args.sumoArgs.size() > 0)
+      partArgs.insert(partArgs.end(), args.sumoArgs.begin(), args.sumoArgs.end());
     
-    #ifdef PSUMO_SINGLE_EXECUTABLE
+    if (args.verbose)
+      printf("Coordinator | Starting process for part %i\n", i);
+    filesystem::path path;
+    if (args.gui) {
+      path = exeDir / PROGRAM_NAME_PART_GUI;
+    } else {
+      path = exeDir / PROGRAM_NAME_PART;
     }
-    #endif
+    pid = runProcess(path, partArgs);
+
+    printf("Created partition %d on pid %d\n", i, pid);
+    pids[i] = pid;
+    // if needed, add pid to a partition pids list later
   }
 
   // Check for partition pids in case of unexpected exit in a subthread
