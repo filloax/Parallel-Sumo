@@ -40,6 +40,7 @@ Contributions: Filippo Lenzi
 #include "PartitionEdgesStub.hpp"
 #include "ParallelSim.hpp"
 #include "partArgs.hpp"
+#include "src/globals.hpp"
 #include "src/psumoTypes.hpp"
 #include "utils.hpp"
 #include "args.hpp"
@@ -520,7 +521,7 @@ void PartitionManager::runSimulation() {
     "-c", cfg, 
     "--start",
     // Output vehicle paths
-    "--netstate-dump", args.dataDir+"/output"+to_string(id)+".xml",
+    "--netstate-dump", OUTDIR+"/output"+to_string(id)+".xml",
     // Log stdout/stderr
     "--log", args.dataDir+"/log"+to_string(id)+".txt"
   };

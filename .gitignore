@@ -4,6 +4,7 @@ bin/**
 .vscode/**
 **/__pycache__/**
 data/**
+output/**
 .venv
 .conda
 .obj/libs/storage.d

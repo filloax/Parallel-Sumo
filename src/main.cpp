@@ -36,8 +36,10 @@ int main(int argc, char* argv[]) {
         std::filesystem::remove_all(dataDir / "sockets");
     } catch (std::exception& e) {}
     std::filesystem::create_directories(dataDir / "sockets");
-
-
+    try {
+        std::filesystem::remove_all(OUTDIR);
+    } catch (std::exception& e) {}
+    std::filesystem::create_directories(OUTDIR);
 
     // params: host server, first port. sumo cfg file, gui option (true), number of threads
     ParallelSim client(args.cfg.c_str(), args.gui, args.numThreads, args);

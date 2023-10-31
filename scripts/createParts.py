@@ -602,10 +602,18 @@ def _split_list(list: list, n: int) -> list[list]:
 
     return parts
 
+def _get_check_args(args: object):
+    d = args.__dict__.copy()
+    del d["verbose"]
+    del d["force"]
+    del d["threads"]
+    del d["timing"]
+    return d
+
 def _save_args(args: object):
     args_path = os.path.join(args.data_folder, "partArgs.json")
     with open(args_path, 'w', encoding='utf-8') as f:
-        json.dump(args.__dict__, f)
+        json.dump(_get_check_args(args), f)
         
 def _check_args(args: object):
     args_path = os.path.join(args.data_folder, "partArgs.json")
@@ -613,7 +621,7 @@ def _check_args(args: object):
         if os.path.exists(args_path):
             with open(args_path, 'r', encoding='utf-8') as f:
                 old_args = json.load(f)
-            return old_args == args.__dict__
+            return old_args == _get_check_args(args)
     except Exception:
         print("Coudldn't check for previous calls' args", file=sys.stderr)
     return False
