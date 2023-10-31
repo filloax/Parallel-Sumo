@@ -51,40 +51,48 @@ class PartitionDataGen:
         border_edges = [[] for _ in range(self.num_parts)]
         
         for id in self.edge_parts:
-            (p0, p1) = self.edge_parts[id]
-            border_edge = self.__get_border_edge_data(id, p0, p1)
-            border_edges[p0].append(border_edge)
-            border_edges[p1].append(border_edge)
+            (p1, p2) = self.edge_parts[id]
+            edge_border_edges = self.__get_border_edge_data(id, p1, p2)
+            border_edges[p1].extend(edge_border_edges[0])
+            border_edges[p2].extend(edge_border_edges[1])
             
         return border_edges
 
-    def __get_border_edge_data(self, edge_id: str, part0: int, part1: int):
-        border_edge = {}
-        border_edge["id"] = edge_id
-        net_file = self.netfiles[part0]
-        root = net_file.getroot()
-        for el in root.findall("edge"):
-            if edge_id == el.get("id"):
-                border_edge["lanes"] = [lane_el.get("id") for lane_el in el.findall("lane")]
-                from_junc = el.get("from")
-                from_, to = None, None
-                for jun_el in root.findall("junction"):
-                    if from_junc == jun_el.get("id"):
-                        if jun_el.get("type") == "dead_end":
-                            from_, to = part1, part0
-                        else:
-                            from_, to = part0, part1
-                        border_edge["from"] = from_
-                        border_edge["to"] = to
-                        break
-        return border_edge
+    def __get_border_edge_data(self, edge_id: str, part1: int, part2: int) -> tuple[list[dict], list[dict]]:
+        net_file = self.netfiles[part1]
+        root = net_file.getroot() 
+        edge_el = root.find(f".//edge[@id='{edge_id}']")
+        if edge_el:
+            # temp: add both ways to both partitions always
+            l =[{
+                "id": edge_id,
+                "lanes": [lane_el.get("id") for lane_el in edge_el.findall("lane")],
+                "from": part1 if i % 2 == 0 else part2,
+                "to": part1 if i % 2 == 1 else part2,
+            } for i in range(2)]
+            return l, l
+            
+            # this currently checks for dead ends only; doesn't include traffic_light, which
+            # seems like it also can be a border from experimentation;
+            # TODO: improve if needed, if not keep adding both ways as edges
+            # from_junc = edge_el.get("from")
+            # from_, to = None, None
+            # jun_el = root.find(f".//junction[@id='{from_junc}']")
+            # if jun_el:
+            #     if jun_el.get("type") == "dead_end":
+            #         from_, to = part2, part1
+            #     else:
+            #         from_, to = part1, part2
+            #     border_edge["from"] = from_
+            #     border_edge["to"] = to
+        raise Exception("Cannot find edge " + edge_id)
 
     def __find_part_neighbors(self):
         part_neighbor_sets = [set() for _ in range(self.num_parts)]
         for id in self.edge_parts:
-            (p0, p1) = self.edge_parts[id]
-            part_neighbor_sets[p0].add(p1)
-            part_neighbor_sets[p1].add(p0)
+            (p1, p2) = self.edge_parts[id]
+            part_neighbor_sets[p1].add(p2)
+            part_neighbor_sets[p2].add(p1)
         return [list(s) for s in part_neighbor_sets]
     
     def __get_routes(self, neighbor_lists):
@@ -115,7 +123,7 @@ class PartitionDataGen:
             route_file = self.routefiles[part_idx]
             root = route_file.getroot()
             
-            for route in root.findall(".//route"):
+            for route in root.findall("route"):
                 route_id = route.attrib['id']
                 id_no_part = re.sub(r'_part\d+', '', route_id)
                 route_edges = route.attrib["edges"].split()

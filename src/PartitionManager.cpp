@@ -248,7 +248,7 @@ bool PartitionManager::hasVehicle(const string vehId) {
   // bool contains = allVehicleIds.contains(vehIdToCheck);
   auto found = std::find(allVehicleIds.begin(), allVehicleIds.end(), vehIdToCheck);
   // logminor("POST CONTAINS\n");
-  return found == allVehicleIds.end();
+  return found != allVehicleIds.end();
 }
 
 bool PartitionManager::hasVehicleInEdge(const strarg_ vehId, const strarg_ edgeId) {
