@@ -213,9 +213,11 @@ vector<string> PartitionManager::getEdgeVehicles(const strarg_ edgeId) {
   // didn't work (as in, it didn't find the data)
   #ifndef NDEBUG
   try {
-    logminor("Running getLastStepVehicleIDs({})\n", edgeId.c_str(), edgeId);
+    logminor("Running getLastStepVehicleIDs({})\n", edgeId, edgeId);
   #endif
-  return Edge::getLastStepVehicleIDs(edgeId.c_str());
+
+  return Edge::getLastStepVehicleIDs(edgeId);
+  
   #ifndef NDEBUG
   } catch(exception& e) {
     logerr("Error in getEdgeVehicles({}): {}\n", edgeId, e.what());
@@ -262,9 +264,11 @@ void PartitionManager::setVehicleSpeed(const strarg_ vehId, double speed) {
   // Also use .c_str() for same reason as [getEdgeVehicles]
   #ifndef NDEBUG
   try {
-    logminor("Running setVehicleSpeed({}, {})\n", vehId.c_str(), vehId, speed);
+    logminor("Running setVehicleSpeed({}, {})\n", vehId, vehId, speed);
   #endif
-  Vehicle::slowDown(vehId.c_str(), speed, Simulation::getDeltaT());
+
+  Vehicle::slowDown(vehId, speed, Simulation::getDeltaT());
+
   #ifndef NDEBUG
   } catch(exception& e) {
     logerr("Error in setVehicleSpeed({}, {}): {}\n", vehId, speed, e.what());
@@ -301,8 +305,7 @@ void PartitionManager::addVehicle(
   #endif
 
     Vehicle::add(
-    // Use .c_str() for same reason as [getEdgeVehicles]
-      vehId.c_str(), routeIdAdapted.c_str(), vehType.c_str(), "now", 
+      vehId, routeIdAdapted, vehType, "now", 
       "first", "base", speedStr
     );
 
@@ -310,14 +313,14 @@ void PartitionManager::addVehicle(
     try {
     #endif
 
-      Vehicle::moveTo(vehId.c_str(), laneId.c_str(), lanePos);
+      Vehicle::moveTo(vehId, laneId, lanePos);
       if (allVehicleIdsUpdated) {
         allVehicleIds.insert(vehId);
       }
 
     #ifndef NTRYCHECKS
     } catch(exception& e) {
-      logerr("Error in addVehicle, moveTo({}, {}, {}): {} (still continuing)\n", 
+      logerr("[WARN] Error in addVehicle, moveTo({}, {}, {}): {} (still continuing)\n", 
         vehId, laneId, lanePos, e.what());
     }
     #endif
