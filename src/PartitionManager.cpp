@@ -295,18 +295,33 @@ void PartitionManager::addVehicle(
 
   string lanePosStr = std::to_string(lanePos);
   string speedStr = std::to_string(speed);
+
   #ifndef NDEBUG
   try {
   #endif
-  Vehicle::add(
-  // Use .c_str() for same reason as [getEdgeVehicles]
-    vehId.c_str(), routeIdAdapted.c_str(), vehType.c_str(), "now", 
-    "first", "base", speedStr
-  );
-  Vehicle::moveTo(vehId.c_str(), laneId.c_str(), lanePos);
-  if (allVehicleIdsUpdated) {
-    allVehicleIds.insert(vehId);
-  }
+
+    Vehicle::add(
+    // Use .c_str() for same reason as [getEdgeVehicles]
+      vehId.c_str(), routeIdAdapted.c_str(), vehType.c_str(), "now", 
+      "first", "base", speedStr
+    );
+
+    #ifndef NTRYCHECKS
+    try {
+    #endif
+
+      Vehicle::moveTo(vehId.c_str(), laneId.c_str(), lanePos);
+      if (allVehicleIdsUpdated) {
+        allVehicleIds.insert(vehId);
+      }
+
+    #ifndef NTRYCHECKS
+    } catch(exception& e) {
+      logerr("Error in addVehicle, moveTo({}, {}, {}): {} (still continuing)\n", 
+        vehId, laneId, lanePos, e.what());
+    }
+    #endif
+
   #ifndef NDEBUG
   logminor("Added vehicle {} to lane {}\n", vehId, laneId);
   } catch(exception& e) {
