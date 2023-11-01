@@ -30,7 +30,7 @@ import json
 
 from convertToMetis import main as convert_to_metis, weight_funs, WEIGHT_ROUTE_NUM
 from sumobin import run_duarouter, run_netconvert
-from sumo2png import generate_network_image
+from sumo2png import generate_network_image, generate_partitions_image
 from partitiondatagen import PartitionDataGen
 from partroutes import part_route
 
@@ -38,6 +38,8 @@ if 'SUMO_HOME' in os.environ:
     SUMO_HOME = os.environ['SUMO_HOME']
     route_tools = os.path.join(SUMO_HOME, 'tools', 'route')
     net_tools = os.path.join(SUMO_HOME, 'tools', 'net')
+    tools = os.path.join(os.environ['SUMO_HOME'], 'tools')
+    sys.path.append(os.path.join(tools))
     sys.path.append(os.path.join(route_tools))
 
     import sumolib
@@ -108,7 +110,8 @@ class NetworkPartitioning:
         self.net_file: str = os.path.join(cfg_dir, cfg_root.find("./input/net-file").attrib["value"])
         self.route_files: list[str] = [os.path.join(cfg_dir, x) for x in cfg_root.find("./input/route-files").attrib["value"].split(",")]
         additional_files_el = cfg_root.find("./input/additional-files")
-        self.additional_files: list[str] = [os.path.join(cfg_dir, x) for x in additional_files_el.attrib["value"].split(",")] if additional_files_el else []
+        self.additional_files: list[str] = [os.path.join(cfg_dir, x) for x in additional_files_el.attrib["value"].split(",")] \
+            if additional_files_el is not None else []
         if not self.keep_poly:
             self.additional_files = list(filter(lambda x: not _is_poly_file(x), self.additional_files))
 
@@ -253,18 +256,7 @@ class NetworkPartitioning:
 
 
         if self.png:
-            generate_network_image([os.path.join(self.data_folder, f"part{i}.net.xml") for i in range(num_parts)], 
-                os.path.join("output", f"partitions.png"),
-                self.data_folder, 
-                self._temp_files,
-            )
-            # weight color image
-            generate_network_image([os.path.join(self.data_folder, f"part{i}.net.xml") for i in range(num_parts)], 
-                os.path.join("output", f"partitions_weights.png"),
-                self.data_folder, 
-                self._temp_files,
-                edge_weights_file,
-            )
+            self.generate_images(num_parts)
             
         print("Generating edge data json...")
         postprocessor = PartitionDataGen(num_parts, self.data_folder)
@@ -280,6 +272,21 @@ class NetworkPartitioning:
         if self.timing:
             end_t = time()
             print(f"Took {timedelta(seconds=(end_t - start_t))}")
+
+    def generate_images(self, num_parts: int):
+        edge_weights_file = os.path.join("data", "edge_weights.json")
+        generate_partitions_image([os.path.join(self.data_folder, f"part{i}.net.xml") for i in range(num_parts)], 
+            os.path.join("output", f"partitions.png"),
+            self.data_folder, 
+            self._temp_files,
+        )
+        # weight color image
+        generate_network_image([os.path.join(self.data_folder, f"part{i}.net.xml") for i in range(num_parts)], 
+            os.path.join("output", f"partitions_weights.png"),
+            self.data_folder, 
+            self._temp_files,
+            edge_weights_file,
+        )
 
     def _preprocess_routes(self):
         processed_routes_path = os.path.join(self.data_folder, "processed_routes.rou.xml")
@@ -628,10 +635,6 @@ def _check_args(args: object):
 
 def worker(args):
     global verbose #, devmode
-    
-    if not args.force and _check_args(args):
-        print("Partitioning same as previous gen in this folder, skipping (use --force to ignore this and run anyways)")
-        return
 
     if args.verbose:
         verbose = True
@@ -666,9 +669,13 @@ def worker(args):
         args.use_cut_routes,
     )
     
-    partitioning.partition_network(args.num_parts)
-    
-    _save_args(args)
+    if not args.force and _check_args(args):
+        print("Partitioning same as previous gen in this folder, skipping (use --force to ignore this and run anyways)")
+        if args.png:
+            partitioning.generate_images(args.num_parts)
+    else:
+        partitioning.partition_network(args.num_parts)
+        _save_args(args)
 
 def main(args):
     worker_process = Process(target=worker, args=[args])

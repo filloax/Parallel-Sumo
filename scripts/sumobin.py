@@ -5,6 +5,9 @@ if 'SUMO_HOME' in os.environ:
     SUMO_HOME = os.environ['SUMO_HOME']
     net_tools = os.path.join(SUMO_HOME, 'tools', 'net')
 
+    tools = os.path.join(os.environ['SUMO_HOME'], 'tools')
+    sys.path.append(os.path.join(tools))
+
     import sumolib
 
     DUAROUTER = sumolib.checkBinary('duarouter')

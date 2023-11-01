@@ -5,15 +5,50 @@ import contextily as cx
 from matplotlib import pyplot as plt
 from PIL import Image
 import geopandas as gpd
+import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+import numpy as np
 from xml.etree import ElementTree as ET
+from shapely.ops import transform
 
 from sumobin import run_net2geojson
 
+part_colors = ['red', 'blue', 'green', 'black', 'purple', 'orange', 'cyan', 'magenta', 'yellow']
+
+def _net_to_gdf(net_file: str, temp_files: set[str], data_folder: str):
+    tree = ET.parse(net_file)
+    root = tree.getroot()
+    location = root.find("location")
+    has_location_data = True
+    if not location:
+        has_location_data = False
+        location = ET.Element("location")
+        location.attrib["netOffset"] = "0,0"
+        location.attrib["convBoundary"] = "0,0,3000,3000"
+        location.attrib["origBoundary"] = "0,0,3000,3000"
+        root.append(location)
+    if "projParameter" not in location.attrib or location.attrib["projParameter"] == "!":
+        has_location_data = False
+        location.attrib["projParameter"] = "+proj=utm +zone=32 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
+    tree.write(net_file)
+
+    name = os.path.basename(net_file).replace('.net.xml', '')
+    geo_json_path = os.path.join(data_folder, f"{name}.geo.json")
+    try:
+        run_net2geojson(net_file, geo_json_path, ['--junctions'])
+    except:
+        print("[ERR] Network doesn't provide geo json representation, cannot save image...", file=sys.stderr)
+        return None, True
+    temp_files.add(geo_json_path)
+    
+    gdf: gpd.GeoDataFrame = gpd.read_file(geo_json_path)
+
+    return gdf, has_location_data
+
+
 def generate_network_image(net_files: list[str], output_png_file:str, data_folder:str, temp_files: set[str], edge_value_file: str = None):
     fig, ax = plt.subplots(figsize=(15,15))
-
-    colors = ['red', 'blue', 'green', 'black', 'purple', 'orange', 'cyan', 'magenta', 'yellow']
 
     edge_value_dict = None
     if edge_value_file:
@@ -22,38 +57,93 @@ def generate_network_image(net_files: list[str], output_png_file:str, data_folde
 
     has_location_data = True
 
-    for net_file, color in zip(net_files, cycle(colors)):
-        tree = ET.parse(net_file)
-        root = tree.getroot()
-        location = root.find("location")
-        if not location:
-            has_location_data = False
-            location = ET.Element("location")
-            location.attrib["netOffset"] = "0,0"
-            location.attrib["convBoundary"] = "0,0,3000,3000"
-            location.attrib["origBoundary"] = "0,0,3000,3000"
-            root.append(location)
-        if "projParameter" not in location.attrib or location.attrib["projParameter"] == "!":
-            has_location_data = False
-            location.attrib["projParameter"] = "+proj=utm +zone=32 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
-        tree.write(net_file)
-
-        name = os.path.basename(net_file).replace('.net.xml', '')
-        geo_json_path = os.path.join(data_folder, f"{name}.geo.json")
-        try:
-            run_net2geojson(net_file, geo_json_path)
-        except:
-            print("[ERR] Network doesn't provide geo json representation, cannot save image...", file=sys.stderr)
-            return None
-        temp_files.add(geo_json_path)
-
-        gdf: gpd.GeoDataFrame = gpd.read_file(geo_json_path)
+    for net_file, color in zip(net_files, cycle(part_colors)):
+        gdf, _has_loc_data = _net_to_gdf(net_file, temp_files, data_folder)
+        has_location_data = has_location_data and _has_loc_data
         if edge_value_dict:
             gdf["value"] = gdf.id.apply(lambda id: edge_value_dict.get(id, -1))
             gdf.plot("value", ax=ax)#, legend=True)
         else:
             gdf.plot(ax=ax, color=color)
 
+    if has_location_data:
+        print("Adding background with contextily...")
+        cx.add_basemap(ax, crs='epsg:4326', source=cx.providers.OpenStreetMap.Mapnik, alpha=0.8)
+    else:
+        print("Cannot add background with contextily, not real road network")
+    
+    plt.savefig(output_png_file, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Saved network png to {output_png_file}")
+    return output_png_file
+
+def _offset_downwards(geometry, offset):
+    return transform(lambda x, y: (x, y - offset), geometry)
+
+def _merge_partition_gdfs(gdfs: list[gpd.GeoDataFrame]) -> gpd.GeoDataFrame:
+    for i, gdf in enumerate(gdfs):
+        gdf["partitions"] = i
+    
+    merged_gdf = pd.concat(gdfs, ignore_index=True)
+    merged_gdf = merged_gdf.groupby('id') \
+        .agg({'partitions': tuple, **{col: 'first' for col in merged_gdf.columns if col != 'partitions' and col != 'id'}}) \
+        .reset_index()
+    merged_gdf = gpd.GeoDataFrame(merged_gdf, geometry="geometry")
+    merged_gdf
+    
+    cmap = plt.cm.Set1
+    partcolors = {}
+    for i in range(len(gdfs)):
+        partcolors[i] = cmap(i)
+
+    offset = 0.00004
+    exploded_rows = []
+    linewidth = 1.5
+    
+    props_to_set = ['color', 'linestyle']#, 'linewidth']
+    props = {prop: [] for prop in props_to_set}
+
+    for index, row in merged_gdf.iterrows():
+        # For now one row for each, but can be changed to have more rows (and so plotted geometries)
+        # for each partition in case
+        
+        geometry = row['geometry']
+        partitions = row['partitions']
+
+        new_row = {
+            'id': row['id'], 'geometry': geometry, 'partitions': partitions,
+        }
+        # geometry = _offset_downwards(geometry, offset)
+        
+        colors = [color for i, color in enumerate(part_colors) if i in partitions]
+        colors_hsl = [mcolors.rgb_to_hsv(mcolors.to_rgba(name)[:-1]) for name in colors]
+        average_hsl = np.mean(colors_hsl, axis=0)
+        average_rgb = mcolors.hsv_to_rgb(average_hsl)
+        props['color'].append(average_rgb)
+        props['linestyle'].append('solid' if len(partitions) == 1 else 'dashed')
+        # props['linewidth'].append(linewidth)
+        exploded_rows.append(new_row)
+                
+    return gpd.GeoDataFrame(exploded_rows).reset_index(drop=True), props
+
+def generate_partitions_image(net_files: list[str], output_png_file:str, data_folder:str, temp_files: set[str]):
+    fig, ax = plt.subplots(figsize=(15,15))
+
+    has_location_data = True
+    
+    gdfs = []
+    for net_file in net_files:
+        gdf, _has_loc_data = _net_to_gdf(net_file, temp_files, data_folder)
+        has_location_data = has_location_data and _has_loc_data
+        gdfs.append(gdf)
+        
+    final_gdf, draw_props = _merge_partition_gdfs(gdfs)
+        
+    final_gdf.plot(ax=ax, **draw_props)
+
+    # gdf["centroid"] = gdf.to_crs('+proj=cea').geometry.centroid.to_crs(gdf.crs)
+    # gdf[gdf.element == "junction"]["centroid"].plot(ax=ax, color=color, markersize=3, edgecolors='black', linewidth=0.5)
+        
     if has_location_data:
         print("Adding background with contextily...")
         cx.add_basemap(ax, crs='epsg:4326', source=cx.providers.OpenStreetMap.Mapnik, alpha=0.8)
