@@ -1,5 +1,5 @@
 import os, sys
-from itertools import cycle
+from itertools import cycle, islice
 import json
 import contextily as cx
 from matplotlib import pyplot as plt
@@ -8,30 +8,38 @@ import geopandas as gpd
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+import matplotlib.patches as mpatches
+import matplotlib.patheffects as patheffects
+from matplotlib.legend_handler import HandlerTuple
 import numpy as np
 from xml.etree import ElementTree as ET
 from shapely.ops import transform
 
 from sumobin import run_net2geojson
 
-part_colors = ['red', 'blue', 'green', 'black', 'purple', 'orange', 'cyan', 'magenta', 'yellow']
+simple_part_colors = ['red', 'blue', 'green', 'black', 'purple', 'cyan', 'magenta', 'orange', 'teal', 'yellow', 'crimson', 'lime']
 
 def _net_to_gdf(net_file: str, temp_files: set[str], data_folder: str):
     tree = ET.parse(net_file)
     root = tree.getroot()
-    location = root.find("location")
+    location = root.find(".//location")
     has_location_data = True
-    if not location:
+    modified = False
+    if location is None:
         has_location_data = False
         location = ET.Element("location")
         location.attrib["netOffset"] = "0,0"
         location.attrib["convBoundary"] = "0,0,3000,3000"
         location.attrib["origBoundary"] = "0,0,3000,3000"
         root.append(location)
+        modified = True
     if "projParameter" not in location.attrib or location.attrib["projParameter"] == "!":
         has_location_data = False
         location.attrib["projParameter"] = "+proj=utm +zone=32 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
-    tree.write(net_file)
+        modified = True
+    if modified:
+        tree.write(net_file)
+        print("Added fixed location data to network file")
 
     name = os.path.basename(net_file).replace('.net.xml', '')
     geo_json_path = os.path.join(data_folder, f"{name}.geo.json")
@@ -46,9 +54,10 @@ def _net_to_gdf(net_file: str, temp_files: set[str], data_folder: str):
 
     return gdf, has_location_data
 
-
 def generate_network_image(net_files: list[str], output_png_file:str, data_folder:str, temp_files: set[str], edge_value_file: str = None):
     fig, ax = plt.subplots(figsize=(15,15))
+    
+    part_colors = simple_part_colors
 
     edge_value_dict = None
     if edge_value_file:
@@ -80,7 +89,7 @@ def generate_network_image(net_files: list[str], output_png_file:str, data_folde
 def _offset_downwards(geometry, offset):
     return transform(lambda x, y: (x, y - offset), geometry)
 
-def _merge_partition_gdfs(gdfs: list[gpd.GeoDataFrame]) -> gpd.GeoDataFrame:
+def _merge_partition_gdfs(gdfs: list[gpd.GeoDataFrame], alt_dashes = False) -> gpd.GeoDataFrame:
     for i, gdf in enumerate(gdfs):
         gdf["partitions"] = i
     
@@ -91,10 +100,11 @@ def _merge_partition_gdfs(gdfs: list[gpd.GeoDataFrame]) -> gpd.GeoDataFrame:
     merged_gdf = gpd.GeoDataFrame(merged_gdf, geometry="geometry")
     merged_gdf
     
-    cmap = plt.cm.Set1
-    partcolors = {}
-    for i in range(len(gdfs)):
-        partcolors[i] = cmap(i)
+    # cmap = plt.cm.Dark2
+    # partcolors = [None for _ in gdfs]
+    # for i in range(len(gdfs)):
+    #     partcolors[i] = cmap(i)
+    partcolors = list(islice(cycle(simple_part_colors), len(gdfs)))
 
     offset = 0.00004
     exploded_rows = []
@@ -110,23 +120,41 @@ def _merge_partition_gdfs(gdfs: list[gpd.GeoDataFrame]) -> gpd.GeoDataFrame:
         geometry = row['geometry']
         partitions = row['partitions']
 
-        new_row = {
-            'id': row['id'], 'geometry': geometry, 'partitions': partitions,
-        }
-        # geometry = _offset_downwards(geometry, offset)
-        
-        colors = [color for i, color in enumerate(part_colors) if i in partitions]
-        colors_hsl = [mcolors.rgb_to_hsv(mcolors.to_rgba(name)[:-1]) for name in colors]
-        average_hsl = np.mean(colors_hsl, axis=0)
-        average_rgb = mcolors.hsv_to_rgb(average_hsl)
-        props['color'].append(average_rgb)
-        props['linestyle'].append('solid' if len(partitions) == 1 else 'dashed')
-        # props['linewidth'].append(linewidth)
-        exploded_rows.append(new_row)
+        if alt_dashes:
+            for i in range(min(2, len(partitions))):
+                part = partitions[i]
+                new_row = {
+                    'id': row['id'], 'geometry': geometry, 'partitions': (part,),
+                }
+                # geometry = _offset_downwards(geometry, offset)
                 
-    return gpd.GeoDataFrame(exploded_rows).reset_index(drop=True), props
+                color = partcolors[part]
+                props['color'].append(color)
+                if i == 0:
+                    props['linestyle'].append('solid' if len(partitions) == 1 else (0, (5, 5)))
+                else:
+                    # dashed other way around
+                    props['linestyle'].append((5, (5, 5)))
+                exploded_rows.append(new_row)
+        else:
+            part = partitions[i]
+            new_row = {
+                'id': row['id'], 'geometry': geometry, 'partitions': (part,),
+            }            
+            colors = [color for i, color in enumerate(partcolors) if i in partitions]
+            colors_hsl = [mcolors.rgb_to_hsv(mcolors.to_rgba(name)[:-1]) for name in colors]
+            # colors_hsl = [mcolors.rgb_to_hsv(color[:3]) for color in colors]
+            average_hsl = np.mean(colors_hsl, axis=0)
+            average_rgb = mcolors.hsv_to_rgb(average_hsl)
+            color = average_rgb
+            props['color'].append(color)
+            props['linestyle'].append('solid' if len(partitions) == 1 else 'dashed')
+            exploded_rows.append(new_row)
 
-def generate_partitions_image(net_files: list[str], output_png_file:str, data_folder:str, temp_files: set[str]):
+    
+    return gpd.GeoDataFrame(exploded_rows).reset_index(drop=True), props, partcolors
+
+def generate_partitions_image(net_files: list[str], output_png_file:str, data_folder:str, temp_files: set[str], better_dashes = False):
     fig, ax = plt.subplots(figsize=(15,15))
 
     has_location_data = True
@@ -137,18 +165,31 @@ def generate_partitions_image(net_files: list[str], output_png_file:str, data_fo
         has_location_data = has_location_data and _has_loc_data
         gdfs.append(gdf)
         
-    final_gdf, draw_props = _merge_partition_gdfs(gdfs)
-        
-    final_gdf.plot(ax=ax, **draw_props)
+    final_gdf, draw_props, partcolors = _merge_partition_gdfs(gdfs, better_dashes)
+            
+    if better_dashes:
+        for i, (index, row) in enumerate(final_gdf.iterrows()):
+            this_props = {prop: draw_props[prop][i] for prop in draw_props}
+            gpd.GeoSeries({'geometry': row['geometry']}).plot(ax=ax, **this_props, path_effects=[patheffects.SimpleLineShadow(shadow_color="black", linewidth=1),patheffects.Normal()])
+    else:
+        final_gdf.plot(ax=ax, **draw_props, path_effects=[patheffects.SimpleLineShadow(shadow_color="black", linewidth=1),patheffects.Normal()])
 
     # gdf["centroid"] = gdf.to_crs('+proj=cea').geometry.centroid.to_crs(gdf.crs)
     # gdf[gdf.element == "junction"]["centroid"].plot(ax=ax, color=color, markersize=3, edgecolors='black', linewidth=0.5)
         
     if has_location_data:
         print("Adding background with contextily...")
-        cx.add_basemap(ax, crs='epsg:4326', source=cx.providers.OpenStreetMap.Mapnik, alpha=0.8)
+        cx.add_basemap(ax, crs='epsg:4326', source=cx.providers.OpenStreetMap.Mapnik, alpha=0.6)
     else:
         print("Cannot add background with contextily, not real road network")
+    
+    # Add labels for each partition color
+    partition_labels = []
+    for i, color in enumerate(partcolors):
+        label = f"Partition {i}"
+        partition_labels.append(mpatches.Patch(color=color, label=label))
+        
+    ax.legend(handles=partition_labels, title='Partitions')
     
     plt.savefig(output_png_file, dpi=300, bbox_inches='tight')
     plt.close()

@@ -72,6 +72,7 @@ parser.add_argument('--use-cut-routes', action='store_true', help="Use cutRoutes
 parser.add_argument('-t', '--timing', action='store_true', help="Measure the timing for the whole process")
 # parser.add_argument('--dev-mode', action='store_false', help="Remove some currently unhandled edge cases from the routes (not ideal in release, currently works inversely for easier development)")
 parser.add_argument('--png', action='store_true', help="Output network images for each partition")
+parser.add_argument('--quick-png', action='store_true', help="Remove some image details to output network images faster")
 parser.add_argument('-v', '--verbose', action='store_true', help="Additional output")
 parser.add_argument('--force', action='store_true', help="Regenerate even if data folder already contains partition data matching these settings")
 
@@ -88,6 +89,7 @@ class NetworkPartitioning:
         data_folder: str = "data",
         keep_poly: bool = False,
         png: bool = False,
+        quick_png: bool = False,
         weight_functions: list[str] = [WEIGHT_ROUTE_NUM],
         threads: int = 1,
         timing: bool = False,
@@ -98,6 +100,7 @@ class NetworkPartitioning:
         self.data_folder = data_folder
         self.keep_poly = keep_poly
         self.png = png
+        self.quick_png = quick_png
         self.weight_functions = weight_functions
         self.threads = threads
         self.timing = timing
@@ -279,6 +282,7 @@ class NetworkPartitioning:
             os.path.join("output", f"partitions.png"),
             self.data_folder, 
             self._temp_files,
+            not self.quick_png,
         )
         # weight color image
         generate_network_image([os.path.join(self.data_folder, f"part{i}.net.xml") for i in range(num_parts)], 
@@ -615,6 +619,8 @@ def _get_check_args(args: object):
     del d["force"]
     del d["threads"]
     del d["timing"]
+    del d["png"]
+    del d["quick_png"]
     return d
 
 def _save_args(args: object):
@@ -627,7 +633,7 @@ def _check_args(args: object):
     try:
         if os.path.exists(args_path):
             with open(args_path, 'r', encoding='utf-8') as f:
-                old_args = json.load(f)
+                old_args = _get_check_args(json.load(f))
             return old_args == _get_check_args(args)
     except Exception:
         print("Coudldn't check for previous calls' args", file=sys.stderr)
@@ -647,6 +653,7 @@ def worker(args):
     cache_dir = os.path.join(args.data_folder, "cache")
     cx.set_cache_dir(cache_dir)
     os.makedirs(cache_dir, exist_ok=True)
+    os.makedirs("output", exist_ok=True)
 
     if args.threads > 1:
         sys.stdout = ThreadPrefixStream()
@@ -663,6 +670,7 @@ def worker(args):
         args.data_folder,
         args.keep_poly,
         args.png,
+        args.quick_png,
         weight_funs,
         args.threads,
         args.timing,
