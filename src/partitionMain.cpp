@@ -94,6 +94,7 @@ int main(int argc, char* argv[]) {
     );
     partManager.setBorderEdges(borderEdges);
     partManager.loadRouteMetadata();
+    partManager.enableTimeMeasures();
 
     try {
         partManager.startPartitionLocalProcess();

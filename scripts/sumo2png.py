@@ -137,9 +137,8 @@ def _merge_partition_gdfs(gdfs: list[gpd.GeoDataFrame], alt_dashes = False) -> g
                     props['linestyle'].append((5, (5, 5)))
                 exploded_rows.append(new_row)
         else:
-            part = partitions[i]
             new_row = {
-                'id': row['id'], 'geometry': geometry, 'partitions': (part,),
+                'id': row['id'], 'geometry': geometry, 'partitions': partitions,
             }            
             colors = [color for i, color in enumerate(partcolors) if i in partitions]
             colors_hsl = [mcolors.rgb_to_hsv(mcolors.to_rgba(name)[:-1]) for name in colors]

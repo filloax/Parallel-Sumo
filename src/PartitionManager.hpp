@@ -56,6 +56,7 @@ private:
     bool allVehicleIdsUpdated = false;
     std::string cfg;
     int endTime = -1;
+    bool measureTime = false;
     std::vector<std::string> sumoArgs;
     int numThreads;
     PartArgs& args;
@@ -108,6 +109,8 @@ public:
     // Load route file to initialize assorted metadata
     // (Filename obtained from args)
     void loadRouteMetadata();
+    // Enable counting time spent inside simulation
+    void enableTimeMeasures();
 
     #ifndef NDEBUG
         #define _str_arg_type const std::string

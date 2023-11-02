@@ -633,7 +633,7 @@ def _check_args(args: object):
     try:
         if os.path.exists(args_path):
             with open(args_path, 'r', encoding='utf-8') as f:
-                old_args = _get_check_args(json.load(f))
+                old_args = json.load(f)
             return old_args == _get_check_args(args)
     except Exception:
         print("Coudldn't check for previous calls' args", file=sys.stderr)

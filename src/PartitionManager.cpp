@@ -178,6 +178,10 @@ void PartitionManager::loadRouteMetadata() {
   }
 }
 
+void PartitionManager::enableTimeMeasures() {
+  measureTime = true;
+}
+
 // Returns pid of simulation process
 int PartitionManager::startPartitionNewProcess() {
   cerr << "startPartitionNewProcess to be redone for platform-neutral stuff, currently unused" << endl;
@@ -626,8 +630,15 @@ void PartitionManager::runSimulation() {
     neighborClientHandlers[partId]->listenOn();
   }
 
+  chrono::high_resolution_clock::duration simTime;
+  chrono::high_resolution_clock::time_point timeBefore;
+
   while(running && !isFinished(Simulation::getTime(), endTime, finished)) {
+    if (measureTime) timeBefore = chrono::high_resolution_clock::now();
     Simulation::step();
+    if (measureTime) {
+      simTime += chrono::high_resolution_clock::now() - timeBefore;
+    }
 
     allVehicleIdsUpdated = false;
 
@@ -637,7 +648,7 @@ void PartitionManager::runSimulation() {
       logminor("Step done ({})\n", (int) Simulation::getTime());
 
     if (args.logHandledVehicles) {
-      std::ofstream(logVehiclesFile, std::ios::app) << Simulation::getTime() << "," << Vehicle::getIDCount() << "\n";
+      ofstream(logVehiclesFile, ios::app) << Simulation::getTime() << "," << Vehicle::getIDCount() << "\n";
     }
 
     handleIncomingEdges(numToEdges, prevIncomingVehicles);
@@ -653,6 +664,13 @@ void PartitionManager::runSimulation() {
     for (partId_t partId : neighborPartitions) {
       neighborClientHandlers[partId]->applyMutableOperations();
     }
+  }
+
+  if (measureTime) {
+    double duration = duration_cast<chrono::milliseconds>(simTime).count() / 1000.0;
+    log("Took {}s for simulation, writing to file...\n", duration);
+    auto timeFile = filesystem::path(args.dataDir) / ("simtime" + to_string(id) + ".txt");
+    ofstream(timeFile) << duration << endl;
   }
 
   logminor("Simulation done, barrier then closing connections...\n");
