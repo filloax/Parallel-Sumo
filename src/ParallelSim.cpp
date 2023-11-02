@@ -322,10 +322,16 @@ void ParallelSim::startSim(){
 
   // Postprocess statistics
   if (args.logHandledVehicles) {
-    vector<string> gatherArgs { "scripts/gatherStepVehicles.py" };
+    vector<string> gatherArgs { "scripts/gather-stepvehicles.py" };
     runPython(gatherArgs);
     int status; waitProcess(&status);
   }
+
+  // if (args.measureSimTimes) {
+    vector<string> gatherTimesArgs { "scripts/gather-simtimes.py" };
+    runPython(gatherTimesArgs);
+    int status; waitProcess(&status);
+  // }
 }
 
 void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
