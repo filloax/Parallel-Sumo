@@ -28,7 +28,7 @@ from time import time
 from datetime import timedelta
 import json
 
-from convertToMetis import main as convert_to_metis, weight_funs, WEIGHT_ROUTE_NUM
+from convertToMetis import main as convert_to_metis, weight_funs, WEIGHT_ROUTE_NUM, node_weight_funs
 from sumobin import run_duarouter, run_netconvert
 from sumo2png import generate_network_image, generate_partitions_image
 from partitiondatagen import PartitionDataGen
@@ -64,8 +64,9 @@ parser.add_argument('-c', '--cfg-file', required=True, type=str, help="Path to t
 parser.add_argument('--data-folder', default='data', help="Folder to store output in")
 parser.add_argument('--keep-poly', action='store_true', help="Keep poly files from the sumocfg (disabled by default for performance)")
 parser.add_argument('--no-metis', action='store_true', help="Partition network using grid (unsupported)")
-parser.add_argument('-w', '--weight-fun', choices=weight_funs, nargs="*", default=[WEIGHT_ROUTE_NUM], help="One or more weighting methods to use")
-parser.add_argument('-nw', '--no-weight', action='store_true', help="Do not use edge weights in partitioning")
+parser.add_argument('-w', '--weight-fun', choices=weight_funs, nargs="*", default=[WEIGHT_ROUTE_NUM], help="One or more weighting methods to use, use with no values to avoid using any weight.")
+parser.add_argument('-W', '--node-weight', choices=node_weight_funs, nargs="*", default=[], help="One or more weighting methods to use" \
+    " for nodes, use with no values to avoid using any weight.")
 parser.add_argument('-T', '--threads', type=int, default=8, help="Threads to use for processing the partitioning of the network, will be capped to partition num")
 # remove default True later
 parser.add_argument('--use-cut-routes', action='store_true', help="Use cutRoutes.py with postprocessing instead of our custom script to cut the routes (probably slower, but might handle different cases)")
@@ -91,6 +92,7 @@ class NetworkPartitioning:
         png: bool = False,
         quick_png: bool = False,
         weight_functions: list[str] = [WEIGHT_ROUTE_NUM],
+        node_weight_functions: list[str] = [],
         threads: int = 1,
         timing: bool = False,
         use_cut_routes: bool = False,
@@ -102,6 +104,7 @@ class NetworkPartitioning:
         self.png = png
         self.quick_png = quick_png
         self.weight_functions = weight_functions
+        self.node_weight_functions = node_weight_functions
         self.threads = threads
         self.timing = timing
         self.use_cut_routes = use_cut_routes
@@ -163,6 +166,7 @@ class NetworkPartitioning:
                 self.net_file, num_parts, 
                 routefile=processed_routes_path,
                 weight_functions=self.weight_functions,
+                node_weight_functions=self.node_weight_functions,
                 output_weights_file=edge_weights_file,
             )
 
@@ -204,7 +208,7 @@ class NetworkPartitioning:
 
         # Make immutable for multithreading
         part_bounds = tuple(part_bounds_list)
-        
+                
         thread_num = min(num_parts, self.threads)
         if thread_num < num_parts:
             print(f"Reduced thread num to part num ({thread_num} instead of {self.threads})")
@@ -658,10 +662,6 @@ def worker(args):
     if args.threads > 1:
         sys.stdout = ThreadPrefixStream()
 
-    weight_funs = args.weight_fun
-    if args.no_weight:
-        weight_funs = []
-
     print("Initializing network partitioning...")
 
     partitioning = NetworkPartitioning(
@@ -671,7 +671,8 @@ def worker(args):
         args.keep_poly,
         args.png,
         args.quick_png,
-        weight_funs,
+        args.weight_fun,
+        args.node_weight,
         args.threads,
         args.timing,
         args.use_cut_routes,

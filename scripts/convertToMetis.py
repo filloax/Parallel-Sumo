@@ -14,12 +14,22 @@ import argparse
 from pymetis import Options, part_graph
 import xml.etree.ElementTree as ET
 
+NO_WEIGHT = "none"
+
 WEIGHT_ROUTE_NUM = "route-num"
 WEIGHT_OSM = "osm"
+
+NODE_WEIGHT_CONNECTIONS = "connections"
+NODE_WEIGHT_CONNECTIONS_EXP = "connexp"
 
 weight_funs = [
     WEIGHT_ROUTE_NUM,
     WEIGHT_OSM,
+]
+
+node_weight_funs = [
+    NODE_WEIGHT_CONNECTIONS,
+    NODE_WEIGHT_CONNECTIONS_EXP,
 ]
 
 parser = argparse.ArgumentParser()
@@ -57,6 +67,7 @@ def remove_empty_parts(partitions: list[int], warn: bool = True):
 def main(
     netfile: str, numparts: int,
     weight_functions: list[str]|str = WEIGHT_ROUTE_NUM,
+    node_weight_functions: list[str]|str = None,
     routefile: str = None,
     output_weights_file: str = None,
     check_connection: bool = False,
@@ -66,9 +77,11 @@ def main(
     Args:
         netfile (str): Path to the SUMO network
         numparts (int): Target amount of parts (might have less in output)
-        weights (list[str] | str, optional): One of more weightings to use
-            for edges, current options: "{WEIGHT_OSM}", "{WEIGHT_ROUTE_NUM}".
+        weight_functions (list[str] | str, optional): One of more weightings to use
+            for edges, current options: {", ".join(weight_funs)}.
             "{WEIGHT_ROUTE_NUM}" requires a routefile to be set.
+        node_weight_functions (list[str] | str, optional): One or more weightings to use for nodes, 
+            by default uses None. 
         routefile (str, optional): path to route file to use for weighting.
         output_weights_file (str, optional): if set, path to write a file with the weight of each node, in a json-dict format.
         check_connection (bool, optional): check if the graph is connected
@@ -78,8 +91,14 @@ def main(
     elif type(weight_functions) is str:
         weight_functions = [weight_functions]
     weight_functions = set(weight_functions)
-
+    if node_weight_functions is None:
+        node_weight_functions = []
+    elif type(node_weight_functions) is str:
+        node_weight_functions = [node_weight_functions]
+    node_weight_functions = set(node_weight_functions)
+    
     print(f"Weight functions used: {', '.join(weight_functions)}")
+    print(f"Node weight functions used: {', '.join(node_weight_functions)}")
 
     if routefile is None and WEIGHT_ROUTE_NUM in weight_functions:
         weight_functions.remove(WEIGHT_ROUTE_NUM)
@@ -88,7 +107,6 @@ def main(
     net: sumolib.net.Net = readNet(netfile)
     nodes: list[Node] = net.getNodes()
 
-    nodes_dict = {}
     edge_weights = {}
     numNodes = len(nodes)
 
@@ -105,7 +123,21 @@ def main(
             wgt += _get_edge_weight_routecount(edge, routes_by_edge)
         return int(wgt * 100)
     
+    def get_node_weight(node: Node) -> int:
+        nonlocal routes_by_edge, node_weight_functions
+        
+        wgt = 1
+        if NODE_WEIGHT_CONNECTIONS in node_weight_functions:
+            wgt += len(node.getConnections())
+        if NODE_WEIGHT_CONNECTIONS_EXP in node_weight_functions:
+            wgt += len(node.getConnections()) ** 2
+        return int(wgt * 100)
+    
     def get_node_data(node: Node) -> tuple[list[int],list[int]]:
+        """For every node in the graph, return 
+        its neighbor nodes, the weight of the edges
+        to every neighbor node, and its weight
+        """
         nonlocal edge_weights
 
         # Consider both outgoing and ingoing edges for every node, 
@@ -131,18 +163,20 @@ def main(
 
         nodes = list(weights.keys())
         # Make sure to keep the same order
-        return nodes, [weights[node] for node in nodes]
+        return nodes, [weights[node] for node in nodes], get_node_weight(node)
 
     # for every node i, list of its neighbors indices
     neighbors = [None] * numNodes
     neighbor_edge_wgts = [None] * numNodes
+    node_weights = [None] * numNodes
     num_neighs_total = 0
+    nodes_dict = {node: i for i, node in enumerate(nodes)}
+    
     for i, node in enumerate(nodes):
-        nodes_dict[node] = i
-    for i, node in enumerate(nodes):
-        neighs, weights = get_node_data(node)
-        neighbor_edge_wgts[i] = weights
+        neighs, eweights, weight = get_node_data(node)
+        neighbor_edge_wgts[i] = eweights
         neighbors[i] = [nodes_dict[nnode] for nnode in neighs]
+        node_weights[i] = weight
         num_neighs_total += len(neighbors[i])
 
     if check_connection:
@@ -151,11 +185,10 @@ def main(
         except RecursionError:
             print("Graph too big for connection check, will assume it is", file=sys.stderr)
             is_connected = True
+        print(f"Graph connected: {is_connected}")
     else:
         print("Check connection disabled")
         is_connected = True
-
-    print(f"Graph connected: {is_connected}")
 
     xadj, adjncy, eweights = _neighbors_to_xadj(neighbors, num_neighs_total, neighbor_edge_wgts)
 
@@ -166,6 +199,15 @@ def main(
     # execute metis
     # See metis docs [here](https://github.com/KarypisLab/METIS/blob/master/manual/manual.pdf)
     # (page 13 at time of writing) for parameter explanations
+    
+    # In particular, weights (with ncon=1, aka one weight per vertex):
+    # The weights of the vertices (if any) are stored in an additional array called vwgt. [...]. Note that if
+    # each vertex has only a single weight, then vwgt will contain n elements, and vwgt[i] will store the weight of the
+    # ith vertex. The vertex-weights must be integers greater or equal to zero. [...]
+    # The weights of the edges (if any) are stored in an additional array called adjwgt. This array contains 2m elements,
+    # and the weight of edge adjncy[j] is stored at location adjwgt[j]. The edge-weights must be integers greater
+    # than zero.
+    
     metis_opts = Options()
     metis_opts.contig = True
     try:
@@ -173,6 +215,7 @@ def main(
         edgecuts, parts = part_graph(
             numparts, xadj=xadj, adjncy=adjncy,
             eweights=eweights,
+            vweights=node_weights,
             recursive=False,
             options=metis_opts,
         )
@@ -182,6 +225,7 @@ def main(
         edgecuts, parts = part_graph(
             numparts, xadj=xadj, adjncy=adjncy,
             eweights=eweights,
+            vweights=node_weights,
             recursive=False,
             options=metis_opts,
         )
@@ -239,7 +283,7 @@ def _is_connected(neighbors):
 
     return all(visited.values())
 
-def _get_other_node(edge, node):
+def _get_other_node(edge, node) -> Node:
     to_node: Node = edge.getToNode()
     from_node: Node = edge.getFromNode()
     return to_node if to_node.getID() != node.getID() else from_node

@@ -8,3 +8,5 @@ matplotlib
 contextily
 lxml # for better xpath
 rtree
+tqdm
+pillow

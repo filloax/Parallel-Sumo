@@ -24,3 +24,4 @@ compile_commands.json
 *_output.xml
 assets/bologna-sim/**
 *.code-workspace
+testResults/**
