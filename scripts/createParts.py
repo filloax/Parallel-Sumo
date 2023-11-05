@@ -42,13 +42,7 @@ if 'SUMO_HOME' in os.environ:
     sys.path.append(os.path.join(tools))
     sys.path.append(os.path.join(route_tools))
 
-    import sumolib
     from cutRoutes import main as cut_routes, get_options as cut_routes_options
-
-    DUAROUTER = sumolib.checkBinary('duarouter')
-    NETCONVERT = sumolib.checkBinary('netconvert')
-    # python script, but doesn't have an importable main function (everything in the if)
-    NET2GEOJSON = os.path.join(net_tools, "net2geojson")
 else:
     sys.exit("please declare environment variable 'SUMO_HOME'")
 
@@ -303,7 +297,7 @@ class NetworkPartitioning:
         # duarouter is a SUMO executable that computes trips, aka SUMO routes defined only by start and end points
         # and normally computed via shortest-path at runtime
         # (This also ends up joining the input route files into one regardless)
-        run_duarouter(self.net_file, self.route_files, interm_file_path, additional_files=self.additional_files)
+        run_duarouter(self.net_file, self.route_files, interm_file_path, additional_files=self.additional_files, quiet=not verbose)
         # Remove alternate path files
         for f in glob.glob(f'{self.data_folder}/*.alt.xml'):
             os.remove(f)

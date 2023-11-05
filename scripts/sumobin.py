@@ -24,9 +24,9 @@ def run_netconvert(net_file: str, output: str, extra_options: list[str] = [], mu
         *extra_options,
         "-s", net_file,
         "-o", output,
-    ], "netconvert | ", mute_warnings)
+    ], "netconvert | ", mute_warnings=mute_warnings)
 
-def run_duarouter(net_file: str, trip_files: list[str], output: str, additional_files: list[str] = [], extra_options: list[str] = []):
+def run_duarouter(net_file: str, trip_files: list[str], output: str, additional_files: list[str] = [], extra_options: list[str] = [], quiet = False):
     opts = [
         DUAROUTER,
         "--net-file", net_file, 
@@ -38,7 +38,7 @@ def run_duarouter(net_file: str, trip_files: list[str], output: str, additional_
         opts.extend([
             "--additional-files", ",".join(additional_files),
         ])
-    _run_prefix(opts, "duarouter | ")
+    _run_prefix(opts, "duarouter | ", mute_stdout=quiet)
 
 def run_net2geojson(net_file: str, output: str, extra_options: list[str] = []):
     _run_prefix([
@@ -48,7 +48,7 @@ def run_net2geojson(net_file: str, output: str, extra_options: list[str] = []):
         *extra_options
     ], "net2geojson | ")
 
-def _run_prefix(args: list[str], prefix: str = "PROC | ", mute_warnings: bool = False, **kwargs):
+def _run_prefix(args: list[str], prefix: str = "PROC | ", mute_warnings: bool = False, mute_stdout: bool = False, **kwargs):
     print("Executing", " ".join(args))
 
     process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, **kwargs)
@@ -60,7 +60,7 @@ def _run_prefix(args: list[str], prefix: str = "PROC | ", mute_warnings: bool = 
         if not stdout_line and not stderr_line:
             break
 
-        if stdout_line:
+        if stdout_line and not mute_stdout:
             # Prepend your prefix to stdout lines and print them
             print(prefix + stdout_line, end="")
 
