@@ -12,9 +12,9 @@
     </input>
 
     <output>
-        <emission-output value="./results/emission_output.xml"/>
+        <!-- <emission-output value="./results/emission_output.xml"/>
         <summary-output value="./results/summary_output.xml"/>
-        <vehroute-output value="./results/vehicle-route_output.xml"/>
+        <vehroute-output value="./results/vehicle-route_output.xml"/> -->
     </output>
 
     <processing>

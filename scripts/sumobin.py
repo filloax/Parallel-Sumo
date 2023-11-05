@@ -53,25 +53,31 @@ def _run_prefix(args: list[str], prefix: str = "PROC | ", mute_warnings: bool = 
 
     process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, **kwargs)
 
-    while True:
-        stdout_line = process.stdout.readline()
-        stderr_line = process.stderr.readline()
+    printed_success = False
+    stop = False
+    while not stop:
+        output, err = process.communicate()
 
-        if not stdout_line and not stderr_line:
+        if not output and not err:
             break
 
-        if stdout_line and not mute_stdout:
+        if output and not mute_stdout:
             # Prepend your prefix to stdout lines and print them
-            print(prefix + stdout_line, end="")
+            print('\n'.join(prefix + o for o in output.split('\n')), end="")
 
-        if stderr_line \
-        and (not mute_warnings or not re.search(r'^[^\w]*warning', stderr_line.lower())):
+        if err  and (not mute_warnings or not re.search(r'^[^\w]*warning', err.lower())):
             # Handle stderr separately if needed
-            print(prefix +stderr_line, end="", file=sys.stderr)
+            print('\n'.join(prefix + e for e in err.split('\n')), end="", file=sys.stderr)
 
-    # Wait for the process to complete
+        if process.returncode is not None:
+            stop = True
+
+    # Wait for the process to complete, just in case
     process.wait()
 
     # Check the return code
     if process.returncode != 0:
-        raise Exception(f"Error: The command failed with a non-zero exit code: {process.returncode}")
+        if printed_success:
+            print(prefix + f"[WARN] Printed Success but exited with non zero exit code {process.returncode}, will continue anyways", file=sys.stderr)
+        else:
+            raise Exception(f"Error: The command failed with a non-zero exit code: {process.returncode}")
