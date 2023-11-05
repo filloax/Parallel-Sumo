@@ -1,5 +1,6 @@
 import os, sys
 import subprocess
+import re
 
 if 'SUMO_HOME' in os.environ:
     SUMO_HOME = os.environ['SUMO_HOME']
@@ -17,13 +18,13 @@ if 'SUMO_HOME' in os.environ:
 else:
     sys.exit("please declare environment variable 'SUMO_HOME'")
 
-def run_netconvert(net_file: str, output: str, extra_options: list[str] = []):
+def run_netconvert(net_file: str, output: str, extra_options: list[str] = [], mute_warnings: bool = False):
     _run_prefix([
         NETCONVERT,
         *extra_options,
         "-s", net_file,
-        "-o", output
-    ], "netconvert | ")
+        "-o", output,
+    ], "netconvert | ", mute_warnings)
 
 def run_duarouter(net_file: str, trip_files: list[str], output: str, additional_files: list[str] = [], extra_options: list[str] = []):
     opts = [
@@ -47,7 +48,7 @@ def run_net2geojson(net_file: str, output: str, extra_options: list[str] = []):
         *extra_options
     ], "net2geojson | ")
 
-def _run_prefix(args: list[str], prefix: str = "PROC | ", **kwargs):
+def _run_prefix(args: list[str], prefix: str = "PROC | ", mute_warnings: bool = False, **kwargs):
     print("Executing", " ".join(args))
 
     process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, **kwargs)
@@ -63,7 +64,8 @@ def _run_prefix(args: list[str], prefix: str = "PROC | ", **kwargs):
             # Prepend your prefix to stdout lines and print them
             print(prefix + stdout_line, end="")
 
-        if stderr_line:
+        if stderr_line \
+        and (not mute_warnings or not re.search(r'^[^\w]*warning', stderr_line.lower())):
             # Handle stderr separately if needed
             print(prefix +stderr_line, end="", file=sys.stderr)
 

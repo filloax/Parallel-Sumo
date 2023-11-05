@@ -354,7 +354,7 @@ class NetworkPartitioning:
 
         # Create partition
         print(f"Running netConvert for partition {part_idx}...")
-        run_netconvert(net_file=self.net_file, output=net_part, extra_options=netconvert_options)
+        run_netconvert(net_file=self.net_file, output=net_part, extra_options=netconvert_options, mute_warnings=not verbose)
         print(f"Partition {part_idx} successfully created")
 
         if self.use_cut_routes:

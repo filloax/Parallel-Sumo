@@ -328,7 +328,7 @@ void ParallelSim::startSim(){
   }
 
   // if (args.measureSimTimes) {
-    vector<string> gatherTimesArgs { "scripts/gather-simtimes.py" };
+    vector<string> gatherTimesArgs { "scripts/gather-times.py" };
     runPython(gatherTimesArgs);
     int status; waitProcess(&status);
   // }

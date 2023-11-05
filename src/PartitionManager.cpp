@@ -10,6 +10,7 @@ Contributions: Filippo Lenzi
 */
 #include "PartitionManager.hpp"
 
+#include <bits/chrono.h>
 #include <cstddef>
 #include <cstdlib>
 #include <exception>
@@ -179,7 +180,8 @@ void PartitionManager::loadRouteMetadata() {
 }
 
 void PartitionManager::enableTimeMeasures() {
-  measureTime = true;
+  measureSimTime = true;
+  measureInteractTime = true;
 }
 
 // Returns pid of simulation process
@@ -630,13 +632,13 @@ void PartitionManager::runSimulation() {
     neighborClientHandlers[partId]->listenOn();
   }
 
-  chrono::high_resolution_clock::duration simTime;
+  chrono::high_resolution_clock::duration simTime(0), commTime(0);
   chrono::high_resolution_clock::time_point timeBefore;
 
   while(running && !isFinished(Simulation::getTime(), endTime, finished)) {
-    if (measureTime) timeBefore = chrono::high_resolution_clock::now();
+    if (measureSimTime) timeBefore = chrono::high_resolution_clock::now();
     Simulation::step();
-    if (measureTime) {
+    if (measureSimTime) {
       simTime += chrono::high_resolution_clock::now() - timeBefore;
     }
 
@@ -651,12 +653,21 @@ void PartitionManager::runSimulation() {
       ofstream(logVehiclesFile, ios::app) << Simulation::getTime() << "," << Vehicle::getIDCount() << "\n";
     }
 
+    if (measureInteractTime) timeBefore = chrono::high_resolution_clock::now();
+
     handleIncomingEdges(numToEdges, prevIncomingVehicles);
     logminor("Handled incoming edges\n");
     handleOutgoingEdges(numFromEdges, prevOutgoingVehicles);
     logminor("Handled outgoing edges\n");
+
+    if (measureInteractTime) {
+      commTime += chrono::high_resolution_clock::now() - timeBefore;
+    }
+
     // make sure every time step across partitions is synchronized
     finishStepWait();
+
+    if (measureInteractTime) timeBefore = chrono::high_resolution_clock::now();
 
     // Neighbor handler buffers add vehicle and set speed operations while the 
     // edge handling is going on in each barrier, apply them after to avoid
@@ -664,12 +675,22 @@ void PartitionManager::runSimulation() {
     for (partId_t partId : neighborPartitions) {
       neighborClientHandlers[partId]->applyMutableOperations();
     }
+
+    if (measureInteractTime) {
+      commTime += chrono::high_resolution_clock::now() - timeBefore;
+    }
   }
 
-  if (measureTime) {
+  if (measureSimTime) {
     double duration = duration_cast<chrono::milliseconds>(simTime).count() / 1000.0;
     log("Took {}s for simulation, writing to file...\n", duration);
     auto timeFile = filesystem::path(args.dataDir) / ("simtime" + to_string(id) + ".txt");
+    ofstream(timeFile) << duration << endl;
+  }
+  if (measureInteractTime) {
+    double duration = duration_cast<chrono::milliseconds>(commTime).count() / 1000.0;
+    log("Took {}s for interactions, writing to file...\n", duration);
+    auto timeFile = filesystem::path(args.dataDir) / ("commtime" + to_string(id) + ".txt");
     ofstream(timeFile) << duration << endl;
   }
 
