@@ -1,3 +1,5 @@
 # notebook requirements
 ipykernel
 matplotlib
+jinja2
+ipython

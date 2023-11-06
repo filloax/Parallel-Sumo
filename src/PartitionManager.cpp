@@ -253,7 +253,6 @@ bool PartitionManager::hasVehicle(const string vehId) {
   // logminor("PRE CONTAINS\n");
   // TODO: it seems that this sometimes leads to a segfault when multiple neighbor handler threads
   // access it, but it should be thread-safe; investigate later
-  // bool contains = allVehicleIds.contains(vehIdToCheck);
   auto found = std::find(allVehicleIds.begin(), allVehicleIds.end(), vehIdToCheck);
   // logminor("POST CONTAINS\n");
   return found != allVehicleIds.end();
@@ -642,15 +641,16 @@ void PartitionManager::runSimulation() {
     neighborClientHandlers[partId]->listenOn();
   }
 
-  chrono::high_resolution_clock::duration simTime(0), commTime(0);
-  chrono::high_resolution_clock::time_point timeBefore;
+  chrono::steady_clock::duration simTime, commTime;//, handleTime;
+  simTime = chrono::steady_clock::duration::zero();
+  commTime = chrono::steady_clock::duration::zero();
+  // handleTime = chrono::steady_clock::duration::zero();
+  chrono::steady_clock::time_point timeBefore;
 
   while(running && !isFinished(Simulation::getTime(), endTime, finished)) {
-    if (measureSimTime) timeBefore = chrono::high_resolution_clock::now();
+    if (measureSimTime) timeBefore = chrono::steady_clock::now();
     Simulation::step();
-    if (measureSimTime) {
-      simTime += chrono::high_resolution_clock::now() - timeBefore;
-    }
+    if (measureSimTime) simTime += chrono::steady_clock::now() - timeBefore;
 
     allVehicleIdsUpdated = false;
 
@@ -663,21 +663,19 @@ void PartitionManager::runSimulation() {
       ofstream(logVehiclesFile, ios::app) << Simulation::getTime() << "," << Vehicle::getIDCount() << "\n";
     }
 
-    if (measureInteractTime) timeBefore = chrono::high_resolution_clock::now();
+    if (measureInteractTime) timeBefore = chrono::steady_clock::now();
 
     handleIncomingEdges(numToEdges, prevIncomingVehicles);
     logminor("Handled incoming edges\n");
     handleOutgoingEdges(numFromEdges, prevOutgoingVehicles);
     logminor("Handled outgoing edges\n");
 
-    if (measureInteractTime) {
-      commTime += chrono::high_resolution_clock::now() - timeBefore;
-    }
+    if (measureInteractTime) commTime += chrono::steady_clock::now() - timeBefore;
 
     // make sure every time step across partitions is synchronized
     finishStepWait();
 
-    if (measureInteractTime) timeBefore = chrono::high_resolution_clock::now();
+    // if (measureInteractTime) timeBefore = chrono::steady_clock::now();
 
     // Neighbor handler buffers add vehicle and set speed operations while the 
     // edge handling is going on in each barrier, apply them after to avoid
@@ -686,9 +684,7 @@ void PartitionManager::runSimulation() {
       neighborClientHandlers[partId]->applyMutableOperations();
     }
 
-    if (measureInteractTime) {
-      commTime += chrono::high_resolution_clock::now() - timeBefore;
-    }
+    // if (measureInteractTime) handleTime += chrono::steady_clock::now() - timeBefore;
   }
 
   if (measureSimTime) {
@@ -699,9 +695,14 @@ void PartitionManager::runSimulation() {
   }
   if (measureInteractTime) {
     double duration = duration_cast<chrono::milliseconds>(commTime).count() / 1000.0;
-    log("Took {}s for interactions, writing to file...\n", duration);
+    log("Took {}s for communication, writing to file...\n", duration);
     auto timeFile = filesystem::path(args.dataDir) / ("commtime" + to_string(id) + ".txt");
     ofstream(timeFile) << duration << endl;
+
+    // double handleDuration = duration_cast<chrono::milliseconds>(handleTime).count() / 1000.0;
+    // log("Took {}s for handling interactions, writing to file...\n", handleDuration);
+    // auto timeFile2 = filesystem::path(args.dataDir) / ("handletime" + to_string(id) + ".txt");
+    // ofstream(timeFile2) << handleDuration << endl;
   }
 
   logminor("Simulation done, barrier then closing connections...\n");

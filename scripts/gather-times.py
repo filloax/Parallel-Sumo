@@ -8,7 +8,7 @@ def work(prefix: str, out: str):
     for file_path in file_paths:
         column_name = int(file_path.split(prefix)[1].split(".txt")[0])
         with open(file_path, 'r') as f:
-            value = float(f.read()) / 1000 #seconds
+            value = float(f.read()) #seconds
         data[column_name] = [value]
 
     df = pd.DataFrame(data)
