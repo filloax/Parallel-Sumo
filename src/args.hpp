@@ -15,6 +15,7 @@ Author: Filippo Lenzi
 class Args {
 protected:
     bool printOnParse = true;
+    std::vector<std::string> argv_;
 public:
     Args(argparse::ArgumentParser& program):
     program(program)
@@ -55,6 +56,10 @@ public:
             .help("Print a text file in data with the number of handles vehicles at each simulation step for a partition")
             .default_value(false)
             .implicit_value(true);
+        program.add_argument("--log-msg-num")
+            .help("Print a text file with the number of messages passed in each iteration")
+            .default_value(false)
+            .implicit_value(true);
         program.add_argument("--data-dir")
             .help("Data directory to store working files in")
             .default_value("data");
@@ -65,6 +70,10 @@ public:
     }
 
     void parse_known_args(int argc, char* argv[]) {
+        for (int i = 1; i < argc; i++) {
+            argv_.push_back(argv[i]);
+        }
+
         auto extraArgs = program.parse_known_args(argc, argv);
         // Split partitioning args and sumo args via extra args
         auto pipeIt = std::find(extraArgs.begin(), extraArgs.end(), "--");
@@ -81,6 +90,7 @@ public:
         keepPoly = program.get<bool>("--keep-poly");
         pinToCpu = program.get<bool>("--log-handled-vehicles");
         logHandledVehicles = program.get<bool>("--pin-to-cpu");
+        logMsgNum = program.get<bool>("--log-msg-num");
         dataDir = program.get<std::string>("--data-dir");
         verbose = program.get<bool>("--verbose");
 
@@ -106,6 +116,10 @@ public:
         }
     }
 
+    std::vector<std::string>& getArgVector() {
+        return argv_;
+    }
+
     std::string cfg;
     int numThreads;
     int partitioningThreads;
@@ -114,6 +128,7 @@ public:
     bool keepPoly;
     bool pinToCpu;
     bool logHandledVehicles;
+    bool logMsgNum;
     std::string dataDir;
     bool verbose;
     std::vector<std::string> sumoArgs;

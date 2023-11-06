@@ -290,22 +290,11 @@ void ParallelSim::startSim(){
     auto exeDir = getCurrentExeDirectory();
     vector<string> partArgs ({
       "-P", to_string(i),
-      "-T", to_string(endTime),
-      // Base ParallelSumo args, not all needed by partition
-      // but pass everything for consistency
-      "-N", to_string(args.numThreads),
-      "-c", args.cfg,
-      "--part-threads", to_string(args.partitioningThreads),
-      "--data-dir", args.dataDir
+      "-T", to_string(endTime)
     });
-    if (args.gui) partArgs.push_back("--gui");
-    if (args.skipPart) partArgs.push_back("--skip-part");
-    if (args.keepPoly) partArgs.push_back("--keep-poly");
-    if (args.pinToCpu) partArgs.push_back("--pin-to-cpu");
-    if (args.logHandledVehicles) partArgs.push_back("--log-handled-vehicles");
-    if (args.verbose)  partArgs.push_back("--verbose");
-    if (args.sumoArgs.size() > 0)
-      partArgs.insert(partArgs.end(), args.sumoArgs.begin(), args.sumoArgs.end());
+    auto myArgs = args.getArgVector();
+    partArgs.reserve(myArgs.size());
+    partArgs.insert(partArgs.end(), myArgs.begin(), myArgs.end());
     
     if (args.verbose)
       printf("Coordinator | Starting process for part %i\n", i);
