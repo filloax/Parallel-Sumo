@@ -299,6 +299,16 @@ void PartitionManager::addVehicle(
       vehicleMultipartRouteProgress[vehId] = 0;
       routeIdAdapted = routeId + "_part0"; 
     }
+
+    auto routes = Route::getIDList();
+    auto routeIt = find(routes.begin(), routes.end(), routeIdAdapted);
+
+    // Edge case: if this part's route doesn't exist, it means a vehicle was added again after 
+    // it did all the route parts, meaning its total route ends on another partition and on a
+    // border edge TO this partition
+    if (routeIt == routes.end()) {
+      return;
+    }
   } else {
     routeIdAdapted = routeId;
   }

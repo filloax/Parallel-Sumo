@@ -80,4 +80,5 @@ def _run_prefix(args: list[str], prefix: str = "PROC | ", mute_warnings: bool = 
         if printed_success:
             print(prefix + f"[WARN] Printed Success but exited with non zero exit code {process.returncode}, will continue anyways", file=sys.stderr)
         else:
-            raise Exception(f"Error: The command failed with a non-zero exit code: {process.returncode}")
+            print(f"Error: The command failed with a non-zero exit code: {process.returncode}, exiting", file=sys.stderr)
+            sys.exit(process.returncode)

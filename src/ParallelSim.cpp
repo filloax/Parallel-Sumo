@@ -172,17 +172,18 @@ void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
   auto time0 = high_resolution_clock::now();
 
   std::cout << std::endl << std::endl << ">>> ================================================== <<<" << std::endl << std::endl;
-  runPython(partitioningArgs);
+  auto pid = runPython(partitioningArgs);
 
   bool exited;
   int status;
-  waitProcess(&exited, &status);
+  while (pid != waitProcess(&exited, &status)) {}
+  
   std::cout << std::endl << std::endl << ">>> ================================================== <<<" << std::endl << std::endl;
   if (!exited || status != 0) {
     std::cout << "failed while partitioning" << std::endl;
     exit(EXIT_FAILURE);
   }
-  printf("partitioning successful with status: %d\n", WEXITSTATUS(status));
+  printf("partitioning successful with status: %d\n", status);
 
   auto time1 = high_resolution_clock::now();
   auto duration = duration_cast<microseconds>(time1 - time0).count() / 1000.0;

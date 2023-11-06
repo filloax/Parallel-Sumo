@@ -313,7 +313,7 @@ class NetworkPartitioning:
             ff_v = []
             for file in filtered_files:
                 fn, ext = os.path.splitext(os.path.basename(file))
-                outf = os.path.join(filter_dir, f"{fn}-fv.{ext}")
+                outf = os.path.join(filter_dir, f"{fn}-fv{ext}")
                 
                 orig_routes_tree: ElementTree = lxml.etree.parse(file)
                 orig_routes: Element = orig_routes_tree.getroot()
@@ -718,7 +718,7 @@ def worker(args):
         args.timing,
         args.use_cut_routes,
         {
-            "filter_vehicles": args.filter_vehs.split(",")
+            "filter_vehicles": [v for v in args.filter_vehs.split(",") if v != ""]
         },
     )
     
@@ -740,6 +740,8 @@ def main(args):
     except KeyboardInterrupt:
         print("Quitting.")
         worker_process.terminate()
+
+    sys.exit(worker_process.exitcode)
 
 if __name__ == '__main__':
     main(parser.parse_args())
