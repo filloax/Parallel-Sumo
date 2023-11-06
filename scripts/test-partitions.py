@@ -10,6 +10,10 @@ import shutil
 import itertools
 from PIL import Image, ImageDraw, ImageFont
 import json
+import argparse
+
+# -----------------------------------------------------------
+# Configuration
 
 test_sumocfg = "assets/bologna-sim/osm.sumocfg"
 
@@ -27,6 +31,17 @@ node_weights = [
     "connexp"
 ]
 
+# -----------------------------------------------------------
+# Args
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-S", "--skip-tests", action='store_true', help="Skip testing, only calculate aggregate results from last test")
+args = parser.parse_args()
+
+skip_tests = args.skip_tests
+
+# -----------------------------------------------------------
+# Logic
 
 test_dir = ""
 
@@ -41,8 +56,22 @@ def _get_dir(args: RunArgs):
     cfgname = '_'.join(args["sumo_cfg"].split(os.sep)[-2:]).replace(".sumocfg", "")
     cdirn = f"""{args["id"]:2}_N{args["num_parts"]}___E{'-'.join(args["edge_wgts"])}_V{'-'.join(args["node_wgts"])}_{cfgname}"""
     return os.path.join(test_dir, cdirn)
+    
+handled_files = [
+    "allStepVehicles.csv",
+    "allStepVehicles.png",
+    "simtimes.csv",
+    "commtimes.csv",
+    "partitions.png",
+]
 
 def run_test(args: RunArgs):
+    for file in handled_files:
+        try:
+            os.remove(os.path.join("output", file))
+        except:
+            pass
+    
     if platform.system() == "Windows":
         proc_args = ["PowerShell", "./launch.ps1"]
     else:
@@ -80,25 +109,19 @@ def run_test(args: RunArgs):
         
     print("Running with command:", ' '.join(proc_args))
     with open(os.path.join(cdir, "log.txt"), "w") as f:
-        subprocess.run(proc_args, check=True,
+        completed_proc = subprocess.run(proc_args, check=True,
             stdout=f,
             stderr=subprocess.STDOUT,
         )
+        completed_proc.check_returncode()
+        print("\tFinished with exit code:", completed_proc.returncode)
     
 def gather_outputs(args: RunArgs):
     cdir = _get_dir(args)
     os.makedirs(cdir, exist_ok=True)
     
-    copy_list = [
-        "allStepVehicles.csv",
-        "allStepVehicles.png",
-        "simtimes.csv",
-        "commtimes.csv",
-        "partitions.png",
-    ]
-    
-    for item in copy_list:
-        shutil.copyfile(os.path.join("output", item), os.path.join(cdir, item))
+    for file in handled_files:
+        shutil.copyfile(os.path.join("output", file), os.path.join(cdir, file))
     
     simtimes_df = pd.read_csv("output/simtimes.csv")
     commtimes_df = pd.read_csv("output/commtimes.csv")
@@ -209,13 +232,31 @@ def generate_grids():
         sdata = data.sort_values("id")
         _make_grid(f"_{group}", sdata["image"], sdata["name"], sdata["args"])
     
+def calc_vehcount_variances():
+    subdirs = [f for f in os.listdir(test_dir) if os.path.isdir(os.path.join(test_dir, f))]
+    
+    for dirname in subdirs:
+        dirpath = os.path.join(test_dir, dirname)
+        stepvehs_csv = os.path.join(dirpath, "allStepVehicles.csv")
+        df = pd.read_csv(stepvehs_csv)
+        
+        print(dirname)
+        print(df.var())
+        break
     
 def main():
     global test_dir
     
     now = datetime.datetime.now()
-    # test_dirn = "2023-11-4_23-7-50"
-    test_dirn = f"ptest_{now.year}-{now.month}-{now.day}_{now.hour}-{now.minute}-{now.second}"
+    if skip_tests:
+        subdirs = [dirn for dirn in os.listdir("testResults") if dirn.startswith("ptest")]
+        subdirs.sort()
+        if len(subdirs) == 0:
+            print("skip_tests is True but no test results were found!", file=sys.stderr)
+            exit(-1)
+        test_dirn = subdirs[-1]
+    else:
+        test_dirn = f"ptest_{now.year}-{now.month}-{now.day}_{now.hour}-{now.minute}-{now.second}"
     test_dir = os.path.join("testResults", test_dirn)
     rootdir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
     os.chdir(rootdir)
@@ -232,33 +273,36 @@ def main():
     for r in range(len(node_weights) + 1):
         node_weight_sets.extend(list(itertools.combinations(node_weights, r)))
 
-    print(f"Running tests for cfg {test_sumocfg}")
-    print("Parameters:")
-    print(f"\tPartition numbers: {num_parts}")
-    print(f"\tEdge weight methods: {edge_weights}")
-    print(f"\tNode weight methods: {node_weights}")
-    print(f"Will run {len(edge_weights_sets) * len(node_weight_sets)} weights combinations, for a total of {len(edge_weights_sets) * len(node_weight_sets) * len(num_parts)} configurations")
-    print("==============================")
-        
-    print("Starting!")
-        
-    i = 0
-    for N in num_parts:
-        for ewgts, vwgts in itertools.product(edge_weights_sets, node_weight_sets):
-            args = RunArgs({
-                "num_parts": N,
-                "sumo_cfg": test_sumocfg,
-                "edge_wgts": ewgts,
-                "node_wgts": vwgts,
-                "id": i,
-            })
-            run_test(args)
-            gather_outputs(args)
-            i+=1
-        
-    print("Done!")
+    if not skip_tests:
+        print(f"Running tests for cfg {test_sumocfg}")
+        print("Parameters:")
+        print(f"\tPartition numbers: {num_parts}")
+        print(f"\tEdge weight methods: {edge_weights}")
+        print(f"\tNode weight methods: {node_weights}")
+        print(f"Will run {len(edge_weights_sets) * len(node_weight_sets)} weights combinations, for a total of {len(edge_weights_sets) * len(node_weight_sets) * len(num_parts)} configurations")
+        print("==============================")
+            
+        print("Starting!")
+            
+        i = 0
+        for N in num_parts:
+            for ewgts, vwgts in itertools.product(edge_weights_sets, node_weight_sets):
+                args = RunArgs({
+                    "num_parts": N,
+                    "sumo_cfg": test_sumocfg,
+                    "edge_wgts": ewgts,
+                    "node_wgts": vwgts,
+                    "id": i,
+                })
+                run_test(args)
+                gather_outputs(args)
+                i+=1
+            
+        print("Done running tests!")
+    print("Calculating aggregate results")
     
     generate_grids()
+    calc_vehcount_variances()
         
 
 if __name__ == '__main__':

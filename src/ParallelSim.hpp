@@ -32,8 +32,8 @@ class ParallelSim {
     void calcBorderEdges(std::vector<std::vector<psumo::border_edge_t>>& borderEdges, std::vector<std::vector<psumo::partId_t>>& partNeighbors);
     void loadRealNumThreads();
 
-    void coordinatePartitionsSync(zmq::context_t&);
-    void waitForPartitions(std::vector<pid_t> pids);
+    int coordinatePartitionsSync(zmq::context_t&, std::shared_ptr<zmq::socket_t> controlSocket);
+    void waitForPartitions(std::vector<pid_t> pids, std::shared_ptr<zmq::socket_t> controlSocket);
 
   public:
     ParallelSim(const std::string file, bool gui, int threads, Args& args);

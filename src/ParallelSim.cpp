@@ -17,6 +17,7 @@ Contributions: Filippo Lenzi
 #include <iostream>
 #include <fstream>
 #include <ctime>
+#include <memory>
 #include <nlohmann/json_fwd.hpp>
 #include <ratio>
 #include <sstream>
@@ -173,10 +174,11 @@ void ParallelSim::partitionNetwork(bool metis, bool keepPoly){
   std::cout << std::endl << std::endl << ">>> ================================================== <<<" << std::endl << std::endl;
   runPython(partitioningArgs);
 
+  bool exited;
   int status;
-  waitProcess(&status);
+  waitProcess(&exited, &status);
   std::cout << std::endl << std::endl << ">>> ================================================== <<<" << std::endl << std::endl;
-  if(WEXITSTATUS(status)) {
+  if (!exited || status != 0) {
     std::cout << "failed while partitioning" << std::endl;
     exit(EXIT_FAILURE);
   }
@@ -207,7 +209,7 @@ void ParallelSim::loadRealNumThreads() {
 }
 
 // Not reference so thread starts correctly
-void ParallelSim::waitForPartitions(vector<pid_t> pids) {
+void ParallelSim::waitForPartitions(vector<pid_t> pids, shared_ptr<zmq::socket_t> controlSocket) {
   map<pid_t, partId_t> pidParts;
   for (int i = 0; i < pids.size(); i++) {
     pidParts[pids[i]] = i;
@@ -216,8 +218,9 @@ void ParallelSim::waitForPartitions(vector<pid_t> pids) {
   if (args.verbose)
     __printVector(pids, "Coordinator[t] | Started partition wait thread, pids are: ", ", ", true, std::cout);
   while (pids.size() > 0) {
+    bool exited;
     int status;
-    pid_t pid = waitProcess(&status);
+    pid_t pid = waitProcess(&exited, &status);
     if (pid == -1) {
       perror("waitProcess\n");
     } else if (pid == 0) {
@@ -225,20 +228,26 @@ void ParallelSim::waitForPartitions(vector<pid_t> pids) {
     } else {
       // A child process has exited
       if (endTime >= 0) {
-      printf("Coordinator[t] | Partition %d [pid %d] exited with status %d at step %d/%d\n", pidParts[pid], pid, status, steps, endTime);
+        printf("Coordinator[t] | Partition %d [pid %d] exited with status %d at step %d/%d\n", pidParts[pid], pid, status, steps, endTime);
       } else {
-      printf("Coordinator[t] | Partition %d [pid %d] exited with status %d at step %d\n", pidParts[pid], pid, status, steps);
+        printf("Coordinator[t] | Partition %d [pid %d] exited with status %d at step %d\n", pidParts[pid], pid, status, steps);
       }
       pids.erase(std::remove(pids.begin(), pids.end(), pid), pids.end());
 
-      if (status != 0) {
+      if (!exited || status != 0) {
         if (!allFinished) {
           perror("Partition ended with an error!\n");
           for (auto pid : pids) {
             killProcess(pid);
           }
+          
+          // Do not exit here, as it messes with memory sometimes; just message main thread
+          zmq::message_t doneMessage(sizeof(int));
+          std::memcpy(doneMessage.data(), &status, sizeof(int));
+          controlSocket->send(doneMessage, zmq::send_flags::none);
+          perror("Sent exit message to main thread, quitting wait thread\n");
+          return;
 
-          exit(status);
         } else {
           perror("Partition ended with an error, but seemingly everything finished!\n");
         }
@@ -312,38 +321,59 @@ void ParallelSim::startSim(){
     // if needed, add pid to a partition pids list later
   }
 
+  auto controlSocketThread = shared_ptr<zmq::socket_t>(
+    makeSocket(zctx, zmq::socket_type::pair)
+  );
+  auto controlSocketMain = shared_ptr<zmq::socket_t>(
+    makeSocket(zctx, zmq::socket_type::pair)
+  );
+
+  stringstream uris;
+  uris << "inproc://ctrl";
+  auto uri = uris.str();
+  bind(*controlSocketThread, uri);
+  connect(*controlSocketMain, uri);
+
   // Check for partition pids in case of unexpected exit in a subthread
-  thread waitThread(&ParallelSim::waitForPartitions, this, pids);
+  thread waitThread(&ParallelSim::waitForPartitions, this, pids, controlSocketThread);
 
   // From here, coordination process
-  coordinatePartitionsSync(zctx);
+  int finishStatus = coordinatePartitionsSync(zctx, controlSocketMain);
 
   waitThread.join();
+
+  controlSocketThread->close();
+  controlSocketMain->close();
+
+  if (finishStatus % 256 != 0) {
+    printf("Got finish status %d, exiting!\n", finishStatus);
+    exit(finishStatus);
+  }
 
   // Postprocess statistics
   if (args.logHandledVehicles) {
     vector<string> gatherArgs { "scripts/gather-stepvehicles.py" };
     runPython(gatherArgs);
-    int status; waitProcess(&status);
+    waitProcess();
   }
 
   // if (args.measureSimTimes) {
     vector<string> gatherTimesArgs { "scripts/gather-times.py" };
     runPython(gatherTimesArgs);
-    int status; waitProcess(&status);
+    waitProcess();
   // }
 }
 
-void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
+int ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx, shared_ptr<zmq::socket_t> controlSocket) {
   if (args.verbose)
     printf("Coordinator | Starting coordinator routine...\n");
 
   // Initialize sockets used to sync partitions in a barrier-like fashion
-  vector<zmq::socket_t*> sockets(numThreads);
+  vector<unique_ptr<zmq::socket_t>> sockets(numThreads);
   for (int i = 0; i < numThreads; i++) {
     string uri = psumo::getSyncSocketId(args.dataDir, i);
     try {
-      sockets[i] = makeSocket(zctx, zmq::socket_type::rep);
+      sockets[i] = unique_ptr<zmq::socket_t>(makeSocket(zctx, zmq::socket_type::rep));
       sockets[i]->bind(uri);
     } catch (zmq::error_t& e) {
       stringstream msg;
@@ -357,20 +387,18 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
   if (args.verbose)
     printf("Coordinator | Bound sockets\n");
 
-  vector<zmq::pollitem_t> pollitems(numThreads);
+  vector<zmq::pollitem_t> pollitems(numThreads + 1);
   for (int i = 0; i < numThreads; i++) {
-    // operator void* included in the ZeroMQ C++ wrapper, 
-    // needed to make poll work as it operates on the C version
     pollitems[i].socket = castPollSocket(*sockets[i]);
-    // pollitems[i].socket = *sockets[i]; // Should be equivalent, but let's use the operator
     pollitems[i].events = ZMQ_POLLIN;
   }
+  pollitems[numThreads].socket = castPollSocket(*controlSocket);
+  pollitems[numThreads].events = ZMQ_POLLIN;
 
   vector<bool> partitionReachedBarrier(numThreads);
   vector<bool> partitionReachedStepBarrier(numThreads);
   vector<bool> partitionEmpty(numThreads);
   vector<bool> partitionStopped(numThreads);
-  zmq::message_t message;
 
   for (int i = 0; i < numThreads; i++) {
     partitionReachedBarrier[i] = false;
@@ -389,15 +417,37 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
   steps = 0;
   syncBarrierTimes = 0;
 
+  zmq::message_t message;
+
+  int returnStatus;
+  bool earlyReturn = false;
+
   while (true) {
     zmq::poll(pollitems);
+
+    auto controlItem = pollitems[numThreads];
+    if (controlItem.revents & ZMQ_POLLIN) {
+      auto result = controlSocket->recv(message);
+      int status;
+      std::memcpy(&status, message.data(), sizeof(int));
+
+      if (args.verbose) {
+        printf("Coordinator | Received control message %d\n", status);
+      }
+
+      if (status != 0) {
+        earlyReturn = true;
+        returnStatus = status;
+        break;
+      }
+    }
 
     for (int i = 0; i < numThreads; i++) {
       auto item = pollitems[i];
       // Message arrived on corresponding socket
       if (item.revents & ZMQ_POLLIN) {
-        auto socket = sockets[i];
-        auto result = socket->recv(message);
+        zmq::socket_t& socket = *sockets[i];
+        auto result = socket.recv(message);
         int opcode;
         auto data = static_cast<char*>(message.data());
         std::memcpy(&opcode, data, sizeof(int));
@@ -414,7 +464,7 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
               msg << "Partition sent reached barrier message twice! Is " << i << endl;
               cerr << msg.str();
               // Send message just incase, but this is undefined behavior
-              socket->send(zmq::str_buffer("repeated"), zmq::send_flags::none);
+              socket.send(zmq::str_buffer("repeated"), zmq::send_flags::none);
             }
             break;
 
@@ -432,7 +482,7 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
               msg << "Partition sent reached step barrier message twice! Is " << i << endl;
               cerr << msg.str();
               // Send message just incase, but this is undefined behavior
-              socket->send(zmq::str_buffer("repeated"), zmq::send_flags::none);
+              socket.send(zmq::str_buffer("repeated"), zmq::send_flags::none);
             }
             break;
 
@@ -441,13 +491,13 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
               partitionStopped[i] = true;
               stoppedPartitions++;
               // Partition stopping doesn't block signaling partition, so immediately respond
-              sockets[i]->send(zmq::str_buffer("ok"), zmq::send_flags::none);
+              socket.send(zmq::str_buffer("ok"), zmq::send_flags::none);
             } else {
               stringstream msg;
               msg << "Partition sent finished message twice! Is " << i << endl;
               cerr << msg.str();
               // Send message just incase, but this is undefined behavior
-              socket->send(zmq::str_buffer("repeated"), zmq::send_flags::none);
+              socket.send(zmq::str_buffer("repeated"), zmq::send_flags::none);
             }
             break;
         }
@@ -514,10 +564,14 @@ void ParallelSim::coordinatePartitionsSync(zmq::context_t& zctx) {
 
   for (int i = 0; i < numThreads; i++) {
     sockets[i]->close();
-    delete sockets[i];
+  }
+
+  if (earlyReturn) {
+    return returnStatus;
   }
 
   high_resolution_clock::time_point time1 = high_resolution_clock::now();
   auto duration = duration_cast<microseconds>(time1 - time0).count() / 1000.0;
   cout << "Parallel simulation took " << duration << "ms!" << endl;
+  return 0;
 }

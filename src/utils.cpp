@@ -57,9 +57,17 @@ pid_t runProcess(string exePath, vector<string>& args) {
     #endif
 }
 
-pid_t waitProcess(int *status) {
+pid_t waitProcess(bool* exited, int* status_or_signal) {
     #ifndef USING_WIN
-        return wait(status);
+        int status;
+        pid_t pid = wait(&status);
+        *exited = WIFEXITED(status);
+        if (*exited) {
+            *status_or_signal = WEXITSTATUS(status);
+        } else {
+            *status_or_signal = WTERMSIG(status);
+        }
+        return pid;
     #else
         cerr << "Windows waitProcess NYI!" << endl;
         exit(EXIT_FAILURE);

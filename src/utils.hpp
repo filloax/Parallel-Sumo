@@ -28,7 +28,8 @@
 
 namespace psumo {
     pid_t runProcess(std::string exePath, std::vector<std::string>& args);
-    pid_t waitProcess(int* status);
+    pid_t waitProcess(bool* exited, int* status_or_signal);
+    inline pid_t waitProcess() { bool _; int __; return waitProcess(&_, &__); }
     pid_t getPid();
     void killProcess(pid_t pid);
     void bindProcessToCPU(unsigned int cpuId);
