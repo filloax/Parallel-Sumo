@@ -21,6 +21,7 @@ Contributions: Filippo Lenzi
 #include <libsumo/Edge.h>
 #include <libsumo/Simulation.h>
 #include <libsumo/Vehicle.h>
+#include <mutex>
 #include <queue>
 #include <sstream>
 #include <string>
@@ -83,7 +84,7 @@ PartitionManager::PartitionManager(
   {
     coordinatorSocket = makeSocket(zcontext, zmq::socket_type::req);
     for (partId_t partId : neighborPartitions) {
-      auto stub = new PartitionEdgesStub(id, partId, numThreads, zcontext, args);
+      auto stub = new PartitionEdgesStub(*this, partId, numThreads, zcontext, args);
       neighborPartitionStubs[partId] = stub;
       auto clientHandler = new NeighborPartitionHandler(*this, partId);
       neighborClientHandlers[partId] = clientHandler;
@@ -528,6 +529,18 @@ void PartitionManager::signalFinish() {
   logminor("Signaled partition end...\n");
 }
 
+void PartitionManager::incMsgCount(bool outgoing) {
+  if (args.logMsgNum) {
+    if (outgoing) {
+      lock_guard<mutex> lock(msgCountLockOut);
+      msgCountOut++;
+    } else {
+      lock_guard<mutex> lock(msgCountLockIn);
+      msgCountIn++;
+    }
+  }
+}
+
 bool PartitionManager::isMaybeFinished() {
   return Simulation::getTime() > lastDepartTime + 1 && Vehicle::getIDCount() == 0;
 }
@@ -600,10 +613,14 @@ void PartitionManager::runSimulation() {
     exit(EXIT_FAILURE);
   }
 
-  filesystem::path logVehiclesFile;
+  filesystem::path logVehiclesFile, logMsgsFile;
   if (args.logHandledVehicles) {
     logVehiclesFile = filesystem::path(args.dataDir) / ("stepVehicles" + to_string(id) + ".csv");
     std::ofstream(logVehiclesFile, std::ios::out) << "time,vehNo\n";
+  }
+  if (args.logMsgNum) {
+    logMsgsFile = filesystem::path(args.dataDir) / ("msgNum" + to_string(id) + ".csv");
+    std::ofstream(logMsgsFile, std::ios::out) << "time,msgs_in,msgs_out\n";
   }
 
   // Wait for coordinator process to bind socket
@@ -682,6 +699,14 @@ void PartitionManager::runSimulation() {
     // interference and then start again
     for (partId_t partId : neighborPartitions) {
       neighborClientHandlers[partId]->applyMutableOperations();
+    }
+
+    if (args.logMsgNum) {
+      lock_guard<mutex> lock(msgCountLockIn);
+      lock_guard<mutex> lock2(msgCountLockOut);
+      ofstream(logMsgsFile, ios::app) << Simulation::getTime() << "," << msgCountIn << "," << msgCountOut << "\n";
+      msgCountIn = 0;
+      msgCountOut = 0;
     }
 
     // if (measureInteractTime) handleTime += chrono::steady_clock::now() - timeBefore;

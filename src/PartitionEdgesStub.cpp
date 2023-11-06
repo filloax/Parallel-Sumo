@@ -29,11 +29,11 @@ using namespace std;
 // size to instantiate messages
 #define SUMO_ID_SIZE 256
 
-PartitionEdgesStub::PartitionEdgesStub(partId_t ownerId, partId_t targetId, int numThreads, zmq::context_t& zcontext, Args& args):
-    ownerId(ownerId),
+PartitionEdgesStub::PartitionEdgesStub(PartitionManager& owner, partId_t targetId, int numThreads, zmq::context_t& zcontext, Args& args):
+    owner(owner),
     id(targetId),
     connected(false),
-    socketUri(psumo::getSocketName(args.dataDir, ownerId, targetId, numThreads)),
+    socketUri(psumo::getSocketName(args.dataDir, owner.getId(), targetId, numThreads)),
     args(args),
     socket(makeSocket(zcontext, zmq::socket_type::req))
 {
@@ -83,6 +83,7 @@ std::vector<std::string> PartitionEdgesStub::getEdgeVehicles(const std::string& 
 
     log("Sending getEdge\n");
     socket->send(message, zmq::send_flags::none);
+    owner.incMsgCount(true);
 
     log("Receiving getEdge reply\n");
     zmq::message_t reply;
@@ -92,7 +93,7 @@ std::vector<std::string> PartitionEdgesStub::getEdgeVehicles(const std::string& 
 
     if (args.verbose) {
         stringstream msg;
-        msg << "\tStub " << ownerId << "->"<< id << " | Received: [";
+        msg << "\tStub " << owner.getId() << "->"<< id << " | Received: [";
         printVector(out, "", ", ", false, msg);
         msg << "]" << endl;
         cout << msg.str();
@@ -117,6 +118,7 @@ bool PartitionEdgesStub::hasVehicle(const std::string& vehId) {
 
     log("Sending hasVehicle\n");
     socket->send(message, zmq::send_flags::none);
+    owner.incMsgCount(true);
 
     log("Receiving hasVehicle reply\n");
     zmq::message_t reply;
@@ -145,6 +147,7 @@ bool PartitionEdgesStub::hasVehicleInEdge(const std::string& vehId, const std::s
 
     log("Sending hasVehicleInEdge\n");
     socket->send(message, zmq::send_flags::none);
+    owner.incMsgCount(true);
 
     log("Receiving hasVehicleInEdge reply\n");
     zmq::message_t reply;
@@ -177,6 +180,7 @@ void PartitionEdgesStub::setVehicleSpeed(const string& vehId, double speed) {
 
     log("Sending setSpeed\n");
     socket->send(message, zmq::send_flags::none);
+    owner.incMsgCount(true);
 
     log("Receiving setSpeed reply\n");
     // unused reply, required by zeroMQ
@@ -214,6 +218,7 @@ void PartitionEdgesStub::addVehicle(
 
     log("Sending addVehicle\n");
     socket->send(message, zmq::send_flags::none);
+    owner.incMsgCount(true);
 
     log("Receiving addVehicle reply\n");
     // unused reply, required by zeroMQ
@@ -226,7 +231,7 @@ inline void PartitionEdgesStub::log(std::format_string<_Args...> format, _Args&&
     if (!args.verbose) return;
 
     std::stringstream msg;
-    msg << "\tStub " << ownerId << "->" << id << " | ";
+    msg << "\tStub " << owner.getId() << "->" << id << " | ";
     std::format_to(
         std::ostreambuf_iterator<char>(msg), 
         std::forward<std::format_string<_Args...>>(format),
@@ -238,7 +243,7 @@ inline void PartitionEdgesStub::log(std::format_string<_Args...> format, _Args&&
 template<typename... _Args>
 inline void PartitionEdgesStub::logerr(std::format_string<_Args...> format, _Args&&... args_) {
     std::stringstream msg;
-    msg << "\tStub " << ownerId << "->" << id << " | ";
+    msg << "\tStub " << owner.getId() << "->" << id << " | ";
     std::format_to(
         std::ostreambuf_iterator<char>(msg), 
         std::forward<std::format_string<_Args...>>(format),

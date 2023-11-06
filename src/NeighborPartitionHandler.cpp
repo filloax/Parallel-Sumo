@@ -160,7 +160,11 @@ void NeighborPartitionHandler::listenCheck() {
     if (pollitems[0].revents & ZMQ_POLLIN) {
         zmq::message_t message;
         auto _ = socket->recv(request, zmq::recv_flags::none);
+    } else {
+        return;
     }
+
+    owner.incMsgCount(false);
 
     // Read int representing operations to call from the message
     int opcode;

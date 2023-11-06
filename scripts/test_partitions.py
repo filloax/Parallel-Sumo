@@ -63,6 +63,7 @@ handled_files = [
     "allStepVehicles.png",
     "simtimes.csv",
     "commtimes.csv",
+    "msgNum.csv",
     "partitions.png",
 ]
 
@@ -83,6 +84,7 @@ def run_test(args: RunArgs):
         "-c", args["sumo_cfg"],
         "--pin-to-cpu",
         "--log-handled-vehicles",
+        "--log-msg-num",
         "--",
         "--png", "--quick-png",
     ])
@@ -135,10 +137,13 @@ def gather_outputs(args: RunArgs):
                 break
                 
     with open(os.path.join(cdir, "total-time.txt"), 'w') as f:
-        f.write(total_time)
+        f.write(f'{total_time}\n')
+        
+    msgnum_df = pd.read_csv(os.path.join(cdir, "msgNum.csv"), index_col="time")
+    msgnum_max_df = pd.DataFrame(msgnum_df.sum(axis=0)).transpose().reindex(msgnum_df.columns, axis=1)
     
-    simtimes_df = pd.read_csv("output/simtimes.csv")
-    commtimes_df = pd.read_csv("output/commtimes.csv")
+    simtimes_df = pd.read_csv("output/simtimes.csv", index_col=0)
+    commtimes_df = pd.read_csv("output/commtimes.csv", index_col=0)
     
     # Generate results page
     html_content = f"""
@@ -163,6 +168,8 @@ def gather_outputs(args: RunArgs):
         {simtimes_df.to_html(classes='table table-striped', index=False)}
         <h3>Interaction times per partition</h3>
         {commtimes_df.to_html(classes='table table-striped', index=False)}
+        <h3>Messages sent per partition</h3>
+        {msgnum_max_df.to_html(index=False)}
         
         <h3>Vehicles in partition per step</h3>
         <img src="./allStepVehicles.png" alt="allStepVehicles.png" width="800">
@@ -246,7 +253,7 @@ def generate_grids():
     for group, data in image_data.groupby("num_parts"):
         sdata = data.sort_values("id")
         _make_grid(f"_{group}", sdata["image"], sdata["name"], sdata["args"])
-    
+
 def calc_scores():
     subdirs = [f for f in os.listdir(test_dir) if os.path.isdir(os.path.join(test_dir, f))]
     
@@ -262,13 +269,32 @@ def calc_scores():
         avg_devtn_vehicles_num = stepvehs_df.std(axis=1).mean()
         avg_max_diff_vehicles_num = stepvehs_df.apply(lambda row: max(row) - min(row), axis=1).mean()
         
+        msgnum_df = pd.read_csv(os.path.join(dirpath, "msgNum.csv"), index_col="time")
+        msgnum_df_in = msgnum_df[filter(lambda x: x.endswith("_in"), msgnum_df.columns)]\
+            .rename(columns=lambda x: x.replace("_in", ""))
+        msgnum_df_out = msgnum_df[filter(lambda x: x.endswith("_out"), msgnum_df.columns)]\
+            .rename(columns=lambda x: x.replace("_out", ""))
+        msgnum_df_tot = msgnum_df_in + msgnum_df_out
+        
+        msgnum_vals = {}
+        for df, name in [(msgnum_df_in, 'in'), (msgnum_df_out, 'out'), (msgnum_df_tot, 'tot')]:
+            if name == 'tot':
+                sum = df.sum().sum()
+                msgnum_vals[f'msgs_{name}_sum'] = sum
+            else:
+                max_ = df.sum().max()
+                msgnum_vals[f'msgs_{name}_max'] = max_
+
+            avg_dvtn = df.std(axis=1).mean()
+            msgnum_vals[f'msgs_{name}_dvtn'] = avg_dvtn
+
         simtimes_csv = os.path.join(dirpath, "simtimes.csv")
-        simtimes_df = pd.read_csv(simtimes_csv)
+        simtimes_df = pd.read_csv(simtimes_csv, index_col=0)
         devtn_simtime = simtimes_df.std(axis=1)[0]
         max_simtime = simtimes_df.max(axis=1)[0]
         
         commtimes_csv = os.path.join(dirpath, "commtimes.csv")
-        commtimes_df = pd.read_csv(commtimes_csv)
+        commtimes_df = pd.read_csv(commtimes_csv, index_col=0)
         devtn_commtime = commtimes_df.std(axis=1)[0]
         max_commtime = commtimes_df.max(axis=1)[0]
         
@@ -285,6 +311,7 @@ def calc_scores():
             'ctime_std': devtn_commtime,
             'ctime_max': max_commtime,
             'tot_time': total_time,
+            **msgnum_vals,
         }
         results.append(this_result)
 

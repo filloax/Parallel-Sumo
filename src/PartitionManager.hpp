@@ -60,6 +60,9 @@ private:
     bool measureSimTime = false;
     // Measure time spent in comm and interaction handling
     bool measureInteractTime = false;
+    int msgCountIn = 0;
+    int msgCountOut = 0;
+    std::mutex msgCountLockIn, msgCountLockOut;
     std::vector<std::string> sumoArgs;
     int numThreads;
     PartArgs& args;
@@ -114,6 +117,8 @@ public:
     void loadRouteMetadata();
     // Enable counting time spent inside simulation and messages
     void enableTimeMeasures();
+    // used when counting msgs
+    void incMsgCount(bool outgoing);
 
     #ifndef NDEBUG
         #define _str_arg_type const std::string

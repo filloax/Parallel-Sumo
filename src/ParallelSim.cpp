@@ -346,6 +346,11 @@ void ParallelSim::startSim(){
     runPython(gatherArgs);
     waitProcess();
   }
+  if (args.logMsgNum) {
+    vector<string> gatherArgs { "scripts/gather-msgcounts.py" };
+    runPython(gatherArgs);
+    waitProcess();
+  }
 
   // if (args.measureSimTimes) {
     vector<string> gatherTimesArgs { "scripts/gather-times.py" };

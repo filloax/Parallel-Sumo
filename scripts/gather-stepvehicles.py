@@ -12,6 +12,7 @@ for file_path in file_paths:
 df = pd.DataFrame(data)
 df = df.reindex(sorted(df.columns), axis=1)
 df = df.rename(columns={val: f'p{val}' for val in df.columns})
+df.index.name = 'time'
 df.to_csv("output/allStepVehicles.csv")
 print("Saved output/allStepVehicles.csv")
 

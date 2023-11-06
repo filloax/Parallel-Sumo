@@ -20,7 +20,7 @@ using namespace psumo;
 class PartitionEdgesStub {
 private:
     Args& args;
-    partId_t ownerId;
+    PartitionManager& owner;
     partId_t id;
     bool connected;
     const std::string socketUri;
@@ -39,7 +39,7 @@ public:
         ADD_VEHICLE,
     };
 
-    PartitionEdgesStub(partId_t ownerId, partId_t targetId, int numThreads, zmq::context_t& zcontext, Args& args);
+    PartitionEdgesStub(PartitionManager& owner, partId_t targetId, int numThreads, zmq::context_t& zcontext, Args& args);
     ~PartitionEdgesStub();
 
     // If possible, use hasVehicle and hasVehicleInEdge instead, as they
