@@ -22,7 +22,7 @@ from threading import Thread, Lock, get_ident
 from prefixing import ThreadPrefixStream
 from multiprocessing import Process
 from multiprocessing.pool import ThreadPool
-from typing import Callable
+from typing import Callable, TypedDict
 from collections import defaultdict
 from time import time
 from datetime import timedelta
@@ -52,6 +52,9 @@ def check_nparts(value):
         raise argparse.ArgumentTypeError(f"{value} is an invalid thread num (positive int value)")
     return ivalue
 
+def filter_vehs(value):
+    return value if re.match(r'(\w+(,\w+)*)?', value) else None
+
 parser = argparse.ArgumentParser()
 parser.add_argument('-N', '--num-parts', required=True, type=check_nparts)
 parser.add_argument('-c', '--cfg-file', required=True, type=str, help="Path to the SUMO .sumocfg simulation config")
@@ -68,14 +71,18 @@ parser.add_argument('-t', '--timing', action='store_true', help="Measure the tim
 # parser.add_argument('--dev-mode', action='store_false', help="Remove some currently unhandled edge cases from the routes (not ideal in release, currently works inversely for easier development)")
 parser.add_argument('--png', action='store_true', help="Output network images for each partition")
 parser.add_argument('--quick-png', action='store_true', help="Remove some image details to output network images faster")
-parser.add_argument('-v', '--verbose', action='store_true', help="Additional output")
 parser.add_argument('--force', action='store_true', help="Regenerate even if data folder already contains partition data matching these settings")
+parser.add_argument('--filter-vehs', type=filter_vehs, default="", help="Test: Only keep vehicles with these ids in simulation")
+parser.add_argument('-v', '--verbose', action='store_true', help="Additional output")
 
 verbose = False
 # devmode = False
 
 def _is_poly_file(path: str):
     return path.endswith(".poly.xml")
+
+class TestOptions(TypedDict):
+    filter_vehicles: list[str]
 
 class NetworkPartitioning:   
     def __init__(self, 
@@ -90,6 +97,7 @@ class NetworkPartitioning:
         threads: int = 1,
         timing: bool = False,
         use_cut_routes: bool = False,
+        test_options: TestOptions = {},
     ) -> None:
         self.cfg_file = cfg_file
         self.use_metis = use_metis
@@ -102,6 +110,7 @@ class NetworkPartitioning:
         self.threads = threads
         self.timing = timing
         self.use_cut_routes = use_cut_routes
+        self.test_options = test_options
         
         cfg_tree: ElementTree = lxml.etree.parse(self.cfg_file)
         cfg_root: Element = cfg_tree.getroot()
@@ -291,13 +300,51 @@ class NetworkPartitioning:
         )
 
     def _preprocess_routes(self):
-        processed_routes_path = os.path.join(self.data_folder, "processed_routes.rou.xml")
         interm_file_path = os.path.join(self.data_folder, "processed_routes.interm.rou.xml")
+        processed_routes_path = os.path.join(self.data_folder, "processed_routes.rou.xml")
 
+        filtered_files = [*self.route_files]
+
+        if len(self.test_options["filter_vehicles"]) > 0:
+            filter_dir = os.path.join(self.data_folder, "filtered_routes")
+            os.makedirs(filter_dir, exist_ok=True)
+            
+            c = 0
+            ff_v = []
+            for file in filtered_files:
+                fn, ext = os.path.splitext(os.path.basename(file))
+                outf = os.path.join(filter_dir, f"{fn}-fv.{ext}")
+                
+                orig_routes_tree: ElementTree = lxml.etree.parse(file)
+                orig_routes: Element = orig_routes_tree.getroot()
+
+                drop = []
+                check_routes = set()
+                for vehicle in itertools.chain(orig_routes.findall("vehicle"), orig_routes.findall("trip")):
+                    if vehicle.attrib["id"] not in self.test_options["filter_vehicles"]:
+                        drop.append(vehicle)
+                        if "route" in vehicle.attrib:
+                            check_routes.append(route_el)
+                    else:
+                        c += 1
+                for vehicle in drop:
+                    orig_routes.remove(vehicle)
+                # Remove routes left with no vehicle
+                for route in check_routes:
+                    if not orig_routes.find(f""".//vehicle[@route='{route.attrib["id"]}']"""):
+                        orig_routes.remove(route)
+                        
+                orig_routes_tree.write(outf, pretty_print=True)
+                ff_v.append(outf)
+                
+            filtered_files = ff_v
+                    
+            print("Test: Kept", c, "vehicles after id filtering")
+                    
         # duarouter is a SUMO executable that computes trips, aka SUMO routes defined only by start and end points
         # and normally computed via shortest-path at runtime
         # (This also ends up joining the input route files into one regardless)
-        run_duarouter(self.net_file, self.route_files, interm_file_path, additional_files=self.additional_files, quiet=not verbose)
+        run_duarouter(self.net_file, filtered_files, interm_file_path, additional_files=self.additional_files, quiet=not verbose)
         # Remove alternate path files
         for f in glob.glob(f'{self.data_folder}/*.alt.xml'):
             os.remove(f)
@@ -670,6 +717,9 @@ def worker(args):
         args.threads,
         args.timing,
         args.use_cut_routes,
+        {
+            "filter_vehicles": args.filter_vehs.split(",")
+        },
     )
     
     if not args.force and _check_args(args):
