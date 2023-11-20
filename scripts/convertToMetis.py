@@ -5,7 +5,6 @@
 """
 Convert SUMO network into proper format for METIS input, partition with METIS,
 and write in one file per partition the SUMO network edges of that partition.
-
 """
 from collections import defaultdict
 import os
@@ -72,16 +71,23 @@ def main(
     output_weights_file: str = None,
     check_connection: bool = False,
 ):
-    f"""Partition a SUMO network using METIS
+    """Partition a SUMO network using METIS
 
     Args:
         netfile (str): Path to the SUMO network
         numparts (int): Target amount of parts (might have less in output)
-        weight_functions (list[str] | str, optional): One of more weightings to use
-            for edges, current options: {", ".join(weight_funs)}.
-            "{WEIGHT_ROUTE_NUM}" requires a routefile to be set.
+        weight_functions (list[str] | str, optional): Zero or more of various weightings to use
+            for edges, current options: osm, route-num.
+            route-num requires a routefile to be set.
+            
+            The weight of an edge is used to calculcate the edge cuts optimization target: 
+            the algorithm strives to minimize the edge cut, calculated as the sum of the weights
+            of edges connecting nodes of different partitions.
         node_weight_functions (list[str] | str, optional): One or more weightings to use for nodes, 
             by default uses None. 
+            
+            The weight of a node is used as a criteria for partitioning: the algorithm tries to
+            create partitions with the same total weight of contained nodes.
         routefile (str, optional): path to route file to use for weighting.
         output_weights_file (str, optional): if set, path to write a file with the weight of each node, in a json-dict format.
         check_connection (bool, optional): check if the graph is connected
