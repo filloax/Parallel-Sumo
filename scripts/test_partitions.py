@@ -331,12 +331,14 @@ def get_last_testdir():
         exit(-1)
     return subdirs[-1]
 
-def set_test_dir(use_last):
+def set_test_dir(use_last_or_path):
     global test_dir
     
     now = datetime.datetime.now()
-    if use_last:
+    if type(use_last_or_path) is bool and use_last_or_path:
         test_dirn = get_last_testdir()
+    elif type(use_last_or_path) is str:
+        test_dirn = use_last_or_path
     else:
         test_dirn = f"ptest_{now.year}-{now.month}-{now.day}_{now.hour}-{now.minute}-{now.second}"
 
