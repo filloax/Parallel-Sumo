@@ -323,6 +323,25 @@ def calc_scores():
     
     return results_df
 
+def get_times_df():
+    subdirs = [f for f in os.listdir(test_dir) if os.path.isdir(os.path.join(test_dir, f))]
+    
+    rows = {}
+    
+    for dirname in subdirs:
+        dirpath = os.path.join(test_dir, dirname)
+        with open(os.path.join(dirpath, "args.json"), 'r') as f:
+            run_args: RunArgs = json.load(f)
+        
+        simtimes_csv = os.path.join(dirpath, "simtimes.csv")
+        simtimes_df = pd.read_csv(simtimes_csv, index_col=0)
+                
+        name = f'E: {",".join(run_args["edge_wgts"])} V: {",".join(run_args["node_wgts"])}'
+        
+        rows[name] = simtimes_df.iloc[0, :]
+    
+    return pd.DataFrame(rows).transpose()
+
 def get_last_testdir():
     subdirs = [dirn for dirn in os.listdir("testResults") if dirn.startswith("ptest")]
     subdirs.sort()
