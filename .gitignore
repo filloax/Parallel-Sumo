@@ -24,3 +24,5 @@ compile_commands.json
 *_output.xml
 *.code-workspace
 testResults/**
+!testResults/test6.csv
+!testResults/test6_parts.csv

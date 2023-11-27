@@ -580,7 +580,7 @@ void PartitionManager::runSimulation() {
   }
 
   // Start simulation in this process
-  // Note: doesn't support GUI
+  // Note: doesn't support GUI unless the define for libsumo GUI is enabled
   stringstream startMsg;
   startMsg << "Manager " << id << " | Starting simulation with args: ";
   printVector(simArgs, "", " ", true, startMsg);

@@ -47,9 +47,10 @@ int main(int argc, char* argv[]) {
     // params: host server, first port. sumo cfg file, gui option (true), number of threads
     ParallelSim client(args.cfg.c_str(), args.gui, args.numThreads, args);
     client.getFilePaths();
-    if (!args.skipPart && args.numThreads > 1) {
+    if (!args.skipPart) { //&& args.numThreads > 1) {
         // param: true for metis partitioning, false for grid partitioning (only works for 2 partitions currently)
         // edit: grid implemented by original designer, currently not tested
+        // one thread partitioning just processes the demand files as they would be for partitions
         client.partitionNetwork(true, args.keepPoly);
     }
     client.startSim();

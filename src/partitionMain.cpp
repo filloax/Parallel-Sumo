@@ -72,16 +72,11 @@ int main(int argc, char* argv[]) {
     unordered_map<string, unordered_set<string>> routesEndingInEdge;
     float lastDepartTime;
 
-    if (args.numThreads > 1) {
-        loadPartData(args.partId, 
-            args.dataDir, borderEdges, partNeighbors, 
-            partNeighborRoutes, routesEndingInEdge, 
-            &lastDepartTime
-        );
-    } else {
-        cout << "Starting partition in 1 thread mode (almost no special treatment, more or less base sumo run)" << endl;
-        cfg = args.cfg; 
-    }
+    loadPartData(args.partId, 
+        args.dataDir, borderEdges, partNeighbors, 
+        partNeighborRoutes, routesEndingInEdge, 
+        &lastDepartTime
+    );
 
     zmq::context_t& zctx = ContextPool::newContext(1);
 

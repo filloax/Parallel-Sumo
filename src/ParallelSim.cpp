@@ -262,15 +262,13 @@ void ParallelSim::startSim(){
     loadRealNumThreads();
 
   if (numThreads == 1) {
-    std::cout << "Running in 1 thread mode, will use the original cfg (not intended? check your --num-threads param or the partitions created)" << std::endl;
+    std::cout << "Running in 1 thread mode! (not intended? check your --num-threads param or the partitions created)" << std::endl;
   }
 
-  string partCfg;
-
   if (endTime >= 0) {
-  std::cout << "Will end at time " << endTime << std::endl;
+    std::cout << "Will end at time " << endTime << std::endl;
   } else {
-  std::cout << "Will check empty partitions for end" << std::endl;
+    std::cout << "Will check empty partitions for end" << std::endl;
   }
 
   // Context for ZeroMQ message-passing, ideally one per program
