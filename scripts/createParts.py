@@ -28,7 +28,7 @@ from time import time
 from datetime import timedelta
 import json
 
-from convertToMetis import main as convert_to_metis, weight_funs, WEIGHT_ROUTE_NUM, node_weight_funs
+from convertToMetis import main as convert_to_metis, weight_funs, WEIGHT_ROUTE_NUM, node_weight_funs, NODE_WEIGHT_CONNECTIONS
 from sumobin import run_duarouter, run_netconvert
 from sumo2png import generate_network_image, generate_partitions_image
 from partitiondatagen import PartitionDataGen
@@ -62,7 +62,7 @@ parser.add_argument('--data-folder', default='data', help="Folder to store outpu
 parser.add_argument('--keep-poly', action='store_true', help="Keep poly files from the sumocfg (disabled by default for performance)")
 parser.add_argument('--no-metis', action='store_true', help="Partition network using grid (unsupported)")
 parser.add_argument('-w', '--weight-fun', choices=weight_funs, nargs="*", default=[WEIGHT_ROUTE_NUM], help="One or more weighting methods to use, use with no values to avoid using any weight.")
-parser.add_argument('-W', '--node-weight', choices=node_weight_funs, nargs="*", default=[], help="One or more weighting methods to use" \
+parser.add_argument('-W', '--node-weight', choices=node_weight_funs, nargs="*", default=[NODE_WEIGHT_CONNECTIONS], help="One or more weighting methods to use" \
     " for nodes, use with no values to avoid using any weight.")
 parser.add_argument('-T', '--threads', type=int, default=8, help="Threads to use for processing the partitioning of the network, will be capped to partition num")
 # remove default True later

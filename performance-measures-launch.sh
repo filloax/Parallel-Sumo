@@ -1,21 +1,21 @@
 #!/bin/bash
 
-results_file="test5.csv"
-results_file_parts="test5_parts.csv"
-num_repeats=1 #5
+results_file="test6.csv"
+results_file_parts="test6_parts.csv"
+num_repeats=3
 
 files=(
-    # "./assets/spider0.sumocfg"
-    # "./assets/spider1.sumocfg"
-    # "./assets/spider2.sumocfg"
+    "./assets/spider0.sumocfg"
+    "./assets/spider1.sumocfg"
+    "./assets/spider2.sumocfg"
     # generated with scripts/random-simulation.sh grid_large --grid --grid.number 100 --grid.length 20
     # about 1GB large, so gitignored
-    # "./assets/grid_large.sumocfg" 
+    "./assets/grid_large.sumocfg" 
     "./assets/bologna-sim/osm.sumocfg"
 )
 
 threadNumbers=(
-    # 1 # For some reason tinyxml is giving FILE_NOT_FOUND with the original .sumocfg files, investigate later
+    1 # For some reason tinyxml is giving FILE_NOT_FOUND with the original .sumocfg files, investigate later
     2
     4
     $(( $(nproc) / 2 )) # num cores in testing machine
@@ -27,8 +27,8 @@ echo "cfg,thread no.,part,part.time,vehicles" > "testResults/$results_file_parts
 
 for cfg in "${files[@]}"; do
     for N in "${threadNumbers[@]}"; do
-        for i in {1..$num_repeats}; do
-            echo "Running with: -N $N -c $cfg"
+        for i in $(seq 1 $num_repeats); do
+            echo "Running with: -N $N -c $cfg [$i/$num_repeats]"
             COMMD="python ./measure-performance.py -N $N -c $cfg --pin-to-cpu"
             echo "$COMMD"
             perf_res=$($COMMD)

@@ -146,12 +146,12 @@ void PartitionManager::loadRouteMetadata() {
 
   // NOTE: this assumes that there is only one route file, which is the output for 
   // the partitioning script
-  const filesystem::path dir = filesystem::path(cfg).relative_path();
+  const filesystem::path dir = filesystem::path(cfg).relative_path().parent_path();
   const filesystem::path routeFile = dir / routeFilesValue;
   tinyxml2::XMLDocument routeDoc;
   tinyxml2::XMLError e = routeDoc.LoadFile(routeFile.c_str());
   if(e) {
-    logerr("{}\n", routeDoc.ErrorIDToName(e));
+    logerr("{} - when loading {}\n", routeDoc.ErrorIDToName(e), routeFile.string());
     exit(EXIT_FAILURE);
   }
   tinyxml2::XMLElement* routesEl = routeDoc.FirstChildElement("routes");
