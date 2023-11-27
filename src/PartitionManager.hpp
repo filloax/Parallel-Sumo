@@ -44,6 +44,8 @@ private:
     const std::unordered_map<std::string, std::unordered_set<std::string>> routeEndsInEdges;
     const float lastDepartTime;
     std::unordered_set<std::string> multipartRoutes;
+    // Tracks vehicles added to other partitions, reset for multipart route
+    std::unordered_set<std::string> sentVehicles;
     std::map<int, PartitionEdgesStub*> neighborPartitionStubs;
     std::map<int, NeighborPartitionHandler*> neighborClientHandlers;
     // For vehicles with more than one route part, count last one the vehicle used

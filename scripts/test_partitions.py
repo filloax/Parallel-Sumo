@@ -359,7 +359,7 @@ def set_test_dir(use_last_or_path):
     elif type(use_last_or_path) is str:
         test_dirn = use_last_or_path
     else:
-        test_dirn = f"ptest_{now.year}-{now.month}-{now.day}_{now.hour}-{now.minute}-{now.second}"
+        test_dirn = f"ptest_{now.year}-{now.month:02d}-{now.day:02d}_{now.hour}-{now.minute}-{now.second}"
 
     test_dir = os.path.join("testResults", test_dirn)
 

@@ -287,6 +287,10 @@ void PartitionManager::addVehicle(
   const strarg_ vehId, const strarg_ routeId, const strarg_ vehType,
   const strarg_ laneId, int laneIndex, double lanePos, double speed
 ) {
+  // Regardless of outcome of following code, remove the added vehicle id
+  // to handle multipart routes in where vehicles should be sent more than once
+  sentVehicles.erase(vehId);
+
   string routeIdAdapted;
   // Adapt vehicle routes in case of multipart routes
   if (multipartRoutes.contains(routeId)) {
@@ -417,6 +421,12 @@ void PartitionManager::handleOutgoingEdges(int num, vector<vector<string>>& prev
       PartitionEdgesStub* partStub = neighborPartitionStubs[toId];
       
       for(string veh : edgeVehicles) {
+        // If we already sent this vehicle, do not waste
+        // time in asking the target partition if it's there
+        if (sentVehicles.contains(veh)) {
+          continue;
+        }
+
         auto c_veh = veh.c_str();
         string route = Vehicle::getRouteID(c_veh);
 
@@ -463,6 +473,7 @@ void PartitionManager::handleOutgoingEdges(int num, vector<vector<string>>& prev
                 Vehicle::getLanePosition(c_veh),
                 Vehicle::getSpeed(c_veh)
               );
+              sentVehicles.insert(veh);
             #ifndef PSUMO_NO_EXC_CATCH
             }
             catch(std::exception& e){
