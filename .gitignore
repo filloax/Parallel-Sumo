@@ -10,7 +10,11 @@ output/**
 .obj/libs/storage.d
 *.whl
 *.stackdump
-assets/grid_large.*
+assets/test/**
+!assets/test/README.txt
+!assets/test/bologna-sim
+!assets/test/bologna-sim/osm.netccfg
+!assets/test/bologna-sim/osm_bbox.osm.xml.gz
 err.txt
 build/**
 !build/.dir

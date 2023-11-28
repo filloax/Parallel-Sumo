@@ -16,7 +16,7 @@ import re
 # -----------------------------------------------------------
 # Configuration
 
-test_sumocfg = "assets/bologna-sim/osm.sumocfg"
+test_sumocfg = "assets/test/bologna-sim/osm.sumocfg"
 
 num_parts = [
     4,

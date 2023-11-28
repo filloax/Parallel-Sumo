@@ -5,13 +5,13 @@ results_file_parts="test7_parts.csv"
 num_repeats=3
 
 files=(
-    "./assets/spider0.sumocfg"
-    "./assets/spider1.sumocfg"
-    "./assets/spider2.sumocfg"
+    "./assets/test/spider0.sumocfg"
+    "./assets/test/spider1.sumocfg"
+    "./assets/test/spider2.sumocfg"
     # generated with scripts/random-simulation.sh grid_large --grid --grid.number 100 --grid.length 20
     # about 1GB large, so gitignored
-    "./assets/grid_large.sumocfg" 
-    "./assets/bologna-sim/osm.sumocfg"
+    "./assets/test/grid_large.sumocfg" 
+    "./assets/test/bologna-sim/osm.sumocfg"
 )
 
 threadNumbers=(
