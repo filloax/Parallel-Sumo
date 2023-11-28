@@ -2,4 +2,4 @@
 
 mkdir -p data
 
-bash run-with-env.sh bin/ParallelSumo "$@"
+bash run-with-env.sh bin/ParallelTwin "$@"

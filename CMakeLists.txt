@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5.0)
-project(ParallelSumo VERSION 0.8)
+project(ParallelTwin VERSION 0.8)
 
 # Main config
 
@@ -74,10 +74,10 @@ include_directories(
     .
 )
 
-add_executable(ParallelSumo ${SOURCE_FILES_COORDINATOR} ${LIB_FILES})
-add_executable(ParallelSumo-Partition ${SOURCE_FILES_PARTITION} ${LIB_FILES})
-add_executable(ParallelSumo-Partition-Gui ${SOURCE_FILES_PARTITION} ${LIB_FILES})
-target_compile_definitions(ParallelSumo-Partition-Gui PRIVATE HAVE_LIBSUMOGUI)
+add_executable(ParallelTwin ${SOURCE_FILES_COORDINATOR} ${LIB_FILES})
+add_executable(ParallelTwin-Partition ${SOURCE_FILES_PARTITION} ${LIB_FILES})
+add_executable(ParallelTwin-Partition-Gui ${SOURCE_FILES_PARTITION} ${LIB_FILES})
+target_compile_definitions(ParallelTwin-Partition-Gui PRIVATE HAVE_LIBSUMOGUI)
 message(STATUS "Added partition executable")
 
 #find cppzmq wrapper, installed by make of cppzmq
@@ -148,20 +148,20 @@ if (Boost_FOUND)
         ${Boost_STACKTRACE_ADDR2LINE_LIBRARY}
         ${Boost_STACKTRACE_NOOP_LIBRARY}
     )
-    # target_include_directories(ParallelSumo PUBLIC ${Boost_INCLUDE_DIRS})
-    # target_include_directories(ParallelSumo-Partition PUBLIC ${Boost_INCLUDE_DIRS})
-    # target_include_directories(ParallelSumo-Partition-Gui PUBLIC ${Boost_INCLUDE_DIRS})
+    # target_include_directories(ParallelTwin PUBLIC ${Boost_INCLUDE_DIRS})
+    # target_include_directories(ParallelTwin-Partition PUBLIC ${Boost_INCLUDE_DIRS})
+    # target_include_directories(ParallelTwin-Partition-Gui PUBLIC ${Boost_INCLUDE_DIRS})
 
     # enable stacktrace file lines
-    target_compile_definitions(ParallelSumo PUBLIC BOOST_STACKTRACE_USE_ADDR2LINE _GLIBCXX_ASSERTIONS)
-    target_compile_definitions(ParallelSumo-Partition PUBLIC BOOST_STACKTRACE_USE_ADDR2LINE _GLIBCXX_ASSERTIONS)
-    target_compile_definitions(ParallelSumo-Partition-Gui PUBLIC BOOST_STACKTRACE_USE_ADDR2LINE _GLIBCXX_ASSERTIONS)
-    target_compile_options(ParallelSumo PRIVATE "-g;-fno-inline")
-    target_compile_options(ParallelSumo-Partition PRIVATE "-g;-fno-inline")
-    target_compile_options(ParallelSumo-Partition-Gui PRIVATE "-g;-fno-inline")
-    target_link_options(ParallelSumo PRIVATE "-no-pie")
-    target_link_options(ParallelSumo-Partition PRIVATE "-no-pie")
-    target_link_options(ParallelSumo-Partition-Gui PRIVATE "-no-pie")
+    target_compile_definitions(ParallelTwin PUBLIC BOOST_STACKTRACE_USE_ADDR2LINE _GLIBCXX_ASSERTIONS)
+    target_compile_definitions(ParallelTwin-Partition PUBLIC BOOST_STACKTRACE_USE_ADDR2LINE _GLIBCXX_ASSERTIONS)
+    target_compile_definitions(ParallelTwin-Partition-Gui PUBLIC BOOST_STACKTRACE_USE_ADDR2LINE _GLIBCXX_ASSERTIONS)
+    target_compile_options(ParallelTwin PRIVATE "-g;-fno-inline")
+    target_compile_options(ParallelTwin-Partition PRIVATE "-g;-fno-inline")
+    target_compile_options(ParallelTwin-Partition-Gui PRIVATE "-g;-fno-inline")
+    target_link_options(ParallelTwin PRIVATE "-no-pie")
+    target_link_options(ParallelTwin-Partition PRIVATE "-no-pie")
+    target_link_options(ParallelTwin-Partition-Gui PRIVATE "-no-pie")
     message(STATUS "Adding no-pie mode, security issue out of debug")
 
     list(APPEND LIBS dl)
@@ -169,19 +169,19 @@ endif()
 
 message(STATUS "Used libs: ${LIBS}")
 
-target_link_libraries(ParallelSumo LINK_PUBLIC ${LIBS})
-target_link_libraries(ParallelSumo-Partition LINK_PUBLIC ${LIBS})
-target_link_libraries(ParallelSumo-Partition-Gui LINK_PUBLIC ${LIBS})
+target_link_libraries(ParallelTwin LINK_PUBLIC ${LIBS})
+target_link_libraries(ParallelTwin-Partition LINK_PUBLIC ${LIBS})
+target_link_libraries(ParallelTwin-Partition-Gui LINK_PUBLIC ${LIBS})
 
 # Add header files for IDEs that support autocompletion
-target_sources(ParallelSumo PRIVATE
+target_sources(ParallelTwin PRIVATE
     ${SRC_DIR}/ParallelSim.hpp
     ${SRC_DIR}/utils.hpp
     ${SRC_DIR}/psumoTypes.hpp
     ${SRC_DIR}/args.hpp
     ${SRC_DIR}/globals.hpp
 )
-target_sources(ParallelSumo-Partition PRIVATE
+target_sources(ParallelTwin-Partition PRIVATE
     ${SRC_DIR}/NeighborPartitionHandler.hpp
     ${SRC_DIR}/PartitionEdgesStub.hpp
     ${SRC_DIR}/PartitionManager.hpp
@@ -191,14 +191,14 @@ target_sources(ParallelSumo-Partition PRIVATE
     ${SRC_DIR}/partArgs.hpp
     ${SRC_DIR}/globals.hpp
 )
-get_target_property(TargetPar_SOURCES ParallelSumo-Partition SOURCES)
-set_target_properties(ParallelSumo-Partition-Gui PROPERTIES SOURCES "${TargetPar_SOURCES}")
+get_target_property(TargetPar_SOURCES ParallelTwin-Partition SOURCES)
+set_target_properties(ParallelTwin-Partition-Gui PROPERTIES SOURCES "${TargetPar_SOURCES}")
 
 message(STATUS "Include directories = ${INCLUDE_DIRECTORIES}")
 
 # Install config
 # Used for CPack
-install(TARGETS ParallelSumo ParallelSumo-Partition ParallelSumo-Partition-Gui)
+install(TARGETS ParallelTwin ParallelTwin-Partition ParallelTwin-Partition-Gui)
 install(DIRECTORY scripts/ DESTINATION scripts 
     PATTERN __pycache__ EXCLUDE 
     PATTERN *.ipynb EXCLUDE 

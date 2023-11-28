@@ -3,4 +3,4 @@ N=2
 
 ./run-with-env.sh python scripts/createParts.py -N $N -c "$CFG"
 
-valgrind --tool=memcheck --leak-check=full --suppressions=vg.supp "$@" ./bin/ParallelSumo -N $N -c "$CFG" --skip-part 
+valgrind --tool=memcheck --leak-check=full --suppressions=vg.supp "$@" ./bin/ParallelTwin -N $N -c "$CFG" --skip-part 

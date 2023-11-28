@@ -33,7 +33,7 @@ cp assets/spider0.* "$DST_FOLDER/examples/"
 # cp -r assets/osm-bologna-ing "$DST_FOLDER/examples/"
 
 echo Copying binaries...
-cp bin/ParallelSumo* "$DST_FOLDER/"
+cp bin/ParallelTwin* "$DST_FOLDER/"
 cp DIST_README.md "$DST_FOLDER/README.txt"
 
 echo Zipping...

@@ -2,7 +2,7 @@
 processNeighbors.py
 
 Find partition neighbors and process shared edge data, to be
-used in ParallelSumo. Should be used after createParts.py
+used in ParallelTwin. Should be used after createParts.py
 generated the required files.
 """
 
