@@ -14,7 +14,7 @@ NETFILE="$WORKDIR/$NAME.net.xml"
 ROUFILE="$WORKDIR/$NAME.rou.xml"
 CFGFILE="$WORKDIR/$NAME.sumocfg"
 
-END_TIME="1000"
+END_TIME="3600"
 
 "$SUMO_HOME/bin/netgenerate" -o "$NETFILE" "$@"
 

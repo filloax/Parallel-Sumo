@@ -238,18 +238,18 @@ bool PartitionManager::hasVehicle(const string vehId) {
   
   string vehIdToCheck(vehId);
 
-  if (args.verbose) {
-    stringstream msg;
-    format_to(ostream_iterator<char>(msg), "\tManager {} | hasVehicle: current vehicles are [", id);
-    int i = 0;
-    for (auto id : allVehicleIds) {
-      msg << id;
-      if (i < allVehicleIds.size() - 1) msg << ", ";
-      i++;
-    }
-    msg << "]" << endl;
-    cout << msg.str();
-  }
+  // if (args.verbose) {
+  //   stringstream msg;
+  //   format_to(ostream_iterator<char>(msg), "\tManager {} | hasVehicle: current vehicles are [", id);
+  //   int i = 0;
+  //   for (auto id : allVehicleIds) {
+  //     msg << id;
+  //     if (i < allVehicleIds.size() - 1) msg << ", ";
+  //     i++;
+  //   }
+  //   msg << "]" << endl;
+  //   cout << msg.str();
+  // }
 
   // logminor("PRE CONTAINS\n");
   // TODO: it seems that this sometimes leads to a segfault when multiple neighbor handler threads

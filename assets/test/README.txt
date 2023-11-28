@@ -9,11 +9,8 @@ for the generation parameters.
       SUMO OSM WebWizard, containing the upper right quadrant of Bologna's
       city center (see included netcfg).
     - bologna-sim/osm.passenger.trips.xml: generated with SUMO randomTrips.py
-      with params: 
-        - begin: 0
-        - end: 3600
-        - random-depart
-        - fringe-factor: 20
+      with params 
+      `-n NETFILE -r osm.passenger.trips.xml -e 3600 --fringe-factor 20 --random-depart`
       and following with SUMO duarouter
 
 - spider0, spider1, spider2.sumocfg: generated using our 
