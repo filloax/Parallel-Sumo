@@ -14,6 +14,7 @@ Contributions: Filippo Lenzi
 #include <cstddef>
 #include <cstdlib>
 #include <exception>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <algorithm>
@@ -568,15 +569,18 @@ bool isFinished(float simTime, int endTime, bool finished) {
 void PartitionManager::runSimulation() {
   logminor("Starting simulation logic\n", id);
 
+  // filesystem::path outputDir = filesystem::path(OUTDIR) / ("part" + to_string(id) + "/");
+  // filesystem::create_directories(outputDir);
+
   pid_t pid;
   vector<string> simArgs {
     binary, 
     "-c", cfg, 
     "--start",
-    // Output vehicle paths
-    "--netstate-dump", OUTDIR+"/output"+to_string(id)+".xml",
-    // Log stdout/stderr
-    "--log", args.dataDir+"/log"+to_string(id)+".txt"
+    // Add prefix to all outputs
+    "--output-prefix", "part" + to_string(id) + "_",
+    // Log stdout/stderr, path is also prefixed by output prefix
+    "--log", args.dataDir + "/log.txt"
   };
   simArgs.reserve(simArgs.size() + distance(sumoArgs.begin(), sumoArgs.end()));
   simArgs.insert(simArgs.end(),sumoArgs.begin(),sumoArgs.end());
@@ -611,6 +615,7 @@ void PartitionManager::runSimulation() {
   } else {
     stringstream msg;
     msg << "[ERR] [pid=" << getPid() << ",id=" << id << "] Simulation failed to load! Quitting" << std::endl;
+    msg << "[ERR] Check if your output parameters for the simulation passed via terminal include subfolders (currently not supported and won't work)" << std::endl;
     cerr << msg.str();
     exit(EXIT_FAILURE);
   }

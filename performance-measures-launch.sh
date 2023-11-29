@@ -36,8 +36,8 @@ for cfg in "${files[@]}"; do
             echo "$cfg,$N,$perf_res" >> "testResults/$results_file"
 
             for part_idx in $(seq 0 $(( $N - 1 ))); do
-                part_duration=$(grep -m 1 'Duration:.*s$' "data/log$part_idx.txt" | awk '{print $2}' | sed 's/s//')
-                tot_vehicles=$(grep -m 1 'Inserted:' "data/log$part_idx.txt" | awk '{print $2}' )
+                part_duration=$(grep -m 1 'Duration:.*s$' "data/part$part_idx""_log.txt" | awk '{print $2}' | sed 's/s//')
+                tot_vehicles=$(grep -m 1 'Inserted:' "data/part$part_idx""_log.txt" | awk '{print $2}' )
                 echo "$cfg,$N,$part_idx,$part_duration,$tot_vehicles" >> "testResults/$results_file_parts"
             done
         done
