@@ -584,6 +584,11 @@ void PartitionManager::runSimulation() {
   };
   simArgs.reserve(simArgs.size() + distance(sumoArgs.begin(), sumoArgs.end()));
   simArgs.insert(simArgs.end(),sumoArgs.begin(),sumoArgs.end());
+  if (args.remotePort > 0) {
+    simArgs.push_back("--remote-port");
+    int port = args.remotePort + id;
+    simArgs.push_back(to_string(port));
+  }
 
   numInstancesRunning++;
   if (numInstancesRunning > 1) {

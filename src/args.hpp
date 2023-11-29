@@ -36,6 +36,11 @@ public:
             .default_value(8)
             .scan<'i', int>();
             ;
+        program.add_argument("--remote-port")
+            .help("First remote port that will be used to host TraCI servers in the partitions. Each partition will host it at <this value>+<partition number>, where partition number starts from 0. If not set, no TraCI server will be started.\nNote that doing this will made each partition wait for a client to take control and manually allow them to proceed.")
+            .default_value(-1)
+            .scan<'i', int>();
+            ;
         program.add_argument("--gui")
             .help("Displays SUMO gui. Note that this launches one GUI application per thread.")
             .default_value(false)
@@ -85,6 +90,7 @@ public:
         cfg = program.get<std::string>("--cfg");
         numThreads = program.get<int>("--num-threads");
         partitioningThreads = program.get<int>("--part-threads");
+        remotePort = program.get<int>("--remote-port");
         gui = program.get<bool>("--gui");
         skipPart = program.get<bool>("--skip-part");
         keepPoly = program.get<bool>("--keep-poly");
@@ -123,6 +129,7 @@ public:
     std::string cfg;
     int numThreads;
     int partitioningThreads;
+    int remotePort;
     bool gui;
     bool skipPart;
     bool keepPoly;
