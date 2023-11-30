@@ -484,15 +484,16 @@ class NetworkPartitioning:
     def _fix_output_paths(self, sumo_cfg_root: Element):
         output_root: Element = sumo_cfg_root.find("output")
 
-        for element in output_root:
-            path = element.attrib["value"]
-            if os.path.isabs(path):
-                raise Exception("Absolute paths in simulation outputs not supported!")
-            # Ironically with error message above, use absolute path to place
-            # output in output folder instead of data folder.
-            part_path = os.path.abspath(os.path.join("output", path))
-            os.makedirs(os.path.dirname(part_path), exist_ok=True)
-            element.attrib["value"] = part_path
+        if output_root:
+            for element in output_root:
+                path = element.attrib["value"]
+                if os.path.isabs(path):
+                    raise Exception("Absolute paths in simulation outputs not supported!")
+                # Ironically with error message above, use absolute path to place
+                # output in output folder instead of data folder.
+                part_path = os.path.abspath(os.path.join("output", path))
+                os.makedirs(os.path.dirname(part_path), exist_ok=True)
+                element.attrib["value"] = part_path
             
     def _postprocess_partition(self, part_idx: int):
         if type(sys.stdout) is ThreadPrefixStream:
