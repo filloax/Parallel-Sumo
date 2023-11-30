@@ -1,17 +1,24 @@
 #!/bin/bash
 
-results_file="test7.csv"
-results_file_parts="test7_parts.csv"
+results_file="test8.csv"
+results_file_parts="test8_parts.csv"
 num_repeats=3
 
 files=(
     "./assets/test/spider0.sumocfg"
+    "./assets/test/spider0_lowtraffic.sumocfg"
     "./assets/test/spider1.sumocfg"
+    "./assets/test/spider1_lowtraffic.sumocfg"
     "./assets/test/spider2.sumocfg"
+    "./assets/test/spider2_lowtraffic.sumocfg"
     # generated with scripts/random-simulation.sh grid_large --grid --grid.number 100 --grid.length 20
     # about 1GB large, so gitignored
     "./assets/test/grid_large.sumocfg" 
+    "./assets/test/grid_large_lowtraffic.sumocfg" 
+    "./assets/test/bologna-sim/osm_lowtraffic.sumocfg"
     "./assets/test/bologna-sim/osm.sumocfg"
+    "./assets/test/bologna-metropolitan-area/osm_lowtraffic.sumocfg"
+    "./assets/test/bologna-metropolitan-area/osm.sumocfg"
 )
 
 threadNumbers=(
@@ -25,10 +32,20 @@ threadNumbers=(
 echo "cfg,thread no.,time,part.time" > "testResults/$results_file"
 echo "cfg,thread no.,part,part.time,vehicles" > "testResults/$results_file_parts"
 
+TOT=0
+
 for cfg in "${files[@]}"; do
     for N in "${threadNumbers[@]}"; do
+        TOT=$(($TOT + 1))
+    done
+done
+
+PROG=0
+for cfg in "${files[@]}"; do
+    for N in "${threadNumbers[@]}"; do
+        PROG=$(($PROG + 1))
         for i in $(seq 1 $num_repeats); do
-            echo "Running with: -N $N -c $cfg [$i/$num_repeats]"
+            echo "Running with: -N $N -c $cfg [R$i/$num_repeats] [$PROG/$TOT]"
             COMMD="python ./measure-performance.py -N $N -c $cfg --pin-to-cpu"
             echo "$COMMD"
             perf_res=$($COMMD)
