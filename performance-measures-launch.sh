@@ -1,24 +1,24 @@
 #!/bin/bash
 
-results_file="test8.csv"
-results_file_parts="test8_parts.csv"
-num_repeats=3
+results_file="test10.csv"
+results_file_parts="test10_parts.csv"
+num_repeats=10
 
 files=(
-    "./assets/test/spider0.sumocfg"
-    "./assets/test/spider0_lowtraffic.sumocfg"
+#    "./assets/test/spider0.sumocfg"
+#    "./assets/test/spider0_lowtraffic.sumocfg"
     "./assets/test/spider1.sumocfg"
     "./assets/test/spider1_lowtraffic.sumocfg"
     "./assets/test/spider2.sumocfg"
     "./assets/test/spider2_lowtraffic.sumocfg"
     # generated with scripts/random-simulation.sh grid_large --grid --grid.number 100 --grid.length 20
     # about 1GB large, so gitignored
-    "./assets/test/grid_large.sumocfg" 
-    "./assets/test/grid_large_lowtraffic.sumocfg" 
-    "./assets/test/bologna-sim/osm_lowtraffic.sumocfg"
-    "./assets/test/bologna-sim/osm.sumocfg"
-    "./assets/test/bologna-metropolitan-area/osm_lowtraffic.sumocfg"
-    "./assets/test/bologna-metropolitan-area/osm.sumocfg"
+#    "./assets/test/grid_large.sumocfg" 
+#    "./assets/test/grid_large_lowtraffic.sumocfg" 
+#    "./assets/test/bologna-sim/osm_lowtraffic.sumocfg"
+#    "./assets/test/bologna-sim/osm.sumocfg"
+#    "./assets/test/bologna-metropolitan-area/osm_lowtraffic.sumocfg"
+#    "./assets/test/bologna-metropolitan-area/osm.sumocfg"
 )
 
 threadNumbers=(
@@ -53,9 +53,11 @@ for cfg in "${files[@]}"; do
             echo "$cfg,$N,$perf_res" >> "testResults/$results_file"
 
             for part_idx in $(seq 0 $(( $N - 1 ))); do
-                part_duration=$(grep -m 1 'Duration:.*s$' "data/part$part_idx""_log.txt" | awk '{print $2}' | sed 's/s//')
-                tot_vehicles=$(grep -m 1 'Inserted:' "data/part$part_idx""_log.txt" | awk '{print $2}' )
-                echo "$cfg,$N,$part_idx,$part_duration,$tot_vehicles" >> "testResults/$results_file_parts"
+                if test -f "data/part$part_idx""_log.txt"; then
+                    part_duration=$(grep -m 1 'Duration:.*s$' "data/part$part_idx""_log.txt" | awk '{print $2}' | sed 's/s//')
+                    tot_vehicles=$(grep -m 1 'Inserted:' "data/part$part_idx""_log.txt" | awk '{print $2}' )
+                    echo "$cfg,$N,$part_idx,$part_duration,$tot_vehicles" >> "testResults/$results_file_parts"
+                fi
             done
         done
     done

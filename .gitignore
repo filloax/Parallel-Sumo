@@ -30,3 +30,4 @@ compile_commands.json
 testResults/**
 !testResults/test6.csv
 !testResults/test6_parts.csv
+scripts/plots/*.png
