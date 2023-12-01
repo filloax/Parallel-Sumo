@@ -4,3 +4,4 @@ matplotlib
 jinja2
 ipython
 seaborn
+scipy
